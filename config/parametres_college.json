@@ -1,0 +1,11 @@
+{
+  "departement": "49 - Maine-et-Loire",
+  "zone": "B",
+  "api_holidays_url": "https://date.nager.at/api/v3/PublicHolidays",
+  "country_code_holidays": "FR",
+  "vacances_ics_base_url_manuel": null,
+  "sonnerie_ppms": null,
+  "sonnerie_attentat": "tes-137215.mp3",
+  "sonnerie_fin_alerte": null,
+  "nom_peripherique_audio_sonneries": "Haut-parleurs (USB Audio Device)"
+}

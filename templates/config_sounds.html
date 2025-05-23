@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Gestion des Sonneries - Sonneries Collège</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Barre de Navigation -->
+    <div style="text-align: right; margin-bottom: 10px; font-size: 0.9em;">
+       {% if current_user and current_user.is_authenticated %}
+         Connecté: <strong>{{ current_user.id }}</strong> |
+         <a href="{{ url_for('index') }}">Contrôle Principal</a> |
+         <a href="{{ url_for('config_general_page') }}">Config Générale</a> |
+         <a href="{{ url_for('config_weekly_page') }}">Config Hebdo</a> |
+         <a href="{{ url_for('config_day_types_page') }}">Journées Types</a> |
+         <a href="{{ url_for('config_exceptions_page') }}">Exceptions</a> |
+         <a href="{{ url_for('config_sounds_page') }}">Sonneries</a> |
+         <a href="{{ url_for('logout') }}">Déconnexion</a>
+       {% else %}
+         (Non Connecté) <a href="{{ url_for('login') }}">Se connecter</a>
+       {% endif %}
+     </div>
+<table id="sounds-table" class="config-table">
+    <h1>Gestion des Sonneries Disponibles</h1>
+
+    <div class="config-section">
+        <h2>Ajouter une Nouvelle Sonnerie</h2>
+        <div class="form-group" style="max-width: 500px;">
+            <label for="sound-file-input">Sélectionner un fichier MP3 à uploader :</label>
+            <input type="file" id="sound-file-input" name="soundfile" accept=".mp3">
+        </div>
+        <button id="upload-btn" onclick="uploadSound()">Uploader et Ajouter cette Sonnerie</button>
+        <hr style="margin: 20px 0;">
+
+        <h2>Sonneries Configurées</h2>
+        <div class="scan-button-container">
+            <button id="scan-mp3-btn" onclick="scanMp3Directory()">Scanner le Dossier MP3 et Mettre à Jour la Liste</button>
+        </div>
+        <table id="sounds-table">
+            <thead>
+                <tr>
+                    <th>Actions</th>
+                    <th>Nom Convivial (Affichage)</th>
+                    <th>Nom du Fichier MP3 (Serveur)</th>
+                    <th>Pré-écoute</th>
+                </tr>
+            </thead>
+            <tbody id="sounds-table-body">
+                <tr><td colspan="4">Chargement des sonneries...</td></tr>
+            </tbody>
+        </table>
+        <div id="sounds-feedback" class="feedback-message" style="display: none;"></div>
+    </div>
+
+    <audio id="preview-audio-player" style="display:none;"></audio>
+
+<script>
+    // --------------------------------------------------
+    // 1. Variables Globales
+    // --------------------------------------------------
+    let globalAudioPlayer = null;
+    let currentlyPlayingSoundFile = null;
+
+    // --------------------------------------------------
+    // 2. Fonctions Utilitaires
+    // --------------------------------------------------
+    function showSoundsFeedback(message, type = 'info', duration = 4000) {
+        const feedbackDiv = document.getElementById('sounds-feedback');
+        if (!feedbackDiv) { console.error("Div #sounds-feedback non trouvé"); return; }
+        feedbackDiv.textContent = message;
+        feedbackDiv.className = 'feedback-message';
+        feedbackDiv.classList.add(type, 'show');
+        feedbackDiv.style.display = 'block';
+        setTimeout(() => {
+            feedbackDiv.classList.remove('show');
+            setTimeout(() => { if (!feedbackDiv.classList.contains('show')) feedbackDiv.style.display = 'none'; }, 500);
+        }, duration);
+    }
+
+    function previewSoundFile(fileName, buttonElement) {
+        if (!globalAudioPlayer) {
+            globalAudioPlayer = document.getElementById('preview-audio-player');
+            if(!globalAudioPlayer) { showSoundsFeedback("Erreur: Lecteur audio non trouvé.", 'error'); return; }
+        }
+        const isCurrentlyPlayingThisFile = !globalAudioPlayer.paused && currentlyPlayingSoundFile === fileName;
+
+        if (!globalAudioPlayer.paused) {
+            globalAudioPlayer.pause();
+            globalAudioPlayer.currentTime = 0;
+            document.querySelectorAll('#sounds-table-body button.listen-btn').forEach(btn => {
+                if (btn.innerHTML.includes('⏹️')) {
+                     btn.innerHTML = '🔊';
+                     btn.title = 'Écouter la sonnerie';
+                }
+            });
+        }
+        currentlyPlayingSoundFile = null;
+
+        if (isCurrentlyPlayingThisFile) {
+            showSoundsFeedback(`Lecture de ${fileName} arrêtée.`, 'info', 2000);
+            return;
+        }
+
+        if (!fileName) { return; }
+
+        globalAudioPlayer.src = `/api/sound/${encodeURIComponent(fileName)}`;
+        console.log(`Pré-écoute: ${fileName}`);
+        globalAudioPlayer.play()
+            .then(() => {
+                currentlyPlayingSoundFile = fileName;
+                if (buttonElement) { buttonElement.innerHTML = '⏹️'; buttonElement.title = 'Arrêter la lecture'; }
+                showSoundsFeedback(`Lecture de: ${fileName}`, 'info', 2500);
+            })
+            .catch(e => {
+                showSoundsFeedback(`Erreur lecture ${fileName}: ${e.message}`, 'error');
+                console.error("Erreur lecture audio:", e);
+                currentlyPlayingSoundFile = null;
+                if (buttonElement) { buttonElement.innerHTML = '🔊'; buttonElement.title = 'Écouter la sonnerie';}
+            });
+
+        globalAudioPlayer.onended = function() {
+            if (currentlyPlayingSoundFile === fileName) {
+                if (buttonElement) { buttonElement.innerHTML = '🔊'; buttonElement.title = 'Écouter la sonnerie'; }
+                currentlyPlayingSoundFile = null;
+            }
+        };
+        globalAudioPlayer.onerror = function() {
+            showSoundsFeedback(`Erreur lecteur pour ${fileName}.`, 'error');
+            if (currentlyPlayingSoundFile === fileName) {
+                if (buttonElement) { buttonElement.innerHTML = '🔊'; buttonElement.title = 'Écouter la sonnerie'; }
+                currentlyPlayingSoundFile = null;
+            }
+        };
+    }
+
+    // --------------------------------------------------
+    // 3. Fonctions UI et Logique pour la table des sonneries
+    // --------------------------------------------------
+    function populateSoundsTable(sounds) {
+        const tableBody = document.getElementById('sounds-table-body');
+        tableBody.innerHTML = '';
+
+        if (Object.keys(sounds).length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="4">Aucune sonnerie configurée. Scannez le dossier MP3.</td></tr>';
+            return;
+        }
+        const sortedSoundEntries = Object.entries(sounds).sort((a, b) => a[0].localeCompare(b[0]));
+
+        sortedSoundEntries.forEach(([displayName, fileName]) => {
+            const row = tableBody.insertRow();
+            // Stocker les identifiants sur la ligne pour un accès facile
+            row.dataset.fileName = fileName;
+            row.dataset.displayName = displayName; // Stocker le nom convivial original
+
+            // Cellule 0: Actions (Éditer Nom Convivial, Désassocier)
+            const cellActions = row.insertCell();
+            cellActions.innerHTML = `
+                <button class="edit-name-btn btn-small" onclick="toggleEditDisplayName(this)" title="Modifier nom convivial">✏️</button>
+                <button class="disassociate-btn btn-small" onclick="disassociateSound('${fileName}', '${displayName}')" title="Désassocier cette sonnerie (garde le fichier MP3)">🔗</button>
+            `;
+
+            // Cellule 1: Nom Convivial (avec input caché et boutons Sauver/Annuler cachés)
+            const cellDisplayName = row.insertCell();
+            cellDisplayName.innerHTML = `
+                <span class="display-name-text">${displayName}</span>
+                <input type="text" class="display-name-input" value="${displayName}" style="display:none;">
+                <span class="save-cancel-controls" style="display:none;">
+                    <button class="save-name-btn btn-small" onclick="saveNewDisplayName(this)" title="Sauvegarder nom">💾</button>
+                    <button class="cancel-edit-btn btn-small" onclick="cancelEditDisplayName(this)" title="Annuler édition">🚫</button>
+                </span>
+            `;
+
+            // Cellule 2: Nom de Fichier MP3 (avec bouton Supprimer Fichier à gauche)
+            const cellFileName = row.insertCell();
+            cellFileName.innerHTML = `
+                <button class="delete-file-btn btn-small" onclick="confirmAndDeletePhysicalSound('${fileName}', '${displayName}')" title="Supprimer le fichier MP3 du serveur et l'association">🗑️</button>
+                <span>${fileName}</span>
+            `;
+
+            // Cellule 3: Pré-écoute
+            const cellListen = row.insertCell();
+            const listenButton = document.createElement('button');
+            listenButton.innerHTML = '🔊';
+            listenButton.classList.add('listen-btn', 'btn-small');
+            listenButton.title = 'Écouter la sonnerie';
+            listenButton.onclick = (event) => previewSoundFile(fileName, event.currentTarget);
+            cellListen.appendChild(listenButton);
+        });
+    }
+
+    function toggleEditDisplayName(editButtonElement) {
+        const row = editButtonElement.closest('tr');
+        // Récupérer les infos depuis les data-attributes de la ligne
+        const fileName = row.dataset.fileName;
+        const currentDisplayName = row.dataset.displayName;
+
+        const displayNameSpan = row.querySelector('.display-name-text');
+        const displayNameInput = row.querySelector('.display-name-input');
+        const saveCancelControls = row.querySelector('.save-cancel-controls');
+        // Les boutons "Éditer", "Désassocier" (dans la première cellule) et "Corbeille" (dans la troisième)
+        // doivent être désactivés pendant l'édition du nom.
+        const actionCellButtons = row.cells[0].querySelectorAll('button');
+        const fileCellDeleteButton = row.cells[2].querySelector('button.delete-file-btn');
+
+        // Cacher tous les autres modes édition avant d'en activer un nouveau
+        document.querySelectorAll('#sounds-table-body tr').forEach(r => {
+            if (r !== row) {
+                const otherInput = r.querySelector('.display-name-input');
+                if (otherInput && otherInput.style.display !== 'none') {
+                    const otherCancelBtn = r.querySelector('.save-cancel-controls .cancel-edit-btn');
+                    if(otherCancelBtn) cancelEditDisplayName(otherCancelBtn); // Annuler l'autre édition
+                }
+            }
+        });
+
+        // Activer le mode édition pour la ligne actuelle
+        displayNameSpan.style.display = 'none';
+        displayNameInput.style.display = 'inline-block';
+        displayNameInput.value = currentDisplayName;
+        displayNameInput.focus();
+
+        saveCancelControls.style.display = 'inline-block'; // Afficher Sauver/Annuler
+
+        // Désactiver les autres boutons d'action de la ligne
+        actionCellButtons.forEach(btn => btn.disabled = true);
+        if(fileCellDeleteButton) fileCellDeleteButton.disabled = true;
+    }
+
+    function cancelEditDisplayName(cancelButtonElement) {
+        const row = cancelButtonElement.closest('tr');
+        const originalDisplayName = row.dataset.displayName;
+
+        const displayNameSpan = row.querySelector('.display-name-text');
+        const displayNameInput = row.querySelector('.display-name-input');
+        const saveCancelControls = row.querySelector('.save-cancel-controls');
+
+        const actionCellButtons = row.cells[0].querySelectorAll('button');
+        const fileCellDeleteButton = row.cells[2].querySelector('button.delete-file-btn');
+
+        displayNameSpan.style.display = 'inline-block';
+        displayNameInput.style.display = 'none';
+        displayNameInput.value = originalDisplayName;
+        displayNameSpan.textContent = originalDisplayName;
+
+        saveCancelControls.style.display = 'none';
+
+        // Réactiver les autres boutons d'action
+        actionCellButtons.forEach(btn => btn.disabled = false);
+        if(fileCellDeleteButton) fileCellDeleteButton.disabled = false;
+    }
+
+    // --- Fonctions API ---
+    function loadConfiguredSounds() {
+        console.log("Chargement des sonneries configurées...");
+        document.getElementById('sounds-table-body').innerHTML = '<tr><td colspan="4">Chargement des sonneries...</td></tr>';
+        fetch('/api/config/sounds')
+            .then(response => response.ok ? response.json() : response.json().then(err => { throw new Error(err.error || `Erreur HTTP ${response.status}`) }))
+            .then(data => {
+                console.log("Sonneries reçues:", data);
+                populateSoundsTable(data.configured_sounds || {});
+            })
+            .catch(error => {
+                console.error("Erreur chargement sonneries:", error);
+                document.getElementById('sounds-table-body').innerHTML = `<tr><td colspan="4" style="color:red;">Erreur: ${error.message}</td></tr>`;
+                showSoundsFeedback(`Erreur chargement: ${error.message}`, 'error');
+            });
+    }
+
+    function scanMp3Directory() {
+        console.log("Demande de scan du dossier MP3...");
+        showSoundsFeedback("Scan du dossier MP3 en cours...", 'info', 0);
+        fetch('/api/config/sounds/scan', { method: 'POST' })
+            .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
+            .then(({ ok, status, data }) => {
+                if (ok) {
+                    showSoundsFeedback(data.message || "Scan terminé.", 'success');
+                    populateSoundsTable(data.configured_sounds || {});
+                     if (data.added_count > 0 && confirm("De nouvelles sonneries ont été ajoutées. Voulez-vous recharger la configuration serveur ?")) {
+                        fetch('/api/config/reload', { method: 'POST' })
+                            .then(r => r.json())
+                            .then(d => showSoundsFeedback(d.message || "Rechargement demandé.", r.ok ? 'info' : 'error', 5000));
+                    }
+                } else { throw new Error(data.error || `Erreur ${status} lors du scan.`); }
+            })
+            .catch(error => {
+                console.error("Erreur scan MP3:", error);
+                showSoundsFeedback(`Erreur scan: ${error.message}`, 'error');
+            });
+    }
+
+    function saveNewDisplayName(saveButtonElement) {
+        const row = saveButtonElement.closest('tr');
+        const fileName = row.dataset.fileName;
+        const originalDisplayName = row.dataset.displayName;
+
+        const displayNameInput = row.querySelector('.display-name-input');
+        const newDisplayName = displayNameInput.value.trim();
+        // const displayNameSpan = row.querySelector('.display-name-text'); // On le mettra à jour
+
+        if (!newDisplayName) {
+            showSoundsFeedback("Le nom convivial ne peut pas être vide.", 'error');
+            displayNameInput.focus();
+            return;
+        }
+        if (newDisplayName === originalDisplayName) {
+            showSoundsFeedback("Aucun changement détecté dans le nom.", 'info', 2000);
+            cancelEditDisplayName(row.querySelector('.save-cancel-controls .cancel-edit-btn'));
+            return;
+        }
+
+        console.log(`Sauvegarde nom convivial pour ${fileName}: ${newDisplayName}`);
+        showSoundsFeedback(`Sauvegarde nom pour ${fileName}...`, 'info', 0);
+
+        fetch(`/api/config/sounds/display_name/${encodeURIComponent(fileName)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ new_display_name: newDisplayName })
+        })
+        .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
+        .then(({ ok, status, data }) => {
+            if (ok) {
+                showSoundsFeedback(data.message || "Nom convivial mis à jour.", 'success');
+                // Mettre à jour le dataset de la ligne pour la prochaine édition
+                row.dataset.displayName = newDisplayName;
+                // Annuler le mode édition (ce qui mettra à jour le span via cancelEditDisplayName)
+                cancelEditDisplayName(row.querySelector('.save-cancel-controls .cancel-edit-btn'));
+
+                if (confirm("Nom de sonnerie mis à jour. Voulez-vous recharger la configuration serveur ?")) {
+                    fetch('/api/config/reload', { method: 'POST' })
+                        .then(r => r.json()).then(d => showSoundsFeedback(d.message || "Rechargement demandé.", r.ok ? 'info' : 'error', 5000));
+                }
+            } else {
+                 if (status === 409) { displayNameInput.focus(); }
+                throw new Error(data.error || `Erreur ${status}`);
+            }
+        })
+        .catch(error => {
+            console.error("Erreur sauvegarde nom convivial:", error);
+            showSoundsFeedback(`Erreur sauvegarde nom: ${error.message}`, 'error');
+        });
+    }
+
+    function disassociateSound(fileName, displayName) {
+        if (!confirm(`Voulez-vous désassocier la sonnerie "${displayName}" (fichier: ${fileName}) ?\nLe fichier MP3 restera sur le serveur et pourra être retrouvé par un nouveau scan.`)) {
+            return;
+        }
+        console.log(`Désassociation pour: ${fileName}`);
+        showSoundsFeedback(`Désassociation de "${displayName}" en cours...`, 'info', 0);
+        fetch(`/api/config/sounds/${encodeURIComponent(fileName)}`, { method: 'DELETE' })
+        .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
+        .then(({ ok, status, data }) => {
+            if (ok) {
+                showSoundsFeedback(data.message || "Association supprimée.", 'success');
+                loadConfiguredSounds();
+                 if (confirm("Association de sonnerie supprimée. Voulez-vous recharger la configuration serveur ?")) {
+                    fetch('/api/config/reload', { method: 'POST' })
+                        .then(r => r.json()).then(d => showSoundsFeedback(d.message || "Rechargement demandé.", r.ok ? 'info' : 'error', 5000));
+                }
+            } else { throw new Error(data.error || `Erreur ${status}`); }
+        })
+        .catch(error => {
+            console.error("Erreur désassociation:", error);
+            showSoundsFeedback(`Erreur désassociation: ${error.message}`, 'error');
+        });
+    }
+
+    function confirmAndDeletePhysicalSound(fileName, displayName) {
+        if (!confirm(`ATTENTION : ACTION DESTRUCTIVE !\n\nÊtes-vous sûr de vouloir supprimer DÉFINITIVEMENT le fichier MP3 '${fileName}' du serveur ET son association dans la configuration pour "${displayName}" ?\n\nCette action est IRRÉVERSIBLE.`)) {
+            return;
+        }
+        console.log(`Suppression physique et association pour: ${fileName}`);
+        showSoundsFeedback(`Suppression définitive de "${fileName}" en cours...`, 'info', 0);
+        fetch(`/api/config/sounds/${encodeURIComponent(fileName)}?delete_physical_file=true`, { method: 'DELETE' })
+        .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
+        .then(({ ok, status, data }) => {
+            if (ok) {
+                showSoundsFeedback(data.message || "Fichier et association supprimés.", 'success');
+                loadConfiguredSounds();
+                 if (confirm("Sonnerie (fichier et association) supprimée. Voulez-vous recharger la configuration serveur ?")) {
+                    fetch('/api/config/reload', { method: 'POST' })
+                        .then(r => r.json()).then(d => showSoundsFeedback(d.message || "Rechargement demandé.", r.ok ? 'info' : 'error', 5000));
+                }
+            } else { throw new Error(data.error || `Erreur ${status}`); }
+        })
+        .catch(error => {
+            console.error("Erreur suppression physique:", error);
+            showSoundsFeedback(`Erreur suppression physique: ${error.message}`, 'error');
+        });
+    }
+
+    function uploadSound() {
+        const fileInput = document.getElementById('sound-file-input');
+        if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+            showSoundsFeedback("Veuillez sélectionner un fichier MP3 à uploader.", 'error'); return;
+        }
+        const file = fileInput.files[0];
+        if (!file.name.toLowerCase().endsWith('.mp3') && file.type !== 'audio/mpeg') {
+            showSoundsFeedback("Type de fichier invalide. Seuls les fichiers .mp3 sont autorisés.", 'error'); return;
+        }
+        const maxSizeMB = 10;
+        if (file.size > maxSizeMB * 1024 * 1024) {
+            showSoundsFeedback(`Le fichier est trop volumineux (max ${maxSizeMB} MB).`, 'error'); return;
+        }
+        const formData = new FormData();
+        formData.append('soundfile', file);
+        console.log(`Upload de: ${file.name}`);
+        showSoundsFeedback(`Upload de "${file.name}" en cours...`, 'info', 0);
+        fetch('/api/config/sounds/upload', { method: 'POST', body: formData })
+        .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
+        .then(({ ok, status, data }) => {
+            if (ok) {
+                showSoundsFeedback(data.message || "Upload réussi !", 'success');
+                populateSoundsTable(data.configured_sounds || {});
+                fileInput.value = '';
+                if (confirm("Sonnerie uploadée et ajoutée. Voulez-vous recharger la configuration serveur ?")) {
+                    fetch('/api/config/reload', { method: 'POST' })
+                        .then(r => r.json())
+                        .then(d => showSoundsFeedback(d.message || "Rechargement demandé.", r.ok ? 'info' : 'error', 5000));
+                }
+            } else { throw new Error(data.error || `Erreur ${status}`); }
+        })
+        .catch(error => {
+            console.error("Erreur upload sonnerie:", error);
+            showSoundsFeedback(`Erreur upload: ${error.message}`, 'error');
+            fileInput.value = '';
+        });
+    }
+
+    // --------------------------------------------------
+    // 5. Initialisation
+    // --------------------------------------------------
+    function initPage() {
+        console.log("Initialisation page config sonneries...");
+        globalAudioPlayer = document.getElementById('preview-audio-player');
+        loadConfiguredSounds();
+    }
+
+    document.addEventListener('DOMContentLoaded', initPage);
+
+</script>
+</body>
+</html>

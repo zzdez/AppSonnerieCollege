@@ -1,0 +1,41 @@
+# Environnement virtuel Python
+.venv/
+venv/
+ENV/
+env/
+*.pyc
+__pycache__/
+.Python
+
+# Fichiers de configuration spécifiques à l'IDE/éditeur
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+# Pour Notepad++ (si vous stockez des sessions ou projets)
+# Aucun fichier spécifique à Notepad++ n'est généralement commité,
+# mais si vous avez des fichiers de session .xml que vous ne voulez pas, ajoutez-les.
+
+# Fichiers de log
+*.log
+logs/
+
+# Fichiers temporaires ou de build
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Fichiers spécifiques au système d'exploitation
+.DS_Store
+Thumbs.db
+
+# Secrets ou configurations sensibles (si vous en aviez en dehors du script principal)
+# Par exemple, si vous aviez un config.ini avec des mots de passe
+# config.ini
+# secrets.json
+
+# Dossier de staging (contient des données temporaires, pas du code source)
+# Si votre LOCAL_STAGING_DIR est en dehors du projet Git, pas besoin de l'ajouter ici.
+# S'il était DANS X:\Seedbox-importer (ce qui n'est pas recommandé pour des données), vous l'ajouteriez :
+# seedbox_staging/

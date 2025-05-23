@@ -1,0 +1,195 @@
+{
+  "sonneries": {
+    "default_alert": "default_alert.mp3",
+    "phone-ringtone-trance-312274": "phone-ringtone-trance-312274.mp3",
+    "phone-ringtone-wurly-309475": "phone-ringtone-wurly-309475.mp3",
+    "ringtone-1-275863": "ringtone-1-275863.mp3",
+    "ringtone-283510": "ringtone-283510.mp3",
+    "ringtone-297922": "ringtone-297922.mp3",
+    "tes-137215": "tes-137215.mp3",
+    "ZZ-Top-Rough-Boy-v3": "ZZ-Top-Rough-Boy-v3.mp3",
+    "phone-ringtone-sound-294438ccccccccccccccccccccc": "phone-ringtone-sound-294438.mp3",
+    "11L-Arpeggiated_sequence-1746178014640": "11L-Arpeggiated_sequence-1746178014640.mp3",
+    "11L-Generates_a_school_b-1746176903716": "11L-Generates_a_school_b-1746176903716.mp3",
+    "cell-65384": "cell-65384.mp3",
+    "11L-Arpeggiated_sequence-1746178003598": "11L-Arpeggiated_sequence-1746178003598.mp3"
+  },
+  "journees_types": {
+    "Mercredi": {
+      "nom": "Mercredi",
+      "periodes": [
+        {
+          "nom": "Cours 4",
+          "heure_debut": "10:40:00",
+          "heure_fin": "10:45:00",
+          "sonnerie_debut": "ringtone-283510.mp3",
+          "sonnerie_fin": "ringtone-297922.mp3"
+        },
+        {
+          "nom": "Cours 1",
+          "heure_debut": "07:30:00",
+          "heure_fin": "08:30:00",
+          "sonnerie_debut": "ringtone-283510.mp3",
+          "sonnerie_fin": "ringtone-297922.mp3"
+        },
+        {
+          "nom": "Cours 2",
+          "heure_debut": "08:30:00",
+          "heure_fin": "09:30:00",
+          "sonnerie_debut": "ringtone-283510.mp3",
+          "sonnerie_fin": "ringtone-297922.mp3"
+        },
+        {
+          "nom": "Cours 3",
+          "heure_debut": "09:30:00",
+          "heure_fin": "10:30:00",
+          "sonnerie_debut": "phone-ringtone-sound-294438.mp3",
+          "sonnerie_fin": "phone-ringtone-trance-312274.mp3"
+        },
+        {
+          "nom": "Cours 5",
+          "heure_debut": "11:35:00",
+          "heure_fin": "11:36:00",
+          "sonnerie_debut": "ringtone-283510.mp3",
+          "sonnerie_fin": "ringtone-297922.mp3"
+        },
+        {
+          "nom": "Cours 6",
+          "heure_debut": "11:55:00",
+          "heure_fin": "11:59:00",
+          "sonnerie_debut": "ringtone-283510.mp3",
+          "sonnerie_fin": "ringtone-297922.mp3"
+        },
+        {
+          "nom": "Cours 7",
+          "heure_debut": "12:00:00",
+          "heure_fin": "12:05:00",
+          "sonnerie_debut": "ringtone-283510.mp3",
+          "sonnerie_fin": "ringtone-297922.mp3"
+        }
+      ]
+    },
+    "Journée Pédago": {
+      "nom": "Journée Pédago",
+      "periodes": [
+        {
+          "heure_debut": "08:00:00",
+          "heure_fin": "09:00:00",
+          "nom": "heure 1",
+          "sonnerie_debut": "phone-ringtone-trance-312274.mp3",
+          "sonnerie_fin": "phone-ringtone-sound-294438.mp3"
+        }
+      ]
+    },
+    "LMJV": {
+      "nom": "LMJV",
+      "periodes": [
+        {
+          "heure_debut": "07:35:00",
+          "heure_fin": "07:40:00",
+          "nom": "Cours 0",
+          "sonnerie_debut": "ringtone-283510.mp3",
+          "sonnerie_fin": "ringtone-297922.mp3"
+        },
+        {
+          "heure_debut": "08:00:00",
+          "heure_fin": "08:55:00",
+          "nom": "Cours 1",
+          "sonnerie_debut": "ringtone-283510.mp3",
+          "sonnerie_fin": "ringtone-297922.mp3"
+        },
+        {
+          "heure_debut": "09:00:00",
+          "heure_fin": "10:00:00",
+          "nom": "Cours 2",
+          "sonnerie_debut": "ringtone-283510.mp3",
+          "sonnerie_fin": "ringtone-297922.mp3"
+        },
+        {
+          "heure_debut": "10:45:00",
+          "heure_fin": "10:46:00",
+          "nom": "Nouveau Cours",
+          "sonnerie_debut": "11L-Arpeggiated_sequence-1746178003598.mp3",
+          "sonnerie_fin": "11L-Arpeggiated_sequence-1746178003598.mp3"
+        },
+        {
+          "heure_debut": "11:05:00",
+          "heure_fin": "11:06:00",
+          "nom": "test audio",
+          "sonnerie_debut": "11L-Arpeggiated_sequence-1746178014640.mp3",
+          "sonnerie_fin": "11L-Generates_a_school_b-1746176903716.mp3"
+        },
+        {
+          "heure_debut": "11:30:00",
+          "heure_fin": "11:35:00",
+          "nom": "Cours 4",
+          "sonnerie_debut": "ringtone-283510.mp3",
+          "sonnerie_fin": "ringtone-297922.mp3"
+        },
+        {
+          "heure_debut": "12:25:00",
+          "heure_fin": "12:26:00",
+          "nom": "Test audio 2",
+          "sonnerie_debut": "11L-Arpeggiated_sequence-1746178014640.mp3",
+          "sonnerie_fin": "11L-Arpeggiated_sequence-1746178014640.mp3"
+        },
+        {
+          "heure_debut": "12:35:00",
+          "heure_fin": "12:36:00",
+          "nom": "Test audio 3",
+          "sonnerie_debut": "11L-Arpeggiated_sequence-1746178003598.mp3",
+          "sonnerie_fin": "11L-Arpeggiated_sequence-1746178014640.mp3"
+        },
+        {
+          "nom": "Test audio 4",
+          "heure_debut": "13:15:00",
+          "heure_fin": "13:16:00",
+          "sonnerie_debut": "11L-Arpeggiated_sequence-1746178003598.mp3",
+          "sonnerie_fin": "11L-Arpeggiated_sequence-1746178014640.mp3"
+        },
+        {
+          "heure_debut": "17:35:00",
+          "heure_fin": "17:36:00",
+          "nom": "Cours 5",
+          "sonnerie_debut": null,
+          "sonnerie_fin": "phone-ringtone-sound-294438.mp3"
+        },
+        {
+          "heure_debut": "18:20:00",
+          "heure_fin": "18:21:00",
+          "nom": "Cours 4",
+          "sonnerie_debut": "ringtone-283510.mp3",
+          "sonnerie_fin": "ringtone-297922.mp3"
+        }
+      ]
+    },
+    "Journée test": {
+      "nom": "Journée test",
+      "periodes": []
+    }
+  },
+  "planning_hebdomadaire": {
+    "Lundi": "LMJV",
+    "Mardi": "LMJV",
+    "Mercredi": "Mercredi",
+    "Jeudi": "LMJV",
+    "Vendredi": "LMJV",
+    "Samedi": "Aucune",
+    "Dimanche": "Aucune"
+  },
+  "exceptions_planning": {
+    "2025-05-30": {
+      "action": "utiliser_jt",
+      "journee_type": "Mercredi",
+      "description": "Ascension"
+    },
+    "2025-05-01": {
+      "action": "utiliser_jt",
+      "journee_type": "LMJV",
+      "description": "Test Journée exeption"
+    }
+  },
+  "vacances": {
+    "ics_file_path": null
+  }
+}

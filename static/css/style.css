@@ -1,0 +1,772 @@
+/* static/css/style.css */
+
+/* Styles généraux */
+body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
+h1 { /* Style global pour H1 */
+    color: #2c3e50; /* Bleu marine foncé */
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #3498db; /* Bleu plus clair */
+}
+h2 { color: #333; } /* Gardé pour certains titres spécifiques si besoin */
+
+/* Sections principales des pages (control.html) */
+#auth-section, #control-section,
+#status-section, #calendar-section {
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background-color: #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+#auth-section { background-color: #e9e9e9; }
+
+/* Boutons de contrôle principaux (control.html) */
+#control-section button, #auth-section button {
+    margin-right: 10px;
+    margin-bottom: 5px; /* Pour le retour à la ligne */
+    padding: 8px 15px;
+    background-color: #0d6efd;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+#control-section button:hover,
+#auth-section button:hover { background-color: #0b5ed7; }
+#control-section button:last-child { margin-right: 0; }
+
+/* Styles pour les messages de feedback (globaux) */
+.feedback-message {
+    padding: 10px 15px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    border: 1px solid transparent;
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out;
+    max-height: 0; /* Pour l'animation de hauteur */
+    overflow: hidden; /* Pour l'animation de hauteur */
+    margin-top: 0; /* Gérer via CSS spécifique si besoin */
+}
+.feedback-message.show {
+    opacity: 1;
+    max-height: 100px; /* Hauteur suffisante pour le message */
+    margin-top: 15px; /* Apparaît avec une marge */
+    /* La transition sur max-height peut être ajoutée si on veut un effet de "glissement" */
+}
+.feedback-message.success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; }
+.feedback-message.error { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; }
+.feedback-message.info { color: #0c5460; background-color: #d1ecf1; border-color: #bee5eb; }
+
+/* Statut (control.html) */
+#status-section span { font-weight: bold; }
+.status-ok { color: #198754; }
+.status-error { color: #dc3545; }
+.status-inactive { color: #ffc107; }
+.status-unknown { color: #6c757d; }
+
+/* Calendar Styles (control.html) */
+#calendar-section h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px;}
+#calendar-selector { margin-bottom: 15px; text-align: right; }
+#calendar-selector label { margin-right: 5px; }
+#calendar-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; }
+.calendar-month { border: 1px solid #ddd; padding: 10px; border-radius: 6px; background-color: #fdfdfd;}
+.calendar-month h3 { text-align: center; margin-top: 0; margin-bottom: 10px; font-size: 1.1em; color: #555; }
+.calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.calendar-weekday, .calendar-day { text-align: center; padding: 4px 0; font-size: 0.8em; border-radius: 3px; height: 26px; display: flex; justify-content: center; align-items: center; transition: background-color 0.15s, transform 0.1s; overflow: hidden; }
+.calendar-weekday { font-weight: bold; background-color: #e9ecef; color: #495057; }
+.calendar-day { border: 1px solid #eee; }
+.calendar-day.empty { background-color: #f8f9fa; border-color: #f8f9fa; cursor: default; }
+.calendar-day.ferie { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; font-weight: bold;}
+.calendar-day.vacances { background-color: #d1ecf1; color: #0c5460; border-color: #bee5eb; }
+.calendar-day.weekend { background-color: #e2e3e5; color: #383d41; border-color: #d6d8db; }
+.calendar-day.classe { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
+.calendar-day.exception-silence { background-color: #fff3cd; color: #856404; border: 1px dashed #ffeeba; }
+.calendar-day.exception-jt { background-color: #e2d9f3; color: #492f6d; border: 1px dashed #d6c0f0; }
+.calendar-day.autre { background-color: #f0f0f0; }
+.calendar-day.erreur-donnees { background-color: yellow; border: 1px solid red; }
+.calendar-day.today { border: 2px solid #0d6efd; font-weight: bold; background-color: #cfe2ff; position: relative; z-index: 2; }
+.calendar-day:not(.empty) { cursor: pointer; }
+.calendar-day:not(.empty):hover { background-color: #d6eaff; transform: scale(1.05); z-index: 10; position: relative; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+
+/* Styles Modale (control.html) */
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; opacity:0; visibility:hidden; transition: opacity .3s ease, visibility 0s linear .3s;}
+.modal-overlay.visible { opacity:1; visibility:visible; transition: opacity .3s ease;}
+.modal-box { background-color: #fff; padding: 0; /* Padding géré par les sections internes */ border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1),0 6px 20px rgba(0,0,0,0.1); border: 1px solid #ddd; width: 90%; max-width: 550px; max-height: 80vh; overflow-y: auto; position:relative; transform: scale(.9); transition: transform .3s ease;}
+.modal-overlay.visible .modal-box {transform: scale(1);}
+.modal-close-btn { position:absolute; top:12px; right:20px; background:none; border:none; font-size:1.8em; font-weight:bold; color:#fff; cursor:pointer; line-height:1; padding:0; opacity:.8; transition: opacity .2s ease, transform .2s ease;}
+.modal-close-btn:hover {color:#fff; opacity:1; transform: scale(1.1);}
+#modal-content h4 { border-bottom:none; padding:15px 30px; margin:-1px -1px 20px -1px; font-size:1.3em; background-color:#5cb85c; color:white; border-top-left-radius:9px; border-top-right-radius:9px; font-weight:600;}
+#modal-content .modal-padding { padding: 0 25px 25px 25px; } /* Ajouter padding pour le contenu sous le h4 */
+#modal-content .day-type-info {font-weight:bold; color:#31708f; padding:10px 15px; border-radius:4px; border-left:5px solid #5bc0de; margin-bottom:20px; background-color:#f8f9fa; display:block; font-size:1.1em;}
+#modal-content table {width:100%; border-collapse:collapse; margin-top:5px; font-size:.9em; border:1px solid #ddd;}
+#modal-content th, #modal-content td {border:1px solid #e1e1e1; padding:8px 10px; text-align:left; vertical-align:top;}
+#modal-content th {background-color:#f8f9fa; font-weight:bold; color:#495057;}
+#modal-content td:first-child {text-align:center; font-weight:bold; white-space:nowrap; background-color:#fdfdfd;}
+#modal-content tbody tr:nth-child(odd) {background-color:#f9f9f9;}
+#modal-content em {color:#6c757d; font-style:italic; font-size:.9em;}
+#modal-content p > em {font-style:normal; font-weight:bold; color:#555; display:block; margin-top:10px;}
+#modal-message-content {margin-top:15px; padding:15px 20px; border-radius:5px; background-color:#f8f9fa; border:1px solid #dee2e6; border-left:5px solid #6c757d; font-size:1em; line-height:1.6;}
+#modal-message-content.type-erreur, #modal-message-content.type-erreur_serveur, #modal-message-content.type-erreur_interne {background-color:#f8d7da; border-color:#f5c6cb; border-left-color:#dc3545; color:#721c24;}
+#modal-message-content.type-vacances, #modal-message-content.type-ferie, #modal-message-content.type-weekend, #modal-message-content.type-exception_silence {background-color:#e7f3fe; border-color:#cce5ff; border-left-color:#428bca; color:#0c5460;}
+#modal-message-content.type-loading {font-style:italic; color:#6c757d; border-left-color:#ffc107;}
+#modal-content table tbody tr:hover td {background-color:#f1f1f1;}
+
+
+/* =============================================== */
+/* STYLES COMMUNS POUR LES PAGES DE CONFIGURATION  */
+/* =============================================== */
+
+.config-page-container > h1 { /* Style pour le H1 des pages de config */
+    text-align: left; /* Aligner à gauche */
+    font-size: 1.8em; /* Un peu plus petit que le H1 principal */
+    color: #34495e; /* Bleu plus foncé */
+    border-bottom: 1px solid #bdc3c7; /* Gris clair */
+    padding-bottom: 15px;
+    margin-bottom: 25px;
+}
+
+/* Conteneur principal pour une section de configuration */
+.config-section {
+    margin-bottom: 25px;
+    padding: 20px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background-color: #ffffff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.config-section h2 { /* Titres H2 dans les sections de config */
+    margin-top: 0;
+    font-size: 1.3em; /* Plus petit que le H1 de la page */
+    color: #3498db; /* Bleu thématique */
+    border-bottom: 1px solid #ecf0f1; /* Bordure très légère */
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+/* Groupe de formulaire (label + champ) */
+.form-group {
+    margin-bottom: 18px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 600;
+    font-size: 0.9em; /* Labels un peu plus petits */
+    color: #555; /* Gris foncé pour les labels */
+}
+
+/* Style commun pour les inputs, selects dans les formulaires de config */
+.config-section input[type="text"],
+.config-section input[type="url"],
+.config-section input[type="date"],
+.config-section input[type="time"],
+.config-section select,
+.config-section textarea { /* Ajout textarea pour plus tard */
+    width: 100%;
+    padding: 8px 10px; /* Padding un peu réduit */
+    border: 1px solid #ccc; /* Bordure plus standard */
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 0.95em; /* Taille de police des champs */
+    color: #333;
+    background-color: #fff;
+    transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+}
+
+.config-section input[type="text"]:focus,
+.config-section input[type="url"]:focus,
+.config-section input[type="date"]:focus,
+.config-section input[type="time"]:focus,
+.config-section select:focus,
+.config-section textarea:focus {
+    border-color: #007bff; /* Bleu pour le focus */
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25); /* Ombre de focus type Bootstrap */
+}
+
+.config-section input[readonly] {
+    background-color: #e9ecef;
+    cursor: not-allowed;
+    color: #6c757d;
+}
+
+.form-group .help-text {
+    font-size: 0.8em;
+    color: #6c757d;
+    margin-top: 4px;
+    display: block;
+}
+
+/* Pour les groupes select + bouton écoute (config_general, config_day_types) */
+.sound-control-group {
+    display: flex;
+    align-items: center;
+    gap: 10px; /* Espace entre select et bouton */
+}
+.sound-control-group select {
+    flex-grow: 1;
+    /* margin-right est géré par gap */
+}
+.sound-control-group button { /* Bouton Écouter */
+    flex-shrink: 0;
+    /* Utiliser la classe .btn-small pour le style du bouton lui-même */
+}
+
+/* Bouton de sauvegarde principal pour une page de config */
+.config-page-save-button {
+    padding: 10px 20px;
+    background-color: #198754;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1.05em;
+    transition: background-color 0.2s;
+    margin-top: 20px; /* Plus d'espace au-dessus */
+    display: block; /* Prend toute la largeur s'il est seul */
+    min-width: 200px; /* Largeur minimale */
+    text-align: center;
+}
+.config-page-save-button:hover {
+    background-color: #157347;
+}
+
+/* Feedback messages DANS une config-section (s'il y en a un spécifique) */
+.config-section .feedback-message {
+    margin-top: 15px;
+}
+
+
+/* =============================================== */
+/* STYLES SPÉCIFIQUES AUX TABLES DE CONFIGURATION  */
+/* (utilisé dans config_day_types, config_exceptions, config_sounds) */
+/* =============================================== */
+.config-table { /* Appliquer cette classe à vos <table> */
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    font-size: 0.9em;
+}
+.config-table th,
+.config-table td {
+    border: 1px solid #ddd;
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: middle; /* Mieux pour les boutons et le texte sur la même ligne */
+}
+.config-table th {
+    background-color: #f2f2f2; /* Fond plus clair pour les en-têtes */
+    font-weight: 600; /* Un peu moins gras que bold par défaut */
+    color: #333;
+}
+.config-table td em { /* Pour les "Silence" ou notes */
+    color: #777;
+    font-style: italic;
+}
+
+/* Petits boutons d'action DANS les tables */
+.config-table button.btn-small {
+    margin-right: 4px;
+    padding: 3px 7px;
+    font-size: 0.85em;
+    line-height: 1.2;
+    cursor: pointer;
+    border: 1px solid #bbb;
+    background-color: #f0f0f0;
+    border-radius: 3px;
+    color: #333;
+}
+.config-table button.btn-small:hover {
+    background-color: #e0e0e0;
+    border-color: #999;
+}
+.config-table button.btn-small:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.config-table td.actions button.btn-small:last-child { /* Si une cellule .actions est dédiée aux boutons */
+    margin-right: 0;
+}
+
+
+/* =============================================== */
+/* STYLES SPÉCIFIQUES À CONFIG_DAY_TYPES.HTML      */
+/* =============================================== */
+.day-type-layout-container { /* Remplacera .container pour cette page */
+    display: flex;
+    gap: 20px;
+}
+.day-type-list-section {
+    flex: 0 0 280px; /* Un peu plus large pour les noms de JT */
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+}
+.day-type-details-section {
+    flex: 1;
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+}
+.day-type-list-section h2,
+.day-type-details-section h2 { /* Titres H2 spécifiques à ces sections */
+    margin-top: 0;
+    font-size: 1.2em; /* Plus petits que les H2 de .config-section */
+    color: #007bff; /* Bleu */
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 8px;
+    margin-bottom: 15px;
+}
+
+#day-types-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 15px 0; /* Marge en bas avant les boutons */
+    max-height: 350px; /* Hauteur max pour la liste */
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+#day-types-list li {
+    padding: 10px 12px; /* Plus de padding */
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+    transition: background-color 0.15s ease-in-out;
+    font-size: 0.95em;
+}
+#day-types-list li:last-child { border-bottom: none; }
+#day-types-list li:hover { background-color: #e9ecef; } /* Gris clair au survol */
+#day-types-list li.selected {
+    background-color: #007bff; /* Bleu sélection */
+    color: white;
+    font-weight: bold;
+}
+
+/* Boutons d'action sous la liste des JT */
+.day-type-list-section .action-buttons button {
+    /* Héritent du style de #control-section button ou peuvent avoir leur propre style */
+    padding: 6px 12px;
+    font-size: 0.9em;
+    margin-right: 8px;
+}
+
+/* Titre H3 des périodes */
+#details-content h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+    color: #555;
+}
+
+/* Tableau des périodes (utilise .config-table) */
+#periods-table { /* S'il y a des styles spécifiques en plus de .config-table */
+    /* Par exemple, alignement des heures */
+}
+#periods-table td:nth-child(1), /* Début */
+#periods-table td:nth-child(2) { /* Fin */
+    text-align: center;
+    font-family: monospace;
+    width: 70px; /* Largeur fixe pour les heures */
+}
+
+
+/* Styles pour le formulaire d'ajout/modification de période (utilise .form-container-style) */
+#period-form-section {
+    /* Hérite de .form-container-style. Les styles spécifiques sont déjà là-haut */
+}
+#period-form-section .time-input-group { /* Spécifique au formulaire de période */
+    /* Déjà défini dans .form-container-style .time-input-group */
+}
+
+
+/* =============================================== */
+/* STYLES SPÉCIFIQUES À CONFIG_WEEKLY.HTML         */
+/* =============================================== */
+.weekly-schedule-grid {
+    display: grid;
+    grid-template-columns: auto 1fr; /* Label à gauche, select à droite */
+    gap: 10px 15px;
+    align-items: center;
+    max-width: 500px;
+    margin-top: 15px; /* Espace par rapport au paragraphe d'intro */
+}
+.weekly-schedule-grid label {
+    font-weight: 600; /* Labels en gras */
+    text-align: right;
+    font-size: 0.95em;
+}
+/* Le select utilise le style général .config-section .form-group select */
+
+
+/* =============================================== */
+/* STYLES SPÉCIFIQUES À CONFIG_EXCEPTIONS.HTML     */
+/* =============================================== */
+.exceptions-layout-container { /* Remplacera .container pour cette page */
+    display: flex;
+    flex-wrap: wrap; /* Permet le retour à la ligne */
+    gap: 20px;
+}
+.exceptions-list-section {
+    flex: 1 1 450px; /* Prend plus de place, peut rétrécir */
+    min-width: 400px;
+    /* Hérite de .config-section pour le style de base */
+}
+.exception-form-section {
+    flex: 1 1 350px;
+    min-width: 320px;
+    /* Hérite de .config-section pour le style de base */
+}
+.exceptions-list-section h2,
+.exception-form-section h2 { /* Titres H2 spécifiques */
+    margin-top: 0;
+    font-size: 1.2em;
+    color: #007bff;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 8px;
+    margin-bottom: 15px;
+}
+/* Tableau des exceptions (utilise .config-table) */
+#exceptions-table { /* Styles spécifiques en plus de .config-table */
+}
+#exceptions-table td:nth-child(1) { /* Date */
+    font-family: monospace;
+    width: 100px;
+    text-align: center;
+}
+
+/* Formulaire d'exception (utilise .form-container-style et .form-group) */
+#exception-form .radio-group { /* Pour les radios Silence / Utiliser JT */
+    display: flex;
+    align-items: center;
+    gap: 15px; /* Espacer les options radio */
+    margin-bottom: 10px; /* Espace sous le groupe radio */
+}
+#exception-form .radio-group div { /* Conteneur pour chaque paire input+label */
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+#exception-form .radio-group input[type="radio"] {
+    margin: 0;
+    width: auto; /* Laisser la taille par défaut du radio */
+}
+#exception-form .radio-group label {
+    font-weight: normal; /* Labels des radios normaux */
+    margin-bottom: 0;
+}
+
+
+/* =============================================== */
+/* STYLES SPÉCIFIQUES À CONFIG_SOUNDS.HTML         */
+/* =============================================== */
+/* Tableau des sonneries (utilise .config-table) */
+#sounds-table { /* Styles spécifiques en plus de .config-table */
+}
+/* Colonne "Actions" dans la table des sonneries */
+#sounds-table td:nth-child(1) { /* Première colonne - Actions pour nom/désassocier/suppr fichier */
+    white-space: nowrap;
+    width: auto;
+}
+/* Colonne "Nom Convivial" et ses contrôles d'édition */
+#sounds-table td:nth-child(2) .display-name-text {
+    margin-right: 8px; /* Espace entre le nom et le groupe de boutons d'édition */
+}
+#sounds-table td:nth-child(2) .display-name-input {
+    min-width: 180px; /* Largeur de base pour l'input du nom */
+    padding: 6px;
+    margin-right: 5px;
+}
+#sounds-table td:nth-child(2) .display-name-controls {
+    display: inline-block;
+    white-space: nowrap;
+}
+/* Colonne "Nom Fichier" */
+#sounds-table td:nth-child(3) {
+    font-family: monospace;
+}
+/* Colonne "Pré-écoute" */
+#sounds-table td:nth-child(4) {
+    text-align: center;
+}
+
+/* Boutons spécifiques à la page des sonneries */
+#scan-mp3-btn,
+#upload-btn { /* Styles pour les boutons Scanner et Uploader */
+    padding: 10px 15px;
+    background-color: #0d6efd;
+    color: white;
+    border:none;
+    border-radius:4px;
+    cursor:pointer;
+    margin-right: 10px; /* Pour les espacer s'ils sont sur la même ligne */
+    margin-bottom: 10px; /* Espace en dessous s'ils sont sur des lignes séparées */
+}
+#scan-mp3-btn:hover,
+#upload-btn:hover { background-color: #0b5ed7; }
+
+/* =============================================== */
+/* STYLES SPÉCIFIQUES À CONFIG_WEEKLY.HTML         */
+/* =============================================== */
+
+.weekly-schedule-grid { 
+    display: grid; 
+    grid-template-columns: auto 1fr; /* Label à gauche, select à droite */
+    gap: 10px 15px; /* Espacement entre lignes et colonnes */
+    align-items: center; /* Aligner verticalement label et select */
+    max-width: 450px; /* Largeur max de la grille */
+    margin-top: 15px; /* Espace par rapport au paragraphe d'intro */
+}
+
+.weekly-schedule-grid label { 
+    font-weight: 600; /* Labels en gras (cohérent avec .form-group label) */
+    text-align: right; 
+    font-size: 0.95em; /* Cohérent avec .form-group label */
+    color: #555;
+}
+
+/* Les selects dans .weekly-schedule-grid utiliseront le style global : */
+/* .config-section .form-group select, (ou juste .config-section select si pas dans un form-group) */
+/* car #weekly-schedule-form est dans un .config-section. */
+/* Si besoin de spécificité : */
+/* .weekly-schedule-grid select { ... } */
+
+/* Le bouton de sauvegarde #save-weekly-btn utilisera .config-page-save-button */
+/* Le #weekly-feedback utilisera .feedback-message */
+
+
+/* =============================================== */
+/* STYLES SPÉCIFIQUES À CONFIG_DAY_TYPES.HTML      */
+/* =============================================== */
+
+/* Le conteneur flex principal pour la mise en page à deux colonnes */
+/* Si .container est trop générique, tu peux le renommer en .day-type-layout dans le HTML */
+.container { /* Utilisé dans config_day_types.html */
+    display: flex;
+    gap: 20px;
+}
+
+.day-type-list-section {
+    flex: 0 0 280px; /* Un peu plus large que tes 250px pour les noms */
+    padding: 15px;
+    border: 1px solid #e0e0e0; /* Cohérent avec .config-section */
+    border-radius: 8px;
+    background-color: #f9f9f9; /* Fond légèrement différent pour la liste */
+}
+
+.day-type-details-section {
+    flex: 1;
+    padding: 15px;
+    border: 1px solid #e0e0e0; /* Cohérent avec .config-section */
+    border-radius: 8px;
+    background-color: #ffffff; /* Fond blanc pour la zone de détails */
+}
+
+/* Titres H2 spécifiques à ces sections */
+.day-type-list-section h2, 
+.day-type-details-section h2 { 
+    margin-top: 0;
+    font-size: 1.2em; /* Un peu plus petit que les h2 de .config-section */
+    color: #007bff;   /* Bleu thématique pour ces titres */
+    border-bottom: 1px solid #dee2e6; /* Bordure plus légère */
+    padding-bottom: 8px;
+    margin-bottom: 15px;
+}
+
+/* Liste des journées types */
+#day-types-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 15px 0; /* Marge en bas avant les boutons */
+    max-height: 350px; 
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+#day-types-list li {
+    padding: 10px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+    transition: background-color 0.15s ease-in-out;
+    font-size: 0.95em;
+}
+#day-types-list li:last-child { border-bottom: none; }
+#day-types-list li:hover { background-color: #e9ecef; }
+#day-types-list li.selected { 
+    background-color: #007bff; /* Utiliser le même bleu que les titres de section */
+    color: white; 
+    font-weight: bold; 
+}
+
+/* Boutons d'action sous la liste des JT */
+.day-type-list-section .action-buttons button {
+    margin-top: 10px; /* Un peu moins de marge */
+    margin-right: 8px;
+    padding: 6px 12px;
+    font-size: 0.9em;
+    /* Ils hériteront du style .btn-small ou d'un style de bouton global si défini */
+}
+.day-type-list-section .action-buttons button:last-child {
+    margin-right: 0;
+}
+
+
+/* Titre H3 des périodes dans la section détails */
+.day-type-details-section #details-content h3 { /* Plus spécifique */
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+    color: #333; /* Couleur de titre standard */
+}
+
+/* Tableau des périodes (utilise .config-table maintenant) */
+/* #periods-table { width: 100%; border-collapse: collapse; margin-top: 15px; } */
+/* #periods-table th, #periods-table td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.9em;} */
+/* #periods-table th { background-color: #f2f2f2; } */
+/* Ces styles sont maintenant dans .config-table, on ajoute juste les spécificités */
+
+#periods-table td:nth-child(1), /* Colonne Début */
+#periods-table td:nth-child(2) { /* Colonne Fin */
+    text-align: center;
+    font-family: monospace;
+    width: 70px; /* Largeur fixe pour les heures */
+}
+#periods-table td em { /* Pour "Silence" dans le tableau des périodes */
+    color: #6c757d; /* Gris Bootstrap */
+    font-style: italic;
+}
+
+/* Feedback messages DANS la section détails des JT */
+.day-type-details-section #day-type-feedback { /* Plus spécifique */
+    margin-top: 15px;
+}
+.day-type-list-section #list-feedback { /* Plus spécifique */
+    margin-top: 10px;
+}
+
+
+/* Styles pour le formulaire d'ajout/modification de période (utilise .form-container-style) */
+/* La classe .form-container-style et ses enfants (.form-group, input, select, h4) */
+/* sont déjà définis dans les styles communs. */
+/* #period-form-section { ... } */ /* Ce sélecteur ID est utilisé par JS pour trouver le div, mais son style vient de la classe */
+
+/* Si on a besoin de surcharger des styles spécifiques pour #period-form-section au-delà de .form-container-style: */
+/* Par exemple, si les boutons à l'intérieur doivent être différents : */
+#period-form-section button { 
+    /* S'ils n'héritent pas correctement ou si on veut un style différent des boutons globaux de .form-container-style */
+    /* margin-right: 10px; */ /* Déjà dans .form-container-style button */
+    /* padding: 8px 15px; */ /* Déjà dans .form-container-style button */
+}
+/* Le bouton Annuler dans le formulaire de période utilise déjà .cancel-button de .form-container-style */
+
+/* =============================================== */
+/* STYLES SPÉCIFIQUES À CONFIG_EXCEPTIONS.HTML     */
+/* =============================================== */
+
+/* Conteneur flex principal pour cette page */
+/* Si tu utilises <div class="container"> dans le HTML, ce style s'appliquera.
+   Sinon, si tu as <div class="exceptions-layout-container">, utilise ce sélecteur.
+   Je vais utiliser .exceptions-layout-container pour être spécifique. */
+.exceptions-layout-container { 
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap; /* Permet le retour à la ligne sur petits écrans */
+}
+
+/* Sections de la liste et du formulaire */
+/* Elles utiliseront la classe .config-section pour leur style de base (bordure, fond, padding) */
+.exceptions-list-section { 
+    flex: 1 1 450px; /* Prend plus de place, peut rétrécir */
+    min-width: 400px; 
+}
+.exception-form-section { 
+    flex: 1 1 380px; /* Un peu plus large pour le formulaire */
+    min-width: 350px; 
+}
+
+/* Titres H2 spécifiques à ces sections (si différents de .config-section h2) */
+/* Si le style de .config-section h2 te convient, ces règles ne sont pas nécessaires */
+.exceptions-list-section h2, 
+.exception-form-section h2 { 
+    margin-top: 0;
+    font-size: 1.2em; 
+    color: #007bff; /* Bleu thématique */
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 8px;
+    margin-bottom: 15px;
+}
+
+/* Tableau des exceptions (utilise .config-table) */
+/* #exceptions-table { width: 100%; border-collapse: collapse; margin-top: 10px; } */
+/* #exceptions-table th, #exceptions-table td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.9em; } */
+/* #exceptions-table th { background-color: #f2f2f2; } */
+/* Ces styles sont couverts par .config-table. On ajoute juste les spécificités. */
+
+#exceptions-table td:nth-child(1) { /* Colonne Date */
+    font-family: monospace;
+    width: 100px; /* Largeur fixe pour la date */
+    text-align: center;
+}
+#exceptions-table .actions button { /* Style pour les boutons d'action dans la table */
+    /* Hérite de .btn-small */
+    /* margin-right: 5px; */ /* Déjà dans .btn-small */
+    /* padding: 3px 6px; */  /* Déjà dans .btn-small */
+    /* font-size: 0.8em; */  /* Déjà dans .btn-small */
+}
+
+
+/* Formulaire d'exception */
+/* Le formulaire lui-même (#exception-form) n'a pas besoin de style particulier ici, */
+/* ce sont ses enfants .form-group qui sont stylés. */
+
+/* Groupe de boutons radio pour l'action */
+#exception-form .radio-group { 
+    display: flex;
+    align-items: center;
+    gap: 20px; /* Espacer les options "Silence" et "Utiliser JT" */
+    margin-bottom: 10px; /* Espace sous le groupe radio */
+    margin-top: 5px; /* Espace au-dessus */
+}
+#exception-form .radio-group div { /* Conteneur pour chaque paire input+label radio */
+    display: flex;
+    align-items: center;
+    gap: 5px; /* Espace entre le radio et son label */
+}
+#exception-form .radio-group input[type="radio"] {
+    margin: 0; /* Retirer marges par défaut du navigateur */
+    width: auto; /* Laisser la taille par défaut du radio */
+    /* vertical-align: middle; (déjà sur td, ou flex align-items s'en charge) */
+}
+#exception-form .radio-group label {
+    font-weight: normal; /* Labels des radios normaux */
+    margin-bottom: 0; /* Pas de marge en bas pour ces labels */
+    cursor: pointer; /* Rendre le label cliquable */
+}
+
+/* Le select pour Journée Type (#exception-day-type) et l'input pour description */
+/* utiliseront les styles généraux de .config-section .form-group select/input[type="text"] */
+
+/* Le bouton Sauvegarder Exception et Effacer/Annuler peuvent utiliser le style global des boutons */
+/* ou des classes spécifiques si besoin (ex: .btn-primary, .btn-secondary) */
+/* Par exemple, si on veut que le bouton "Sauvegarder" soit vert : */
+#exception-form button[onclick="submitExceptionForm()"] {
+    /* Peut hériter de .config-page-save-button si on ajoute cette classe au HTML */
+    /* ou style spécifique ici */
+    /* background-color: #198754; */
+    /* color: white; */
+}
+#exception-form button[onclick="clearExceptionForm()"] {
+    /* Peut utiliser .cancel-button si on ajoute cette classe au HTML */
+    /* background-color: #6c757d; */
+    /* color: white; */
+}
+
+/* Feedback dans cette page (utilise déjà .feedback-message global) */
+/* #exception-feedback, #list-feedback { margin-top: 15px; } */

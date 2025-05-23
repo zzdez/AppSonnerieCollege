@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Configuration des Exceptions - Sonneries Collège</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+</head>
+<body>
+    <!-- Barre de Navigation -->
+    <div style="text-align: right; margin-bottom: 10px; font-size: 0.9em;">
+       {% if current_user and current_user.is_authenticated %}
+         Connecté: <strong>{{ current_user.id }}</strong> |
+         <a href="{{ url_for('index') }}">Contrôle Principal</a> |
+         <a href="{{ url_for('config_general_page') }}">Config Générale</a> |
+         <a href="{{ url_for('config_weekly_page') }}">Config Hebdo</a> |
+         <a href="{{ url_for('config_day_types_page') }}">Journées Types</a> |
+         <a href="{{ url_for('config_exceptions_page') }}">Exceptions</a> |
+         <a href="{{ url_for('config_sounds_page') }}">Sonneries</a> |
+         <a href="{{ url_for('logout') }}">Déconnexion</a>
+       {% else %}
+         (Non Connecté) <a href="{{ url_for('login') }}">Se connecter</a>
+       {% endif %}
+     </div>
+<div class="config-page-container">
+    <h1>Gestion des Exceptions de Planning</h1>
+
+    <div class="exceptions-layout-container">
+        <!-- Section Liste des Exceptions -->
+        <div class="exceptions-list-section">
+            <h2>Exceptions Actuelles</h2>
+            <table id="exceptions-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Action</th>
+                        <th>Journée Type / Description</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="exceptions-table-body">
+                    <tr><td colspan="4">Chargement des exceptions...</td></tr>
+                </tbody>
+            </table>
+            <div id="list-feedback" class="feedback-message" style="display: none; margin-top: 10px;"></div>
+        </div>
+
+        <!-- Section Formulaire Ajout/Modification -->
+        <div class="exception-form-section">
+            <h2 id="form-title">Ajouter une Exception</h2>
+            <form id="exception-form" onsubmit="return false;">
+                <input type="hidden" id="editing-date" value="">
+                <div class="form-group">
+                    <label for="exception-date">Date :</label> <!-- Ajout du for ici -->
+                    <input type="date" id="exception-date" required>
+                </div>
+                <div class="form-group">
+                    <label>Action :</label>
+                    <div class="radio-group">
+                        <div>
+                            <input type="radio" id="action-silence" name="exception-action" value="silence" checked onchange="toggleDayTypeSelect()">
+                            <label for="action-silence">Silence</label>
+                        </div>
+                        <div>
+                            <input type="radio" id="action-utiliser-jt" name="exception-action" value="utiliser_jt" onchange="toggleDayTypeSelect()">
+                            <label for="action-utiliser-jt">Utiliser Journée Type</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group" id="day-type-select-group" style="display: none;">
+                    <label for="exception-day-type">Journée Type :</label>
+                    <select id="exception-day-type">
+                        <!-- Options chargées par JS -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="exception-description">Description (optionnel) :</label>
+                    <input type="text" id="exception-description" placeholder="Ex: Journée pédagogique">
+                </div>
+                <button type="button" class="config-page-save-button" onclick="submitExceptionForm()">Sauvegarder Exception</button>
+                <button type="button" class="config-page-save-button" onclick="clearExceptionForm()">Effacer / Annuler</button>
+            </form>
+            <div id="exception-feedback" class="feedback-message" style="display: none;"></div>
+        </div>
+    </div>
+
+<script>
+    // --------------------------------------------------
+    // 1. Variables Globales
+    // --------------------------------------------------
+    let availableDayTypesForExceptions = []; // Sera chargé une fois
+
+    // --------------------------------------------------
+    // 2. Fonctions Utilitaires
+    // --------------------------------------------------
+    function showExceptionFeedback(message, type = 'info', duration = 4000, targetId = 'exception-feedback') {
+        const feedbackDiv = document.getElementById(targetId);
+        if (!feedbackDiv) { console.error("Div feedback non trouvé:", targetId); return; }
+        feedbackDiv.textContent = message;
+        feedbackDiv.className = 'feedback-message'; // Reset
+        feedbackDiv.classList.add(type, 'show');
+        feedbackDiv.style.display = 'block';
+        setTimeout(() => {
+            feedbackDiv.classList.remove('show');
+            setTimeout(() => { if (!feedbackDiv.classList.contains('show')) feedbackDiv.style.display = 'none'; }, 500);
+        }, duration);
+    }
+
+    function populateDropdown(selectId, options, selectedValue, addEmptyOptionText = null, emptyOptionValue = "") {
+        const select = document.getElementById(selectId);
+        if (!select) { console.error("Select non trouvé:", selectId); return; }
+        select.innerHTML = '';
+        if (addEmptyOptionText !== null) {
+            const emptyOpt = document.createElement('option');
+            emptyOpt.value = emptyOptionValue;
+            emptyOpt.textContent = addEmptyOptionText;
+            select.appendChild(emptyOpt);
+        }
+        options.forEach(item => { // Suppose que 'options' est un tableau de strings pour les JT
+            const option = document.createElement('option');
+            option.value = item;
+            option.textContent = item;
+            select.appendChild(option);
+        });
+        select.value = selectedValue || emptyOptionValue;
+    }
+
+    // --------------------------------------------------
+    // 3. Fonctions UI et Logique Formulaire
+    // --------------------------------------------------
+    function toggleDayTypeSelect() {
+        const useJtRadio = document.getElementById('action-utiliser-jt');
+        const dayTypeGroup = document.getElementById('day-type-select-group');
+        if (useJtRadio && dayTypeGroup) {
+            dayTypeGroup.style.display = useJtRadio.checked ? 'block' : 'none';
+        }
+    }
+
+    function clearExceptionForm() {
+        document.getElementById('exception-form').reset(); // Reset les champs du formulaire
+        document.getElementById('editing-date').value = ''; // Vider la date cachée d'édition
+        document.getElementById('exception-date').disabled = false; // Rendre le champ date éditable
+        document.getElementById('form-title').textContent = "Ajouter une Exception";
+        toggleDayTypeSelect(); // Assurer que le select de JT est dans le bon état
+        showExceptionFeedback('', 'info'); // Cacher le feedback
+        console.log("Formulaire d'exception effacé.");
+    }
+
+    function populateExceptionsTable(exceptions) {
+        const tableBody = document.getElementById('exceptions-table-body');
+        tableBody.innerHTML = ''; // Vider
+
+        if (Object.keys(exceptions).length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="4">Aucune exception définie.</td></tr>';
+            return;
+        }
+
+        // Trier les exceptions par date pour l'affichage
+        const sortedDates = Object.keys(exceptions).sort();
+
+        sortedDates.forEach(dateStr => {
+            const ex = exceptions[dateStr];
+            const row = tableBody.insertRow();
+            row.insertCell().textContent = dateStr;
+            row.insertCell().textContent = ex.action === 'utiliser_jt' ? 'Utiliser JT' : 'Silence';
+
+            let detailsText = ex.description || '';
+            if (ex.action === 'utiliser_jt' && ex.journee_type) {
+                detailsText = `${ex.journee_type}${detailsText ? ' - ' + detailsText : ''}`;
+            }
+            row.insertCell().textContent = detailsText || '-';
+
+            const actionsCell = row.insertCell();
+            actionsCell.classList.add('actions');
+            const editButton = document.createElement('button');
+            editButton.innerHTML = '✏️';
+            editButton.title = 'Modifier';
+            editButton.onclick = () => loadExceptionForEdit(dateStr, ex);
+            actionsCell.appendChild(editButton);
+
+            const deleteButton = document.createElement('button');
+            deleteButton.innerHTML = '❌';
+            deleteButton.title = 'Supprimer';
+            deleteButton.onclick = () => deleteException(dateStr);
+            actionsCell.appendChild(deleteButton);
+        });
+    }
+
+    function loadExceptionForEdit(dateStr, exceptionData) {
+        console.log("Chargement exception pour édition:", dateStr, exceptionData);
+        document.getElementById('form-title').textContent = `Modifier l'Exception du ${dateStr}`;
+        document.getElementById('editing-date').value = dateStr;
+
+        const dateInput = document.getElementById('exception-date');
+        dateInput.value = dateStr;
+        dateInput.disabled = true;
+
+        // Décocher les deux radios avant de cocher le bon
+        document.getElementById('action-silence').checked = false;
+        document.getElementById('action-utiliser-jt').checked = false;
+
+        // Cocher le bon radio basé sur les données
+        const actionToSelect = exceptionData.action || 'silence'; // 'silence' par défaut si action manquante
+        const radioToSelect = document.getElementById(`action-${actionToSelect}`);
+        if (radioToSelect) {
+            radioToSelect.checked = true;
+        } else {
+            console.warn(`Radio pour action '${actionToSelect}' non trouvé, défaut sur silence.`);
+            document.getElementById('action-silence').checked = true;
+        }
+
+        toggleDayTypeSelect(); // Mettre à jour la visibilité du select JT APRES avoir coché
+
+        if (actionToSelect === 'utiliser_jt' && exceptionData.journee_type) {
+            document.getElementById('exception-day-type').value = exceptionData.journee_type;
+        } else {
+            // S'assurer que le select est sur une valeur par défaut si action est silence
+            // ou si pas de journée type pour utiliser_jt
+            populateDropdown('exception-day-type', availableDayTypesForExceptions, null, "Sélectionner une JT...");
+        }
+        document.getElementById('exception-description').value = exceptionData.description || '';
+        // Optionnel: scroll vers le formulaire
+        // document.getElementById('exception-form').scrollIntoView({behavior: "smooth", block: "start"});
+    }
+
+    // --------------------------------------------------
+    // 4. Fonctions API (CRUD pour Exceptions)
+    // --------------------------------------------------
+    function loadAllExceptionsAndDayTypes() {
+        console.log("Chargement des exceptions et des journées types...");
+        const exceptionsPromise = fetch('/api/config/exceptions')
+            .then(response => response.ok ? response.json() : Promise.reject('Erreur chargement exceptions'))
+            .then(data => {
+                populateExceptionsTable(data.exceptions_planning || {});
+            })
+            .catch(error => {
+                console.error("Erreur chargement exceptions:", error);
+                document.getElementById('exceptions-table-body').innerHTML = `<tr><td colspan="4" style="color:red;">Erreur chargement: ${error.message}</td></tr>`;
+                showExceptionFeedback(`Erreur chargement exceptions: ${error.message}`, 'error', 10000, 'list-feedback');
+            });
+
+        // Charger les noms des journées types pour le select
+        const dayTypesPromise = fetch('/api/config/day_types') // API pour lister les JT
+            .then(response => response.ok ? response.json() : Promise.reject('Erreur chargement journées types'))
+            .then(data => {
+                availableDayTypesForExceptions = data.day_types || [];
+                populateDropdown('exception-day-type', availableDayTypesForExceptions, null, "Sélectionner une JT...");
+            })
+            .catch(error => {
+                console.error("Erreur chargement journées types pour select:", error);
+                showExceptionFeedback("Erreur chargement liste des journées types.", 'error', 10000);
+            });
+
+        Promise.all([exceptionsPromise, dayTypesPromise]).then(() => {
+            console.log("Chargement initial des exceptions et JT terminé.");
+            clearExceptionForm(); // Assurer que le formulaire est propre au début
+        });
+    }
+
+    function submitExceptionForm() {
+        const editingDate = document.getElementById('editing-date').value;
+        const dateStr = document.getElementById('exception-date').value;
+        const action = document.querySelector('input[name="exception-action"]:checked').value;
+        const description = document.getElementById('exception-description').value.trim();
+        const dayTypeName = (action === 'utiliser_jt') ? document.getElementById('exception-day-type').value : null;
+
+        if (!dateStr) {
+            showExceptionFeedback("La date est requise.", 'error'); return;
+        }
+        if (action === 'utiliser_jt' && !dayTypeName) {
+            showExceptionFeedback("Veuillez sélectionner une journée type.", 'error'); return;
+        }
+
+        const exceptionData = { date: dateStr, action, description };
+        if (dayTypeName) exceptionData.journee_type = dayTypeName;
+
+        let apiUrl = '/api/config/exceptions';
+        let method = 'POST';
+
+        if (editingDate) { // Si editingDate a une valeur, c'est une modification
+            apiUrl += `/${encodeURIComponent(editingDate)}`; // L'URL utilise la date originale pour l'update
+            method = 'PUT';
+            // Pour PUT, on envoie les nouvelles données, mais la date clé est dans l'URL
+            // Si la date elle-même a été modifiée dans le formulaire (non permis actuellement),
+            // il faudrait une logique plus complexe (supprimer l'ancienne, ajouter la nouvelle).
+            // Ici, on suppose que la date n'est pas modifiée lors d'un PUT.
+            // La route PUT prend la date de l'URL, pas du corps pour identifier l'exception.
+            // Le corps contient les nouvelles valeurs pour cette date.
+            delete exceptionData.date; // Pas besoin d'envoyer la date dans le corps pour PUT
+        }
+
+        console.log(`Soumission exception (${method}) vers ${apiUrl}:`, exceptionData);
+        showExceptionFeedback("Sauvegarde en cours...", 'info', 0);
+
+        fetch(apiUrl, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(exceptionData)
+        })
+        .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
+        .then(({ ok, status, data }) => {
+            if (ok) { // 200 pour PUT, 201 pour POST
+                showExceptionFeedback(data.message || "Exception sauvegardée !", 'success');
+                loadAllExceptionsAndDayTypes(); // Recharger la table et le formulaire (pour le clear)
+                // clearExceptionForm(); // Déjà appelé par loadAllExceptionsAndDayTypes implicitement
+                if (confirm("Exception sauvegardée. Voulez-vous demander au serveur de recharger sa configuration ?")) {
+                    fetch('/api/config/reload', { method: 'POST' })
+                        .then(r => r.json())
+                        .then(d => showExceptionFeedback(d.message || "Rechargement demandé.", r.ok ? 'info' : 'error', 5000));
+                }
+            } else {
+                throw new Error(data.error || `Erreur ${status} lors de la sauvegarde.`);
+            }
+        })
+        .catch(error => {
+            console.error("Erreur sauvegarde exception:", error);
+            showExceptionFeedback(`Erreur sauvegarde: ${error.message}`, 'error');
+        });
+    }
+
+    function deleteException(dateStr) {
+        if (!confirm(`Êtes-vous sûr de vouloir supprimer l'exception du ${dateStr} ?`)) {
+            return;
+        }
+        console.log(`Suppression exception pour date: ${dateStr}`);
+        showExceptionFeedback("Suppression en cours...", 'info', 0);
+
+        fetch(`/api/config/exceptions/${encodeURIComponent(dateStr)}`, { method: 'DELETE' })
+        .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
+        .then(({ ok, status, data }) => {
+            if (ok) {
+                showExceptionFeedback(data.message || "Exception supprimée.", 'success');
+                loadAllExceptionsAndDayTypes(); // Recharger la table
+                if (confirm("Exception supprimée. Voulez-vous demander au serveur de recharger sa configuration ?")) {
+                    fetch('/api/config/reload', { method: 'POST' })
+                        .then(r => r.json())
+                        .then(d => showExceptionFeedback(d.message || "Rechargement demandé.", r.ok ? 'info' : 'error', 5000));
+                }
+            } else {
+                throw new Error(data.error || `Erreur ${status} lors de la suppression.`);
+            }
+        })
+        .catch(error => {
+            console.error("Erreur suppression exception:", error);
+            showExceptionFeedback(`Erreur suppression: ${error.message}`, 'error');
+        });
+    }
+
+
+    // --------------------------------------------------
+    // 5. Initialisation
+    // --------------------------------------------------
+    function initPage() {
+        console.log("Initialisation page config exceptions...");
+        document.querySelectorAll('input[name="exception-action"]').forEach(radio => {
+            radio.addEventListener('change', toggleDayTypeSelect);
+        });
+        loadAllExceptionsAndDayTypes(); // Charger les données initiales
+    }
+
+    document.addEventListener('DOMContentLoaded', initPage);
+
+</script>
+</body>
+</html>

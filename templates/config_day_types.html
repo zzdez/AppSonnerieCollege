@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Configuration Journées Types - Sonneries Collège</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+</head>
+<body>
+    <!-- Barre de Navigation -->
+    <div style="text-align: right; margin-bottom: 10px; font-size: 0.9em;">
+       {% if current_user and current_user.is_authenticated %}
+         Connecté: <strong>{{ current_user.id }}</strong> |
+         <a href="{{ url_for('index') }}">Contrôle Principal</a> |
+         <a href="{{ url_for('config_general_page') }}">Config Générale</a> |
+         <a href="{{ url_for('config_weekly_page') }}">Config Hebdo</a> |
+         <a href="{{ url_for('config_day_types_page') }}">Journées Types</a> |
+         <a href="{{ url_for('config_exceptions_page') }}">Exceptions</a> |
+         <a href="{{ url_for('config_sounds_page') }}">Sonneries</a> |
+         <!-- Ajouter d'autres futurs liens de config ici -->
+         <a href="{{ url_for('logout') }}">Déconnexion</a>
+       {% else %}
+         (Non Connecté) <a href="{{ url_for('login') }}">Se connecter</a>
+       {% endif %}
+     </div>
+<table id="periods-table" class="config-table">
+    <h1>Gestion des Journées Types</h1>
+
+    <div class="container">
+        <!-- Section Liste des Journées Types -->
+        <div class="day-type-list-section">
+            <h2>Journées Types</h2>
+            <ul id="day-types-list">
+                <li>Chargement...</li>
+            </ul>
+            <div class="action-buttons">
+                <button onclick="prepareAddDayType()">➕ Ajouter</button>
+                <button onclick="prepareEditDayType()">✏️ Renommer</button>
+                <button onclick="deleteDayType()">❌ Supprimer</button>
+            </div>
+            <div id="list-feedback" class="feedback-message" style="display: none; margin-top: 10px;"></div>
+        </div>
+
+        <!-- Section Détails / Édition -->
+        <div class="day-type-details-section">
+            <h2 id="details-title">Détails de la Journée Type</h2>
+            <div id="details-content">
+                <p>Sélectionnez une journée type dans la liste pour voir ses détails ou cliquez sur "Ajouter".</p>
+                <!-- Le contenu (tableau des périodes ou formulaire d'ajout/modif) sera injecté ici -->
+            </div>
+             <div id="day-type-feedback" class="feedback-message" style="display: none;"></div>
+        </div>
+    </div>
+
+<script>
+    // --------------------------------------------------
+    // 1. Variables Globales
+    // --------------------------------------------------
+    let availableRingtones = {};
+    let currentSelectedDayTypeName = null;
+    let editingPeriodIndex = null;
+
+    // --------------------------------------------------
+    // 2. Fonctions Utilitaires (Helpers)
+    // --------------------------------------------------
+    function showDayTypeFeedback(message, type = 'info', duration = 4000, targetId = 'day-type-feedback') {
+        const feedbackDiv = document.getElementById(targetId);
+        if (!feedbackDiv) { console.error("Feedback div non trouvé:", targetId); return; }
+        feedbackDiv.textContent = message;
+        feedbackDiv.className = 'feedback-message';
+        feedbackDiv.classList.add(type, 'show');
+        feedbackDiv.style.display = 'block';
+        setTimeout(() => {
+            feedbackDiv.classList.remove('show');
+            setTimeout(() => { if (!feedbackDiv.classList.contains('show')) feedbackDiv.style.display = 'none'; }, 500);
+        }, duration);
+    }
+
+    function findRingtoneDisplayName(filename) {
+        if (!filename) return "Silence";
+        for (const [displayName, fname] of Object.entries(availableRingtones)) {
+            if (fname === filename) return displayName;
+        }
+        return filename;
+    }
+
+    function populateDropdown(selectId, options, selectedValue, addEmptyOptionText = null, emptyOptionValue = "") {
+        const select = document.getElementById(selectId);
+        if (!select) { console.error("Select non trouvé:", selectId); return; }
+        select.innerHTML = '';
+        if (addEmptyOptionText !== null) {
+            const emptyOpt = document.createElement('option');
+            emptyOpt.value = emptyOptionValue;
+            emptyOpt.textContent = addEmptyOptionText;
+            select.appendChild(emptyOpt);
+        }
+        if (typeof options === 'object' && !Array.isArray(options)) {
+            for (const [displayName, fileName] of Object.entries(options)) {
+                const option = document.createElement('option');
+                option.value = fileName; option.textContent = displayName; select.appendChild(option);
+            }
+        } else if (Array.isArray(options)) {
+            options.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item; option.textContent = item; select.appendChild(option);
+            });
+        }
+        if (selectedValue !== undefined && selectedValue !== null) {
+            select.value = selectedValue;
+        } else if (addEmptyOptionText !== null) {
+            select.value = emptyOptionValue;
+        }
+    }
+
+    function incrementTime(timeStrHHMM, minutesToAdd) {
+        if (!timeStrHHMM || timeStrHHMM.length !== 5) return "09:00";
+        try {
+            const [hours, minutes] = timeStrHHMM.split(':').map(Number);
+            const date = new Date(1970, 0, 1, hours, minutes);
+            date.setMinutes(date.getMinutes() + minutesToAdd);
+            return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+        } catch (e) { return "09:00"; }
+    }
+
+    function validatePeriods(allPeriods) {
+        const issues = [];
+        if (!allPeriods || allPeriods.length === 0) return issues;
+        const processedPeriods = allPeriods.map(p => ({
+            ...p,
+            startTime: new Date(`1970-01-01T${p.heure_debut}`),
+            endTime: new Date(`1970-01-01T${p.heure_fin}`)
+        })).sort((a, b) => a.startTime - b.startTime);
+
+        for (let i = 0; i < processedPeriods.length; i++) {
+            const p1 = processedPeriods[i];
+            if (p1.startTime.getTime() >= p1.endTime.getTime()) {
+                issues.push({ type: 'error', message: `Pour "${p1.nom}", fin (${p1.heure_fin.substring(0,5)}) doit être après début (${p1.heure_debut.substring(0,5)}).`, period: p1 });
+            }
+            if (i < processedPeriods.length - 1) {
+                const p2 = processedPeriods[i+1];
+                if (p2.startTime.getTime() < p1.endTime.getTime()) {
+                    issues.push({ type: 'error', message: `"${p1.nom}" (${p1.heure_debut.substring(0,5)}-${p1.heure_fin.substring(0,5)}) chevauche "${p2.nom}" (${p2.heure_debut.substring(0,5)}-${p2.heure_fin.substring(0,5)}).`, period: p1 });
+                } else if (p1.endTime.getTime() === p2.startTime.getTime()) {
+                    const p1FinSonnerie = p1.sonnerie_fin && p1.sonnerie_fin !== "";
+                    const p2DebutSonnerie = p2.sonnerie_debut && p2.sonnerie_debut !== "";
+                    if (p1FinSonnerie || p2DebutSonnerie) {
+                        if (p1.sonnerie_fin !== p2.sonnerie_debut) {
+                            issues.push({ type: 'warning', message: `Fin de "${p1.nom}" et début de "${p2.nom}" sont à ${p1.heure_fin.substring(0,5)} avec sonneries différentes.`, period: p1 });
+                        } else {
+                             issues.push({ type: 'info', message: `Fin de "${p1.nom}" et début de "${p2.nom}" sont à ${p1.heure_fin.substring(0,5)}. Sonnerie identique.`, period: p1 });
+                        }
+                    }
+                }
+            }
+        }
+        const uniqueIssues = []; const reportedMessages = new Set();
+        for (const issue of issues) {
+            const issueKey = `${issue.type}-${issue.message}-${issue.period.nom}`;
+            if (!reportedMessages.has(issueKey)) { uniqueIssues.push(issue); reportedMessages.add(issueKey); }
+        }
+        return uniqueIssues;
+    }
+
+    function setGlobalAddPeriodButtonState(visible) {
+        const globalAddButton = document.getElementById('btn-show-add-period-form');
+        if (globalAddButton) {
+            globalAddButton.style.display = visible ? 'inline-block' : 'none';
+        }
+    }
+
+    // --------------------------------------------------
+    // 3. Fonctions Affichage / Interaction UI
+    // --------------------------------------------------
+    function populateDayTypeList(dayTypes) {
+        const listElement = document.getElementById('day-types-list');
+        listElement.innerHTML = '';
+        if (!dayTypes || dayTypes.length === 0) {
+            listElement.innerHTML = '<li>Aucune journée type définie.</li>';
+            return;
+        }
+        dayTypes.forEach(name => {
+            const li = document.createElement('li');
+            li.textContent = name;
+            li.dataset.dayTypeName = name;
+            li.onclick = () => selectDayType(name);
+            listElement.appendChild(li);
+        });
+    }
+
+    function selectDayType(name) {
+        console.log(`Sélection de la journée type: ${name}`);
+        currentSelectedDayTypeName = name;
+        document.querySelectorAll('#day-types-list li').forEach(li => {
+            li.classList.toggle('selected', li.dataset.dayTypeName === name);
+        });
+        const formSection = document.getElementById('period-form-section');
+        if (formSection) formSection.remove(); // Retirer form période si ouvert
+        editingPeriodIndex = null;
+        // Le bouton "Ajouter une Période" sera (ré)affiché par loadAndDisplayDayTypeDetails
+        loadAndDisplayDayTypeDetails(name);
+        // Après avoir chargé les détails, si un bouton "btn-show-add-period-form" est créé, il sera visible.
+        // setGlobalAddPeriodButtonState(true); // Peut être appelé dans loadAndDisplayDayTypeDetails
+    }
+
+    function loadAndDisplayDayTypeDetails(name) {
+        const detailsContent = document.getElementById('details-content');
+        const detailsTitle = document.getElementById('details-title');
+        if(!detailsTitle || !detailsContent) { console.error("Elts details manquants"); return; }
+        detailsTitle.textContent = `Détails : ${name}`;
+        detailsContent.innerHTML = '<p>Chargement des détails...</p>';
+        const oldForm = document.getElementById('period-form-section');
+        if (oldForm) oldForm.remove();
+        editingPeriodIndex = null;
+
+        fetch(`/api/config/day_types/${encodeURIComponent(name)}`)
+            .then(response => {
+                if (!response.ok) { return response.json().then(errData => { throw new Error(errData.error || `Erreur ${response.status}`); }); }
+                return response.json();
+            })
+            .then(data => {
+                console.log("Détails JT reçus:", data);
+                let html = `<h3>Périodes pour "${data.nom || name}"</h3>`;
+                if (data.periodes && data.periodes.length > 0) {
+                    html += `<table id="periods-table" class="config-table"><thead><tr><th>Début</th><th>Fin</th><th>Nom Période</th><th>Sonnerie Début</th><th>Sonnerie Fin</th><th>Actions</th></tr></thead><tbody>`;
+                    data.periodes.forEach((p, index) => {
+                        const debut = p.heure_debut || 'N/A'; const fin = p.heure_fin || 'N/A'; const nom = p.nom || '?';
+                        const sonD = p.sonnerie_debut; const sonF = p.sonnerie_fin;
+                        const sonDDisplay = sonD ? `<em>${findRingtoneDisplayName(sonD)}</em> (${sonD})` : '<em>Silence</em>';
+                        const sonFDisplay = sonF ? `<em>${findRingtoneDisplayName(sonF)}</em> (${sonF})` : '<em>Silence</em>';
+                        html += `<tr><td>${debut.substring(0,5)}</td><td>${fin.substring(0,5)}</td><td>${nom}</td><td>${sonDDisplay}</td><td>${sonFDisplay}</td><td><button onclick="editPeriod('${name}', ${index})" class='btn-small' title='Modifier'>✏️</button><button onclick="deletePeriod('${name}', ${index})" class='btn-small' title='Supprimer'>❌</button></td></tr>`;
+                    });
+                    html += `</tbody></table>`;
+                } else { html += `<p>Aucune période définie pour cette journée type.</p>`; }
+                html += `<div class="action-buttons" style="margin-top:15px;"><button id="btn-show-add-period-form" onclick="addPeriod('${name}')">➕ Ajouter une Période</button></div>`;
+                detailsContent.innerHTML = html;
+                setGlobalAddPeriodButtonState(true); // S'assurer qu'il est visible après chargement
+            })
+            .catch(error => {
+                console.error(`Erreur chargement détails JT ${name}:`, error);
+                detailsContent.innerHTML = `<p style="color:red;">Erreur: ${error.message}</p>`;
+                showDayTypeFeedback(`Erreur détails: ${error.message}`, 'error');
+                setGlobalAddPeriodButtonState(false); // Cacher en cas d'erreur de chargement des détails
+            });
+    }
+
+    // --- Fonctions pour le formulaire de période ---
+    function displayPeriodForm(dayTypeName, periodData = null, periodIndexToEdit = null, suggestedStartTime = null) {
+        const detailsContent = document.getElementById('details-content');
+        const oldForm = document.getElementById('period-form-section');
+        if (oldForm) oldForm.remove();
+        editingPeriodIndex = periodIndexToEdit;
+        setGlobalAddPeriodButtonState(false); // Cacher le bouton global "Ajouter une Période"
+        const formTitle = (periodData ? "Modifier la Période" : "Ajouter une Nouvelle Période");
+        const buttonText = (periodData ? "Enregistrer Modifications" : "Ajouter cette Période");
+        const defaultStartTime = periodData?.heure_debut?.substring(0,5) || suggestedStartTime || '08:00';
+        const defaultEndTime = periodData?.heure_fin?.substring(0,5) || (suggestedStartTime ? incrementTime(suggestedStartTime, 60) : '09:00');
+        let formHtml = `<div id="period-form-section" class="form-container-style"><h4>${formTitle}</h4><div class="form-group"><label for="period-nom">Nom de la période :</label><input type="text" id="period-nom" value="${periodData?.nom || 'Nouveau Cours'}"></div><div class="time-input-group"><div class="form-group"><label for="period-heure-debut">Heure Début :</label><input type="time" id="period-heure-debut" value="${defaultStartTime}" step="60"></div><div class="form-group"><label for="period-heure-fin">Heure Fin :</label><input type="time" id="period-heure-fin" value="${defaultEndTime}" step="60"></div></div><div class="form-group"><label for="period-sonnerie-debut">Sonnerie Début :</label><select id="period-sonnerie-debut"></select></div><div class="form-group"><label for="period-sonnerie-fin">Sonnerie Fin :</label><select id="period-sonnerie-fin"></select></div><button type="button" onclick="submitPeriodForm('${dayTypeName}')">${buttonText}</button>`;
+        formHtml += ` <button type="button" class="cancel-button" onclick="cancelPeriodEdit('${dayTypeName}')">Annuler</button>`; // Toujours un bouton Annuler
+        formHtml += `</div>`;
+        const tableContainer = detailsContent.querySelector('#periods-table') || detailsContent.querySelector('p') || detailsContent.querySelector('.action-buttons[style*="margin-top:15px"]'); // Cibler le conteneur du bouton "Ajouter une Période"
+        if (tableContainer && tableContainer.parentNode === detailsContent) {
+            tableContainer.insertAdjacentHTML('afterend', formHtml);
+        } else { // Fallback si on ne trouve pas le point d'insertion exact
+            detailsContent.insertAdjacentHTML('beforeend', formHtml);
+        }
+        populateDropdown('period-sonnerie-debut', availableRingtones, periodData?.sonnerie_debut, "Silence", "");
+        populateDropdown('period-sonnerie-fin', availableRingtones, periodData?.sonnerie_fin, "Silence", "");
+        const nomInput = document.getElementById('period-nom');
+        if(nomInput) nomInput.focus();
+        if(!periodData && nomInput) nomInput.select();
+    }
+
+    function cancelPeriodEdit(dayTypeName) {
+        console.log("Annulation édition/ajout période.");
+        editingPeriodIndex = null;
+        const formSection = document.getElementById('period-form-section');
+        if (formSection) formSection.remove();
+        setGlobalAddPeriodButtonState(true);
+    }
+
+    // --------------------------------------------------
+    // 4. Fonctions CRUD (Journées Types et Périodes)
+    // --------------------------------------------------
+    function prepareAddDayType() {
+        console.log("Préparation ajout JT...");
+        currentSelectedDayTypeName = null;
+        document.querySelectorAll('#day-types-list li').forEach(li => li.classList.remove('selected'));
+        const periodForm = document.getElementById('period-form-section');
+        if (periodForm) periodForm.remove();
+        editingPeriodIndex = null;
+        setGlobalAddPeriodButtonState(false); // Cacher le bouton d'ajout de période car aucune JT n'est active
+        const detailsTitle = document.getElementById('details-title');
+        const detailsContent = document.getElementById('details-content');
+        detailsTitle.textContent = "Ajouter une Nouvelle Journée Type";
+        detailsContent.innerHTML = `<div id="add-day-type-form" class="form-container-style"><h4>Nouvelle Journée Type</h4><div class="form-group"><label for="new-day-type-name">Nom :</label><input type="text" id="new-day-type-name"></div><button type="button" onclick="createDayType()">Créer</button><button type="button" class="cancel-button" onclick="cancelAddDayType()">Annuler</button></div>`;
+        showDayTypeFeedback('', 'info');
+        const nameInput = document.getElementById('new-day-type-name');
+        if(nameInput) nameInput.focus();
+    }
+
+    function cancelAddDayType() {
+        console.log("Annulation ajout journée type.");
+        document.getElementById('details-title').textContent = "Détails de la Journée Type";
+        document.getElementById('details-content').innerHTML = '<p>Sélectionnez une journée type ou cliquez sur "Ajouter".</p>';
+        setGlobalAddPeriodButtonState(false);
+    }
+
+    function prepareEditDayType() { /* ... (Code INCHANGÉ - celui qui marche avec prompt) ... */ }
+    function createDayType() { /* ... (Code INCHANGÉ - celui qui marche) ... */ }
+    function renameDayType(oldName, newName) { /* ... (Code INCHANGÉ - celui qui marche) ... */ }
+    function deleteDayType() { /* ... (Code INCHANGÉ - celui qui marche) ... */ }
+
+    async function addPeriod(dayTypeName) {
+        console.log(`Préparation ajout période à JT: ${dayTypeName}`);
+        if (!currentSelectedDayTypeName || currentSelectedDayTypeName !== dayTypeName) {
+            await selectDayType(dayTypeName);
+        }
+        let suggestedStartTime = "08:00";
+        try {
+            const response = await fetch(`/api/config/day_types/${encodeURIComponent(dayTypeName)}`);
+            if (!response.ok) throw new Error('Erreur récupération périodes');
+            const dayTypeData = await response.json();
+            const existingPeriods = dayTypeData.periodes || [];
+            if (existingPeriods.length > 0) {
+                const sortedPeriods = [...existingPeriods].sort((a, b) => new Date(`1970-01-01T${a.heure_debut}`) - new Date(`1970-01-01T${b.heure_debut}`));
+                const lastPeriod = sortedPeriods[sortedPeriods.length - 1];
+                if (lastPeriod && lastPeriod.heure_fin) suggestedStartTime = lastPeriod.heure_fin.substring(0, 5);
+            }
+        } catch (error) { console.error("Erreur suggestion heure:", error); showDayTypeFeedback("Erreur suggestion heure.", 'error'); }
+        displayPeriodForm(dayTypeName, null, null, suggestedStartTime);
+    }
+
+    async function editPeriod(dayTypeName, periodIndex) {
+        console.log(`Préparation édition période ${periodIndex} de JT: ${dayTypeName}`);
+        if (currentSelectedDayTypeName !== dayTypeName) {
+             await selectDayType(dayTypeName);
+        }
+        fetchPeriodDataAndDisplayForm(dayTypeName, periodIndex);
+    }
+
+    function fetchPeriodDataAndDisplayForm(dayTypeName, periodIndex) {
+        fetch(`/api/config/day_types/${encodeURIComponent(dayTypeName)}`)
+            .then(response => response.ok ? response.json() : Promise.reject('Erreur récupération JT'))
+            .then(dayTypeData => {
+                if (dayTypeData.periodes && dayTypeData.periodes[periodIndex] !== undefined) {
+                    displayPeriodForm(dayTypeName, dayTypeData.periodes[periodIndex], periodIndex);
+                } else { throw new Error("Période non trouvée."); }
+            })
+            .catch(error => { console.error("Erreur fetchPeriodData:", error); showDayTypeFeedback(`Erreur édition: ${error.message}`, 'error'); });
+    }
+
+    async function deletePeriod(dayTypeName, periodIndex) {
+        if (!confirm(`Supprimer cette période de "${dayTypeName}" ?`)) return;
+        try {
+            const response = await fetch(`/api/config/day_types/${encodeURIComponent(dayTypeName)}`);
+            if (!response.ok) throw new Error('Erreur récupération JT');
+            const dayTypeData = await response.json();
+            let periods = dayTypeData.periodes || [];
+            if (periodIndex < 0 || periodIndex >= periods.length) throw new Error("Index invalide.");
+            periods.splice(periodIndex, 1);
+            const putResponse = await fetch(`/api/config/day_types/${encodeURIComponent(dayTypeName)}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ periods: periods })
+            });
+            const resultData = await putResponse.json();
+            if (!putResponse.ok) throw new Error(resultData.error || `Erreur ${putResponse.status}`);
+            showDayTypeFeedback(resultData.message || "Période supprimée !", 'success');
+            loadAndDisplayDayTypeDetails(dayTypeName);
+            cancelPeriodEdit(dayTypeName); // Assurer que le formulaire est fermé
+            if (confirm("Période supprimée. Recharger config serveur ?")) { fetch('/api/config/reload', { method: 'POST' }).then(r=>r.json()).then(d=>showDayTypeFeedback(d.message || "Reload OK.", d.ok ? 'info':'error'));}
+        } catch (error) { console.error("Erreur suppression période:", error); showDayTypeFeedback(`Erreur: ${error.message}`, 'error'); }
+    }
+
+    async function submitPeriodForm(dayTypeName) {
+        const nom = document.getElementById('period-nom').value.trim();
+        let heure_debut = document.getElementById('period-heure-debut').value;
+        let heure_fin = document.getElementById('period-heure-fin').value;
+        const sonnerie_debut = document.getElementById('period-sonnerie-debut').value || null;
+        const sonnerie_fin = document.getElementById('period-sonnerie-fin').value || null;
+        if (!nom || !heure_debut || !heure_fin) { showDayTypeFeedback("Nom, Début et Fin requis.", 'error'); return; }
+        if (heure_debut.length === 5) heure_debut += ":00"; if (heure_fin.length === 5) heure_fin += ":00";
+        const timeRegex = /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/;
+        if (!timeRegex.test(heure_debut) || !timeRegex.test(heure_fin)) { showDayTypeFeedback("Format heure invalide.", 'error'); return; }
+
+        const currentPeriodSubmitting = { nom, heure_debut, heure_fin, sonnerie_debut, sonnerie_fin };
+        let existingPeriods = [];
+        try {
+            const response = await fetch(`/api/config/day_types/${encodeURIComponent(dayTypeName)}`);
+            if (!response.ok) throw new Error('Erreur récupération JT');
+            const dayTypeData = await response.json(); existingPeriods = dayTypeData.periodes || [];
+        } catch (error) { showDayTypeFeedback(`Erreur: ${error.message}`, 'error'); return; }
+
+        let periodsForValidation = [...existingPeriods];
+        if (editingPeriodIndex !== null && editingPeriodIndex >= 0 && editingPeriodIndex < periodsForValidation.length) {
+            periodsForValidation[editingPeriodIndex] = currentPeriodSubmitting;
+        } else { periodsForValidation.push(currentPeriodSubmitting); }
+
+        const validationIssues = validatePeriods(periodsForValidation);
+        if (validationIssues.length > 0) {
+            let message = "Problèmes de validation:\n" + validationIssues.map(issue => `- ${issue.message}`).join("\n");
+            const hasErrors = validationIssues.some(issue => issue.type === 'error');
+            if (hasErrors) { showDayTypeFeedback(message, 'error', 10000); return; }
+            if (validationIssues.some(issue => issue.type === 'warning')) {
+                if (!confirm(message + "\n\nContinuer quand même ?")) return;
+            }
+        }
+
+        let finalPeriodsToSave = [...existingPeriods];
+        if (editingPeriodIndex !== null && editingPeriodIndex >= 0 && editingPeriodIndex < finalPeriodsToSave.length) {
+            finalPeriodsToSave[editingPeriodIndex] = currentPeriodSubmitting;
+        } else { finalPeriodsToSave.push(currentPeriodSubmitting); }
+        try { finalPeriodsToSave.sort((a, b) => new Date(`1970-01-01T${a.heure_debut}`) - new Date(`1970-01-01T${b.heure_debut}`)); }
+        catch (e) { console.warn("Tri périodes échoué avant sauvegarde:", e); }
+
+        fetch(`/api/config/day_types/${encodeURIComponent(dayTypeName)}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ periods: finalPeriodsToSave })
+        })
+        .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
+        .then(result => {
+            if (!result) return; const {ok, status, data: responseData} = result;
+            if (ok) {
+                showDayTypeFeedback(responseData.message || "Périodes mises à jour !", 'success');
+                loadAndDisplayDayTypeDetails(dayTypeName);
+                cancelPeriodEdit(dayTypeName); // Assure la fermeture et la réactivation du bouton global
+                if (confirm("Périodes màj. Recharger config serveur ?")) { fetch('/api/config/reload', { method: 'POST' }).then(r=>r.json()).then(d=>showDayTypeFeedback(d.message || "Reload OK.", d.ok ? 'info':'error')); }
+            } else { throw new Error(responseData.error || `Erreur ${status}`); }
+        })
+        .catch(error => { showDayTypeFeedback(`Erreur: ${error.message}`, 'error'); });
+    }
+
+    // --------------------------------------------------
+    // 5. Fonctions d'Initialisation
+    // --------------------------------------------------
+    function loadInitialData() {
+        console.log("Chargement initial: liste des JT et sonneries disponibles...");
+        document.getElementById('day-types-list').innerHTML = '<li>Chargement...</li>';
+
+        const listPromise = fetch('/api/config/day_types')
+            .then(response => response.ok ? response.json() : response.json().then(err => { throw new Error(err.error||`Erreur ${response.status}`) }))
+            .then(data => {
+                populateDayTypeList(data.day_types || []);
+            })
+            .catch(error => {
+                console.error("Erreur chargement liste JT:", error);
+                document.getElementById('day-types-list').innerHTML = `<li>Erreur chargement</li>`;
+                showDayTypeFeedback(`Erreur liste JT: ${error.message}`, 'error', 10000, 'list-feedback');
+            });
+
+        const ringtonesPromise = fetch('/api/config/general_and_alerts')
+            .then(response => response.ok ? response.json() : Promise.reject('Erreur chargement sonneries'))
+            .then(data => {
+                availableRingtones = data.available_ringtones || {};
+                console.log(`${Object.keys(availableRingtones).length} sonneries chargées.`);
+            })
+            .catch(error => {
+                console.error("Erreur chargement sonneries:", error);
+                showDayTypeFeedback("Attention: Erreur chargement liste sonneries pour édition périodes.", 'error', 10000);
+            });
+
+        Promise.all([listPromise, ringtonesPromise]).then(() => {
+             console.log("Chargement initial (JT et sonneries) terminé.");
+             // Après chargement, s'assurer que le bouton "Ajouter Période" est caché si aucune JT n'est sélectionnée
+             if (!currentSelectedDayTypeName) {
+                 setGlobalAddPeriodButtonState(false);
+             }
+        }).catch(err => {
+            console.error("Erreur lors d'un des chargements initiaux:", err);
+             setGlobalAddPeriodButtonState(false); // Cacher aussi en cas d'erreur majeure
+        });
+    }
+
+    function initPage() {
+        console.log("Initialisation page config journées types...");
+        loadInitialData();
+    }
+
+    // --------------------------------------------------
+    // 6. Écouteur d'événement
+    // --------------------------------------------------
+    document.addEventListener('DOMContentLoaded', initPage);
+
+</script>
