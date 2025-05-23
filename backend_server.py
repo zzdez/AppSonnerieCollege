@@ -549,34 +549,57 @@ def get_audio_devices():
         logger.error("API /api/audio_devices: sounddevice n'est pas disponible.")
         return jsonify({"audio_devices": [{"name": "Périphérique par défaut système", "id": None}], "error": "sounddevice_unavailable"}), 503
 
-    devices = []
+    devices_options = []
     default_device_option = {"name": "Périphérique par défaut système", "id": None}
-    devices.append(default_device_option)
+    devices_options.append(default_device_option)
 
-    present_device_names = set()
+    processed_devices = {}
 
     try:
         device_list = sd.query_devices()
-        # logger.debug(f"sounddevice.query_devices() raw output: {device_list}")
-
-        # Les lignes suivantes concernant hostapis ont été commentées
-        # hostapis = sd.query_hostapis()
-        # hostapi_names = {api['index']: api['name'] for api in hostapis}
-        # logger.debug(f"Host APIs: {hostapi_names}")
 
         for device_info in device_list:
             if device_info.get('max_output_channels', 0) > 0:
-                device_name = device_info.get('name', 'Périphérique inconnu').strip()
+                device_name_full = device_info.get('name', 'Périphérique inconnu').strip()
+                if not device_name_full:
+                    continue
 
-                # simplified_name et current_hostapi_name logique commentée car non utilisée pour le moment
-                final_name_to_use = device_name
+                if '(' in device_name_full and ')' not in device_name_full:
+                    logger.debug(f"Périphérique ignoré (parenthèse non fermée): {device_name_full}")
+                    continue
+                if "Microsoft Sound Mapper" in device_name_full or \
+                   "Périphérique audio principal" in device_name_full or \
+                   "Primary Sound Capture Driver" in device_name_full or \
+                   "Pilote de capture audio principal" in device_name_full:
+                    logger.debug(f"Périphérique ignoré (générique système/entrée): {device_name_full}")
+                    continue
 
-                if final_name_to_use and final_name_to_use not in present_device_names:
-                    devices.append({"name": final_name_to_use, "id": final_name_to_use})
-                    present_device_names.add(final_name_to_use)
+                should_add_new = True
+                keys_to_remove = []
 
-        logger.info(f"API /api/audio_devices: {len(present_device_names)} périphériques de sortie uniques trouvés.")
-        return jsonify({"audio_devices": devices})
+                for existing_name in list(processed_devices.keys()):
+                    if device_name_full.startswith(existing_name) and len(device_name_full) > len(existing_name):
+                        keys_to_remove.append(existing_name)
+                    elif existing_name.startswith(device_name_full) and len(existing_name) > len(device_name_full):
+                        should_add_new = False
+                        break
+                    elif device_name_full == existing_name:
+                        should_add_new = False
+                        break
+
+                for key_rem in keys_to_remove:
+                    logger.debug(f"Remplacement de '{key_rem}' par une version plus longue '{device_name_full}'")
+                    del processed_devices[key_rem]
+
+                if should_add_new:
+                    logger.debug(f"Ajout du périphérique candidat: {device_name_full}")
+                    processed_devices[device_name_full] = device_name_full
+
+        for name_id in sorted(list(processed_devices.keys())):
+            devices_options.append({"name": name_id, "id": name_id})
+
+        logger.info(f"API /api/audio_devices: {len(processed_devices)} périphériques de sortie uniques et filtrés trouvés.")
+        return jsonify({"audio_devices": devices_options})
 
     except Exception as e:
         logger.error(f"Erreur lors de la récupération des périphériques audio: {e}", exc_info=True)
@@ -642,60 +665,44 @@ def get_daily_schedule_data(date_str):
 @app.route('/api/config/general_and_alerts', methods=['GET'])
 @login_required
 def get_general_and_alerts_config():
-    """
-    Fournit les paramètres généraux et d'alerte, ainsi que la liste des sonneries.
-    """
     user_id = current_user.id
     logger.info(f"User '{user_id}' requête GET /api/config/general_and_alerts")
-
     try:
-        # Charger parametres_college.json
         params_path = os.path.join(CONFIG_PATH, PARAMS_FILE)
         current_params = {}
         if os.path.exists(params_path):
             with open(params_path, 'r', encoding='utf-8') as f:
                 current_params = json.load(f)
         else:
-            logger.warning(f"Fichier {PARAMS_FILE} introuvable lors de la lecture pour l'API config.")
-            # Renvoyer des valeurs par défaut ou une erreur ? Pour GET, valeurs par défaut est plus souple.
+            logger.warning(f"Fichier {PARAMS_FILE} introuvable pour API config.")
             current_params = {
                 "departement": "", "zone": "", "api_holidays_url": "", "country_code_holidays": "FR",
                 "vacances_ics_base_url_manuel": None, "sonnerie_ppms": None, "sonnerie_attentat": None,
-                "sonnerie_fin_alerte": None
+                "sonnerie_fin_alerte": None, "nom_peripherique_audio_sonneries": None
             }
 
-        # Charger la liste des sonneries depuis donnees_sonneries.json
         sonneries_data_path = os.path.join(CONFIG_PATH, DONNEES_SONNERIES_FILE)
         available_ringtones = {}
         if os.path.exists(sonneries_data_path):
             with open(sonneries_data_path, 'r', encoding='utf-8') as f:
                 donnees_sonneries = json.load(f)
             available_ringtones = donnees_sonneries.get("sonneries", {})
-            if not isinstance(available_ringtones, dict):
-                logger.warning(f"La section 'sonneries' dans {DONNEES_SONNERIES_FILE} n'est pas un dictionnaire. Renvoyer liste vide.")
-                available_ringtones = {}
         else:
-            logger.warning(f"Fichier {DONNEES_SONNERIES_FILE} introuvable. Aucune sonnerie disponible pour la config.")
+            logger.warning(f"Fichier {DONNEES_SONNERIES_FILE} introuvable.")
 
-        # Préparer les données à renvoyer
-        # On ne renvoie que les clés utiles pour cette page de config
         config_data_to_return = {
             "departement": current_params.get("departement"),
-            "zone": current_params.get("zone"), # La zone est aussi lue, elle est souvent liée au département
+            "zone": current_params.get("zone"),
             "vacances_ics_base_url_manuel": current_params.get("vacances_ics_base_url_manuel"),
             "sonnerie_ppms": current_params.get("sonnerie_ppms"),
             "sonnerie_attentat": current_params.get("sonnerie_attentat"),
-            "sonnerie_fin_alerte": current_params.get("sonnerie_fin_alerte"), # Ajouté !
-            "available_ringtones": available_ringtones # Format { "Nom Affiché": "fichier.mp3", ... }
+            "sonnerie_fin_alerte": current_params.get("sonnerie_fin_alerte"),
+            "nom_peripherique_audio_sonneries": current_params.get("nom_peripherique_audio_sonneries"), # LIGNE IMPORTANTE
+            "available_ringtones": available_ringtones
         }
-        # On pourrait aussi inclure api_holidays_url et country_code_holidays si on veut les configurer
 
         logger.debug(f"Config générale et alertes renvoyée: {config_data_to_return}")
         return jsonify(config_data_to_return), 200
-
-    except json.JSONDecodeError as e_json:
-        logger.error(f"Erreur JSON lecture config pour API /api/config/general_and_alerts: {e_json}", exc_info=True)
-        return jsonify({"error": "Erreur de format dans un fichier de configuration."}), 500
     except Exception as e:
         logger.error(f"Erreur API GET /api/config/general_and_alerts: {e}", exc_info=True)
         return jsonify({"error": f"Erreur serveur: {str(e)}"}), 500

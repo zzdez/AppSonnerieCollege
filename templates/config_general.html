@@ -118,45 +118,61 @@
         }, duration);
     }
 
-    function populateDropdown(selectId, options, selectedValue, addEmptyOptionValue = null) {
-        const select = document.getElementById(selectId);
-        if (!select) return;
-        select.innerHTML = ''; // Clear existing options
-
-        if (addEmptyOptionValue !== null) {
-            const emptyOpt = document.createElement('option');
-            emptyOpt.value = ""; // Valeur vide pour "Aucune"
-            emptyOpt.textContent = addEmptyOptionValue; // Texte pour "Aucune"
-            select.appendChild(emptyOpt);
-        }
-
-        if (typeof options === 'object' && !Array.isArray(options)) {
-            for (const [displayName, fileName] of Object.entries(options)) {
-                const option = document.createElement('option');
-                option.value = fileName; 
-                option.textContent = displayName; 
-                select.appendChild(option);
-            }
-        } else if (Array.isArray(options)) { 
-            options.forEach(item => {
-                const option = document.createElement('option');
-                if (typeof item === 'object' && item !== null && 'id' in item && 'name' in item) {
-                    option.value = item.id === null ? "" : item.id; // "" pour null (défaut système)
-                    option.textContent = item.name;
-                } else { // Fallback pour les listes simples de chaînes (comme pour les départements)
-                    option.value = item;
-                    option.textContent = item;
-                }
-                select.appendChild(option);
-            });
-        }
-        
-        if (selectedValue !== undefined && selectedValue !== null) {
-            select.value = selectedValue;
-        } else if (addEmptyOptionValue !== null) {
-            select.value = ""; 
-        }
+function populateDropdown(selectId, options, selectedValue, addEmptyOptionValue = null) {
+    const select = document.getElementById(selectId);
+    if (!select) {
+        console.error(`[populateDropdown] Select element with ID '${selectId}' not found.`);
+        return;
     }
+    select.innerHTML = ''; 
+    console.log(`[populateDropdown] Populating: ${selectId}, SelectedValue (entrée): '${selectedValue}' (type: ${typeof selectedValue})`);
+
+    if (addEmptyOptionValue !== null && selectId !== 'audio_device_select') {
+        const emptyOpt = document.createElement('option');
+        emptyOpt.value = ""; 
+        emptyOpt.textContent = addEmptyOptionValue;
+        select.appendChild(emptyOpt);
+    }
+
+    if (typeof options === 'object' && !Array.isArray(options)) {
+        for (const [displayName, fileName] of Object.entries(options)) {
+            const option = document.createElement('option');
+            option.value = fileName; 
+            option.textContent = displayName; 
+            select.appendChild(option);
+        }
+    } else if (Array.isArray(options)) { 
+        options.forEach(item => {
+            const option = document.createElement('option');
+            if (typeof item === 'object' && item !== null && 'id' in item && 'name' in item) {
+                option.value = item.id === null ? "" : item.id; 
+                option.textContent = item.name;
+            } else { 
+                option.value = item;
+                option.textContent = item;
+            }
+            select.appendChild(option);
+        });
+    }
+    
+    console.log(`[populateDropdown] ${selectId} - Attempting to set selected value. Current select.value (before): '${select.value}', Desired selectedValue: '${selectedValue}'`);
+
+    if (selectedValue !== undefined && selectedValue !== null && selectedValue !== "") { 
+        select.value = selectedValue;
+        console.log(`[populateDropdown] ${selectId} - After attempting to set to '${selectedValue}', select.value is now: '${select.value}'`);
+        if (select.value !== selectedValue) {
+            console.warn(`[populateDropdown] ${selectId} - WARN: select.value ('${select.value}') does not match selectedValue ('${selectedValue}'). Option might be missing or value mismatch.`);
+        }
+    } else if (selectId === 'audio_device_select' && (selectedValue === null || selectedValue === undefined || selectedValue === "")) {
+        select.value = ""; 
+        console.log(`[populateDropdown] ${selectId} - Set to default (value=\""). select.value is now: '${select.value}'`);
+    } else if (addEmptyOptionValue !== null && selectId !== 'audio_device_select') {
+         select.value = "";
+         console.log(`[populateDropdown] ${selectId} - Set to empty option (value=\""). select.value is now: '${select.value}'`);
+    }
+
+    console.log(`[populateDropdown] Final select.value for ${selectId}: '${select.value}'`);
+}
 
     function updateZoneDisplay() {
         const deptSelect = document.getElementById('departement');
