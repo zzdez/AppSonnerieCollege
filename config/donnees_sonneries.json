@@ -1,20 +1,15 @@
 {
   "sonneries": {
-    "default_alert": "default_alert.mp3",
     "phone-ringtone-trance-312274": "phone-ringtone-trance-312274.mp3",
     "phone-ringtone-wurly-309475": "phone-ringtone-wurly-309475.mp3",
     "ringtone-1-275863": "ringtone-1-275863.mp3",
     "ringtone-283510": "ringtone-283510.mp3",
     "ringtone-297922": "ringtone-297922.mp3",
     "tes-137215": "tes-137215.mp3",
-    "ZZ-Top-Rough-Boy-v3": "ZZ-Top-Rough-Boy-v3.mp3",
     "phone-ringtone-sound-294438ccccccccccccccccccccc": "phone-ringtone-sound-294438.mp3",
     "11L-Arpeggiated_sequence-1746178014640": "11L-Arpeggiated_sequence-1746178014640.mp3",
     "11L-Generates_a_school_b-1746176903716": "11L-Generates_a_school_b-1746176903716.mp3",
-    "cell-65384": "cell-65384.mp3",
-    "11L-Arpeggiated_sequence-1746178003598": "11L-Arpeggiated_sequence-1746178003598.mp3",
-    "pacman_sms": "pacman_sms.mp3",
-    "pacman_sms_-_Copie": "pacman_sms_-_Copie.mp3"
+    "cell-65384": "cell-65384.mp3"
   },
   "journees_types": {
     "Mercredi": {
@@ -111,8 +106,8 @@
           "heure_debut": "10:45:00",
           "heure_fin": "10:46:00",
           "nom": "Nouveau Cours",
-          "sonnerie_debut": "11L-Arpeggiated_sequence-1746178003598.mp3",
-          "sonnerie_fin": "11L-Arpeggiated_sequence-1746178003598.mp3"
+          "sonnerie_debut": null,
+          "sonnerie_fin": null
         },
         {
           "heure_debut": "11:05:00",
@@ -139,14 +134,14 @@
           "heure_debut": "12:35:00",
           "heure_fin": "12:36:00",
           "nom": "Test audio 3",
-          "sonnerie_debut": "11L-Arpeggiated_sequence-1746178003598.mp3",
+          "sonnerie_debut": null,
           "sonnerie_fin": "11L-Arpeggiated_sequence-1746178014640.mp3"
         },
         {
           "nom": "Test audio 4",
           "heure_debut": "13:15:00",
           "heure_fin": "13:16:00",
-          "sonnerie_debut": "11L-Arpeggiated_sequence-1746178003598.mp3",
+          "sonnerie_debut": null,
           "sonnerie_fin": "11L-Arpeggiated_sequence-1746178014640.mp3"
         },
         {

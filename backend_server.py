@@ -1832,85 +1832,165 @@ def update_sound_display_name(file_name):
         logger.error(f"Erreur API PUT /api/config/sounds/display_name/{file_name}: {e}", exc_info=True)
         return jsonify({"error": f"Erreur serveur: {str(e)}"}), 500
 
-@app.route('/api/config/sounds/<path:file_name>', methods=['DELETE'])
+# Fonction pour DÉSASSOCIATION SEULE (garde le fichier physique)
+@app.route('/api/config/sounds/<path:file_name>/dissociate_only', methods=['DELETE'])
 @login_required
-def delete_sound_association(file_name):
-    """
-    Supprime l'association nom convivial <-> nom de fichier pour un fichier MP3 donné.
-    Ne supprime PAS le fichier MP3 du disque.
-    Le nom de fichier MP3 (file_name dans l'URL) est la clé pour retrouver la sonnerie.
-    """
+@collaborateur_required
+def dissociate_sound_only(file_name):
     user_id = current_user.id
-    logger.info(f"User '{user_id}' - DELETE /api/config/sounds/{file_name}: Tentative de suppression d'association.")
+    logger.info(f"User '{user_id}' - DELETE /api/config/sounds/{file_name}/dissociate_only: Tentative de DÉSASSOCIATION seule.")
 
     donnees_path = os.path.join(CONFIG_PATH, DONNEES_SONNERIES_FILE)
+    params_path = os.path.join(CONFIG_PATH, PARAMS_FILE)
     try:
         donnees_sonneries = {}
         if os.path.exists(donnees_path):
             with open(donnees_path, 'r', encoding='utf-8') as f:
                 donnees_sonneries = json.load(f)
         else:
-            logger.error(f"Fichier {DONNEES_SONNERIES_FILE} non trouvé (delete_sound_association).")
-            return jsonify({"error": "Fichier de configuration principal manquant."}), 500
+            logger.error(f"Fichier de configuration des sonneries {DONNEES_SONNERIES_FILE} non trouvé.")
+            return jsonify({"error": "Fichier de configuration principal des sonneries manquant."}), 500
+        if "sonneries" not in donnees_sonneries or not isinstance(donnees_sonneries["sonneries"], dict):
+            logger.warning(f"Section 'sonneries' non trouvée ou invalide dans {DONNEES_SONNERIES_FILE}.")
+            return jsonify({"error": f"Aucune sonnerie configurée. Impossible de trouver l'association pour '{file_name}'."}), 404
+        display_name_to_delete = None
+        for disp_name, f_name_in_config in donnees_sonneries["sonneries"].items():
+            if f_name_in_config == file_name:
+                display_name_to_delete = disp_name
+                break
+        if display_name_to_delete is None:
+            logger.warning(f"Fichier son '{file_name}' non trouvé dans les associations de {DONNEES_SONNERIES_FILE}.")
+            return jsonify({"error": f"L'association pour le fichier son '{file_name}' n'existe pas dans la configuration."}), 404
+
+        # La suppression physique du fichier (os.remove) EST ABSENTE ICI
+
+        del donnees_sonneries["sonneries"][display_name_to_delete]
+        logger.info(f"Association pour '{file_name}' (nom convivial '{display_name_to_delete}') supprimée de la configuration. Le fichier physique est conservé.")
+
+        # Nettoyage des références
+        if "journees_types" in donnees_sonneries:
+            for jt_name, jt_data in donnees_sonneries["journees_types"].items():
+                if isinstance(jt_data.get("periodes"), list):
+                    for periode in jt_data["periodes"]:
+                        if periode.get("sonnerie_debut") == file_name:
+                            periode["sonnerie_debut"] = None
+                        if periode.get("sonnerie_fin") == file_name:
+                            periode["sonnerie_fin"] = None
+        params_modified = False
+        current_college_params_on_disk = {}
+        if os.path.exists(params_path):
+            with open(params_path, 'r', encoding='utf-8') as f_params:
+                current_college_params_on_disk = json.load(f_params)
+            alert_keys_to_check = ["sonnerie_ppms", "sonnerie_attentat", "sonnerie_fin_alerte"]
+            for key in alert_keys_to_check:
+                if current_college_params_on_disk.get(key) == file_name:
+                    current_college_params_on_disk[key] = None
+                    params_modified = True
+            if params_modified:
+                with open(params_path, 'w', encoding='utf-8') as f_params:
+                    json.dump(current_college_params_on_disk, f_params, indent=2, ensure_ascii=False)
+                logger.info(f"Fichier des paramètres ({PARAMS_FILE}) mis à jour après nettoyage des références à '{file_name}'.")
+                global college_params
+                college_params = current_college_params_on_disk.copy()
+        with open(donnees_path, 'w', encoding='utf-8') as f:
+            json.dump(donnees_sonneries, f, indent=2, ensure_ascii=False)
+        final_message = f"L'association pour la sonnerie '{display_name_to_delete}' (fichier: {file_name}) a été retirée de la configuration. Le fichier MP3 est conservé sur le disque."
+        return jsonify({"message": final_message}), 200
+    except Exception as e:
+        logger.error(f"Erreur API DELETE .../{file_name}/dissociate_only: {e}", exc_info=True)
+        return jsonify({"error": f"Erreur serveur inattendue: {str(e)}"}), 500
+
+@app.route('/api/config/sounds/<path:file_name>', methods=['DELETE'])
+@login_required
+@collaborateur_required
+def delete_sound_association_and_file(file_name):
+    user_id = current_user.id
+    logger.info(f"User '{user_id}' - DELETE /api/config/sounds/{file_name}: Tentative de suppression d'association ET du fichier physique.")
+
+    donnees_path = os.path.join(CONFIG_PATH, DONNEES_SONNERIES_FILE)
+    params_path = os.path.join(CONFIG_PATH, PARAMS_FILE)
+
+    try:
+        donnees_sonneries = {}
+        if os.path.exists(donnees_path):
+            with open(donnees_path, 'r', encoding='utf-8') as f:
+                donnees_sonneries = json.load(f)
+        else:
+            logger.error(f"Fichier de configuration des sonneries {DONNEES_SONNERIES_FILE} non trouvé.")
+            return jsonify({"error": "Fichier de configuration principal des sonneries manquant."}), 500
 
         if "sonneries" not in donnees_sonneries or not isinstance(donnees_sonneries["sonneries"], dict):
-            return jsonify({"error": f"Aucune sonnerie configurée (fichier '{file_name}' non trouvé)."}), 404
+            logger.warning(f"Section 'sonneries' non trouvée ou invalide dans {DONNEES_SONNERIES_FILE}.")
+            return jsonify({"error": f"Aucune sonnerie configurée. Impossible de trouver l'association pour '{file_name}'."}), 404
 
         display_name_to_delete = None
-        for disp_name, f_name in donnees_sonneries["sonneries"].items():
-            if f_name == file_name:
+        for disp_name, f_name_in_config in donnees_sonneries["sonneries"].items():
+            if f_name_in_config == file_name:
                 display_name_to_delete = disp_name
                 break
 
         if display_name_to_delete is None:
-            logger.warning(f"Fichier son '{file_name}' non trouvé dans la configuration pour suppression d'association.")
-            return jsonify({"error": f"Le fichier son '{file_name}' n'est pas dans la configuration."}), 404
+            logger.warning(f"Fichier son '{file_name}' non trouvé dans les associations de {DONNEES_SONNERIES_FILE}.")
+            return jsonify({"error": f"L'association pour le fichier son '{file_name}' n'existe pas dans la configuration."}), 404
 
-        # Supprimer l'entrée
+        file_deleted_physically = False
+        action_on_physical_file_message = ""
+        physical_file_path = os.path.join(MP3_PATH, file_name)
+
+        if os.path.exists(physical_file_path):
+            try:
+                os.remove(physical_file_path)
+                logger.info(f"Fichier MP3 '{physical_file_path}' supprimé physiquement avec succès.")
+                file_deleted_physically = True
+                action_on_physical_file_message = "Le fichier MP3 a également été supprimé du disque."
+            except OSError as e_remove:
+                logger.error(f"Erreur lors de la suppression physique du fichier '{physical_file_path}': {e_remove}", exc_info=True)
+                action_on_physical_file_message = f"ATTENTION: Le fichier MP3 '{file_name}' n'a pas pu être supprimé du disque (Erreur: {e_remove.strerror}). L'association sera quand même retirée."
+        else:
+            logger.warning(f"Fichier MP3 '{physical_file_path}' non trouvé sur le disque pour suppression physique.")
+            action_on_physical_file_message = "Le fichier MP3 n'a pas été trouvé sur le disque à l'emplacement attendu."
+
         del donnees_sonneries["sonneries"][display_name_to_delete]
+        logger.info(f"Association pour '{file_name}' (nom convivial '{display_name_to_delete}') supprimée de la configuration.")
 
-        # Important: Nettoyer les références à ce fichier son dans les journées types et les paramètres d'alerte
-        # 1. Journées Types
         if "journees_types" in donnees_sonneries:
             for jt_name, jt_data in donnees_sonneries["journees_types"].items():
-                if "periodes" in jt_data:
+                if isinstance(jt_data.get("periodes"), list):
                     for periode in jt_data["periodes"]:
                         if periode.get("sonnerie_debut") == file_name:
                             periode["sonnerie_debut"] = None
-                            logger.info(f"Nettoyage: Sonnerie début '{file_name}' retirée de JT '{jt_name}', période '{periode.get('nom')}'.")
                         if periode.get("sonnerie_fin") == file_name:
                             periode["sonnerie_fin"] = None
-                            logger.info(f"Nettoyage: Sonnerie fin '{file_name}' retirée de JT '{jt_name}', période '{periode.get('nom')}'.")
 
-        # 2. Paramètres d'alerte (dans parametres_college.json)
-        params_path = os.path.join(CONFIG_PATH, PARAMS_FILE)
         params_modified = False
+        current_college_params_on_disk = {}
         if os.path.exists(params_path):
             with open(params_path, 'r', encoding='utf-8') as f_params:
-                college_params = json.load(f_params)
-
+                current_college_params_on_disk = json.load(f_params)
             alert_keys_to_check = ["sonnerie_ppms", "sonnerie_attentat", "sonnerie_fin_alerte"]
             for key in alert_keys_to_check:
-                if college_params.get(key) == file_name:
-                    college_params[key] = None
+                if current_college_params_on_disk.get(key) == file_name:
+                    current_college_params_on_disk[key] = None
                     params_modified = True
-                    logger.info(f"Nettoyage: Sonnerie alerte '{key}' utilisant '{file_name}' mise à None.")
-
             if params_modified:
                 with open(params_path, 'w', encoding='utf-8') as f_params:
-                    json.dump(college_params, f_params, indent=2, ensure_ascii=False)
-                logger.info(f"Fichier {PARAMS_FILE} mis à jour après nettoyage des références à '{file_name}'.")
+                    json.dump(current_college_params_on_disk, f_params, indent=2, ensure_ascii=False)
+                logger.info(f"Fichier des paramètres ({PARAMS_FILE}) mis à jour après nettoyage des références à '{file_name}'.")
+                global college_params
+                college_params = current_college_params_on_disk.copy()
 
-        # Sauvegarder donnees_sonneries.json
         with open(donnees_path, 'w', encoding='utf-8') as f:
             json.dump(donnees_sonneries, f, indent=2, ensure_ascii=False)
 
-        logger.info(f"Association pour le fichier son '{file_name}' (nom convivial '{display_name_to_delete}') supprimée.")
-        return jsonify({"message": f"Sonnerie '{display_name_to_delete}' (fichier: {file_name}) retirée de la configuration."}), 200
+        final_message = f"L'association pour la sonnerie '{display_name_to_delete}' (fichier: {file_name}) a été retirée de la configuration."
+        if action_on_physical_file_message:
+            final_message += f" {action_on_physical_file_message}"
+
+        return jsonify({"message": final_message}), 200
 
     except Exception as e:
         logger.error(f"Erreur API DELETE /api/config/sounds/{file_name}: {e}", exc_info=True)
-        return jsonify({"error": f"Erreur serveur: {str(e)}"}), 500
+        return jsonify({"error": f"Erreur serveur inattendue: {str(e)}"}), 500
 
 # Route pour uploader un nouveau fichier son
 @app.route('/api/config/sounds/upload', methods=['POST'])

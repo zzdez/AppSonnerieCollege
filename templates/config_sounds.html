@@ -341,29 +341,30 @@
         });
     }
 
-    function disassociateSound(fileName, displayName) {
-        if (!confirm(`Voulez-vous désassocier la sonnerie "${displayName}" (fichier: ${fileName}) ?\nLe fichier MP3 restera sur le serveur et pourra être retrouvé par un nouveau scan.`)) {
-            return;
-        }
-        console.log(`Désassociation pour: ${fileName}`);
-        showSoundsFeedback(`Désassociation de "${displayName}" en cours...`, 'info', 0);
-        fetch(`/api/config/sounds/${encodeURIComponent(fileName)}`, { method: 'DELETE' })
-        .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
-        .then(({ ok, status, data }) => {
-            if (ok) {
-                showSoundsFeedback(data.message || "Association supprimée.", 'success');
-                loadConfiguredSounds();
-                 if (confirm("Association de sonnerie supprimée. Voulez-vous recharger la configuration serveur ?")) {
-                    fetch('/api/config/reload', { method: 'POST' })
-                        .then(r => r.json()).then(d => showSoundsFeedback(d.message || "Rechargement demandé.", r.ok ? 'info' : 'error', 5000));
-                }
-            } else { throw new Error(data.error || `Erreur ${status}`); }
-        })
-        .catch(error => {
-            console.error("Erreur désassociation:", error);
-            showSoundsFeedback(`Erreur désassociation: ${error.message}`, 'error');
-        });
+function disassociateSound(fileName, displayName) {
+    if (!confirm(`Voulez-vous désassocier la sonnerie "${displayName}" (fichier: ${fileName}) ?\nLe fichier MP3 restera sur le serveur et pourra être retrouvé par un nouveau scan.`)) {
+        return;
     }
+    console.log(`Désassociation seule pour: ${fileName}`);
+    showSoundsFeedback(`Désassociation de "${displayName}" en cours...`, 'info', 0);
+    // Appel à la NOUVELLE ROUTE pour désassocier seulement
+    fetch(`/api/config/sounds/${encodeURIComponent(fileName)}/dissociate_only`, { method: 'DELETE' })
+    .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
+    .then(({ ok, status, data }) => {
+        if (ok) {
+            showSoundsFeedback(data.message || "Association supprimée. Le fichier est conservé.", 'success');
+            loadConfiguredSounds(); // Recharger la liste des sonneries
+             if (confirm("Association de sonnerie supprimée. Voulez-vous recharger la configuration serveur ?")) {
+                fetch('/api/config/reload', { method: 'POST' })
+                    .then(r => r.json()).then(d => showSoundsFeedback(d.message || "Rechargement demandé.", r.ok ? 'info' : 'error', 5000));
+            }
+        } else { throw new Error(data.error || `Erreur ${status}`); }
+    })
+    .catch(error => {
+        console.error("Erreur désassociation:", error);
+        showSoundsFeedback(`Erreur désassociation: ${error.message}`, 'error');
+    });
+}
 
     function confirmAndDeletePhysicalSound(fileName, displayName) {
         if (!confirm(`ATTENTION : ACTION DESTRUCTIVE !\n\nÊtes-vous sûr de vouloir supprimer DÉFINITIVEMENT le fichier MP3 '${fileName}' du serveur ET son association dans la configuration pour "${displayName}" ?\n\nCette action est IRRÉVERSIBLE.`)) {
