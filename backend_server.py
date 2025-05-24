@@ -19,6 +19,7 @@ from flask_login import (LoginManager, UserMixin, login_user, logout_user,
                            login_required, current_user) # Flask-Login
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
+from functools import wraps
 
 # --- Import des modules locaux ---
 # Utilisation d'un bloc try/except pour une erreur de démarrage plus claire
@@ -73,6 +74,69 @@ login_manager.login_message = "Veuillez vous connecter pour accéder à cette pa
 login_manager.login_message_category = "info" # Classe CSS pour les messages flash (Bootstrap)
 # ---------------------------------
 
+# --- Décorateurs de Rôle ---
+
+ROLES_HIERARCHIE = {
+    "administrateur": 3,
+    "collaborateur": 2,
+    "lecteur": 1
+}
+
+def role_access_denied(required_role_name_for_message):
+    # Action commune en cas de refus d'accès.
+    user_display_name = current_user.id if current_user.is_authenticated else 'Anonyme'
+    user_actual_role = getattr(current_user, 'role', 'N/A') if current_user.is_authenticated else 'N/A'
+
+    logger.warning(f"Accès refusé pour l'utilisateur '{user_display_name}' (rôle: {user_actual_role}) à une ressource nécessitant au moins le rôle '{required_role_name_for_message}'.")
+    flash(f"Accès refusé. Vous devez avoir au moins le rôle '{required_role_name_for_message}' pour accéder à cette ressource.", "error")
+    return redirect(url_for('index'))
+
+
+def require_role(required_role_name):
+    # Décorateur générique pour vérifier un rôle minimum.
+    required_role_level = ROLES_HIERARCHIE.get(required_role_name)
+
+    if required_role_level is None:
+        logger.error(f"ERREUR DE CONFIGURATION: Nom de rôle requis invalide ('{required_role_name}') utilisé dans un décorateur @require_role.")
+        # Cette fonction lambda retourne une autre fonction qui ignore ses arguments et appelle role_access_denied.
+        # Essentiellement, si le nom du rôle est mal configuré dans le code, personne ne peut accéder à la route.
+        def actual_decorator(func_to_decorate):
+            @wraps(func_to_decorate)
+            def wrapper(*a, **kw):
+                return role_access_denied("rôle mal configuré en interne")
+            return wrapper
+        return actual_decorator
+
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            # @login_required devrait être utilisé en premier sur la route pour s'assurer que current_user est authentifié.
+            if not current_user.is_authenticated:
+                # Redirection gérée par Flask-Login si @login_required est présent.
+                # Sinon, comportement par défaut de Flask-Login (souvent un abort 401).
+                # Pourrait explicitement appeler login_manager.unauthorized() ici si @login_required n'est pas garanti.
+                # Mais la convention est d'empiler @login_required puis @<role>_required.
+                pass # On suppose que @login_required a fait son travail ou que Flask-Login gère.
+
+            user_role_str = getattr(current_user, 'role', None) # Obtient le rôle de l'objet User
+            user_role_level = ROLES_HIERARCHIE.get(user_role_str, 0) # 0 si rôle inconnu ou non défini
+
+            if user_role_level < required_role_level:
+                return role_access_denied(required_role_name) # Message inclut le nom du rôle attendu
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+def lecteur_required(f):
+    return require_role("lecteur")(f)
+
+def collaborateur_required(f):
+    return require_role("collaborateur")(f)
+
+def admin_required(f):
+    return require_role("administrateur")(f)
+
+# --- Fin Décorateurs de Rôle ---
 
 # ==============================================================================
 # Configuration du Logging Principal
@@ -143,15 +207,23 @@ if not MP3_PATH or not os.path.isdir(MP3_PATH):
 # --- Classe Utilisateur pour Flask-Login ---
 class User(UserMixin):
     """Représente un utilisateur connecté."""
-    def __init__(self, id):
-        self.id = id # Le nom d'utilisateur sert d'ID
+    def __init__(self, id, role="lecteur", nom_complet=""):
+        self.id = id
+        self.role = role
+        self.nom_complet = nom_complet
 
 @login_manager.user_loader
 def load_user(user_id):
     """Charge un utilisateur à partir de l'ID stocké dans la session."""
-    if user_id in users_data:
-        return User(user_id)
-    logger.warning(f"Tentative chargement utilisateur inexistant depuis session: {user_id}")
+    user_info = users_data.get(user_id)
+    if user_info and isinstance(user_info, dict):
+        user_role = user_info.get("role", "lecteur")
+        user_nom_complet = user_info.get("nom_complet", "")
+        return User(user_id, role=user_role, nom_complet=user_nom_complet)
+    elif isinstance(user_info, str): # Fallback pour ancien format (juste le hash)
+         logger.warning(f"Utilisateur '{user_id}' avec ancien format de données. Rôle 'lecteur' par défaut.")
+         return User(user_id, role="lecteur", nom_complet="Utilisateur (format obsolète)")
+    logger.warning(f"Tentative chargement utilisateur inexistant ou format invalide: {user_id}")
     return None # Indique à Flask-Login que l'utilisateur n'est plus valide
 
 # --- Variables globales pour stocker la configuration chargée ---
@@ -269,12 +341,24 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username'); password = request.form.get('password')
         logger.debug(f"Tentative login formulaire pour: {username}")
-        user_hash = users_data.get(username)
-        if user_hash and check_password_hash(user_hash, password):
-            user_obj = User(username); login_user(user_obj); logger.info(f"Login OK pour '{username}'.")
+        user_data_dict = users_data.get(username) # NOUVELLE LIGNE (remplace user_hash)
+
+        if user_data_dict and isinstance(user_data_dict, dict) and check_password_hash(user_data_dict.get("hash"), password): # NOUVELLE CONDITION
+            user_role = user_data_dict.get("role", "lecteur") # Valeur par défaut
+            user_nom_complet = user_data_dict.get("nom_complet", "") # Valeur par défaut
+            user_obj = User(username, role=user_role, nom_complet=user_nom_complet) # Passer les nouvelles infos
+            login_user(user_obj); logger.info(f"Login OK pour '{username}'. Role: '{user_role}', Nom: '{user_nom_complet}'.")
             next_page = request.args.get('next'); logger.info(f"Redirection post-login vers: {next_page or url_for('index')}")
             return redirect(next_page or url_for('index'))
-        else: logger.warning(f"Login échoué pour: {username}"); flash("Identifiants incorrects.", "error")
+        elif isinstance(user_data_dict, str) and check_password_hash(user_data_dict, password): # Fallback pour ancien format (valeur est le hash)
+            logger.warning(f"Utilisateur '{username}' avec ancien format de données (login). Rôle 'lecteur' par défaut.")
+            user_obj = User(username, role="lecteur", nom_complet="Utilisateur (format obsolète)")
+            login_user(user_obj); logger.info(f"Login OK (ancien format) pour '{username}'.")
+            next_page = request.args.get('next'); logger.info(f"Redirection post-login vers: {next_page or url_for('index')}")
+            return redirect(next_page or url_for('index'))
+        else:
+            logger.warning(f"Login échoué pour: {username}. Données utilisateur: {user_data_dict}")
+            flash("Identifiants incorrects.", "error")
     return render_template('login.html') # Afficher si GET ou si POST échoue
 
 @app.route('/logout')
@@ -286,6 +370,7 @@ def logout():
 
 @app.route('/config/general')
 @login_required
+@collaborateur_required
 def config_general_page():
     """Sert la page de configuration générale et des alertes."""
     user_id = current_user.id
@@ -299,6 +384,7 @@ def config_general_page():
 
 @app.route('/config/weekly')
 @login_required
+@collaborateur_required
 def config_weekly_page():
     """Sert la page de configuration du planning hebdomadaire."""
     user_id = current_user.id
@@ -308,6 +394,7 @@ def config_weekly_page():
 
 @app.route('/config/day_types')
 @login_required
+@collaborateur_required
 def config_day_types_page():
     """Sert la page de configuration des journées types."""
     user_id = current_user.id
@@ -318,6 +405,7 @@ def config_day_types_page():
 
 @app.route('/config/exceptions')
 @login_required
+@collaborateur_required
 def config_exceptions_page():
     """Sert la page de configuration des exceptions de planning."""
     user_id = current_user.id
@@ -361,6 +449,7 @@ def get_configured_sounds():
 
 @app.route('/config/sounds')
 @login_required
+@collaborateur_required
 def config_sounds_page():
     """Sert la page de configuration des sonneries disponibles."""
     user_id = current_user.id
@@ -393,6 +482,7 @@ def api_status():
 
 @app.route('/api/planning/activate', methods=['POST'])
 @login_required
+@collaborateur_required
 def activate_planning():
     """Active le scheduler."""
     user = current_user.id; logger.info(f"User '{user}': Activate planning"); msg = "Planning déjà actif."; code = 200
@@ -404,6 +494,7 @@ def activate_planning():
 
 @app.route('/api/planning/deactivate', methods=['POST'])
 @login_required
+@collaborateur_required
 def deactivate_planning():
     """Désactive le scheduler."""
     user = current_user.id; logger.info(f"User '{user}': Deactivate planning"); msg = "Planning déjà inactif."; code = 200
@@ -430,6 +521,7 @@ def stop_current_alert_process():
 
 @app.route('/api/alert/trigger/<filename>', methods=['POST'])
 @login_required
+@lecteur_required
 def trigger_alert(filename):
     """Déclenche une alerte (arrête la précédente si besoin)."""
     user = current_user.id; logger.info(f"User '{user}': Trigger alert: {filename}"); global alert_process
@@ -453,6 +545,7 @@ def trigger_alert(filename):
 
 @app.route('/api/alert/stop', methods=['POST'])
 @login_required
+@lecteur_required
 def stop_alert():
     """Arrête l'alerte active."""
     user = current_user.id; logger.info(f"User '{user}': Stop alert via API")
@@ -461,6 +554,7 @@ def stop_alert():
 
 @app.route('/api/alert/end', methods=['POST'])
 @login_required
+@lecteur_required
 def end_alert():
     """Arrête l'alerte en cours ET joue le son de fin d'alerte."""
     user = current_user.id
@@ -509,6 +603,7 @@ def end_alert():
 
 @app.route('/api/config/reload', methods=['POST'])
 @login_required
+@admin_required
 def reload_config_route():
     """Recharge tous les fichiers de configuration et met à jour le scheduler."""
     user = current_user.id; logger.info(f"User '{user}': Reload config"); msg=""
@@ -553,7 +648,7 @@ def get_audio_devices():
     default_device_option = {"name": "Périphérique par défaut système", "id": None}
     devices_options.append(default_device_option)
 
-    processed_devices = {}
+    processed_devices = {} # Utiliser un dictionnaire pour stocker les noms candidats
 
     try:
         device_list = sd.query_devices()
@@ -564,26 +659,31 @@ def get_audio_devices():
                 if not device_name_full:
                     continue
 
+                # Filtrer les noms clairement tronqués ou non désirés
                 if '(' in device_name_full and ')' not in device_name_full:
                     logger.debug(f"Périphérique ignoré (parenthèse non fermée): {device_name_full}")
                     continue
-                if "Microsoft Sound Mapper" in device_name_full or \
-                   "Périphérique audio principal" in device_name_full or \
-                   "Primary Sound Capture Driver" in device_name_full or \
-                   "Pilote de capture audio principal" in device_name_full:
+                if "Microsoft Sound Mapper" in device_name_full or                    "Périphérique audio principal" in device_name_full or                    "Primary Sound Capture Driver" in device_name_full or                    "Pilote de capture audio principal" in device_name_full: # Exemples de noms à ignorer
                     logger.debug(f"Périphérique ignoré (générique système/entrée): {device_name_full}")
                     continue
+
+                # Logique pour préférer les noms plus longs/complets
+                # Si un nom est un préfixe d'un nom déjà dans processed_devices, on ne fait rien.
+                # Si un nom dans processed_devices est un préfixe du nom actuel, on remplace.
+                # Sinon, on ajoute.
 
                 should_add_new = True
                 keys_to_remove = []
 
-                for existing_name in list(processed_devices.keys()):
+                for existing_name in processed_devices.keys():
                     if device_name_full.startswith(existing_name) and len(device_name_full) > len(existing_name):
+                        # Le nouveau est plus long et l'existant est un préfixe, marquer l'existant pour suppression
                         keys_to_remove.append(existing_name)
                     elif existing_name.startswith(device_name_full) and len(existing_name) > len(device_name_full):
+                        # L'existant est plus long et le nouveau est un préfixe, ne pas ajouter le nouveau
                         should_add_new = False
                         break
-                    elif device_name_full == existing_name:
+                    elif device_name_full == existing_name: # Exactement le même nom
                         should_add_new = False
                         break
 
@@ -595,6 +695,7 @@ def get_audio_devices():
                     logger.debug(f"Ajout du périphérique candidat: {device_name_full}")
                     processed_devices[device_name_full] = device_name_full
 
+        # Convertir le dictionnaire de noms traités en liste pour l'API, triée pour un ordre consistant
         for name_id in sorted(list(processed_devices.keys())):
             devices_options.append({"name": name_id, "id": name_id})
 
@@ -603,10 +704,12 @@ def get_audio_devices():
 
     except Exception as e:
         logger.error(f"Erreur lors de la récupération des périphériques audio: {e}", exc_info=True)
+        # En cas d'erreur majeure, retourner seulement l'option par défaut
         return jsonify({"audio_devices": [default_device_option], "error": str(e)}), 500
 
 @app.route('/api/calendar_view')
 @login_required # Protéger l'accès au calendrier détaillé
+@lecteur_required
 def api_calendar_view():
     """Fournit les données pour le calendrier annuel/scolaire."""
     user = current_user.id; logger.debug(f"User '{user}' requête /api/calendar_view")
@@ -644,6 +747,7 @@ def get_calendar_view_data_range(start_date, end_date):
 
 @app.route('/api/daily_schedule')
 @login_required
+@lecteur_required
 def api_daily_schedule():
     """Fournit le planning détaillé pour une date."""
     user = current_user.id; date_str = request.args.get('date'); logger.debug(f"User '{user}' requête /api/daily_schedule?date={date_str}")
@@ -665,44 +769,61 @@ def get_daily_schedule_data(date_str):
 @app.route('/api/config/general_and_alerts', methods=['GET'])
 @login_required
 def get_general_and_alerts_config():
+    """
+    Fournit les paramètres généraux et d'alerte, ainsi que la liste des sonneries.
+    """
     user_id = current_user.id
     logger.info(f"User '{user_id}' requête GET /api/config/general_and_alerts")
+
     try:
+        # Charger parametres_college.json
         params_path = os.path.join(CONFIG_PATH, PARAMS_FILE)
         current_params = {}
         if os.path.exists(params_path):
             with open(params_path, 'r', encoding='utf-8') as f:
                 current_params = json.load(f)
         else:
-            logger.warning(f"Fichier {PARAMS_FILE} introuvable pour API config.")
+            logger.warning(f"Fichier {PARAMS_FILE} introuvable lors de la lecture pour l'API config.")
+            # Renvoyer des valeurs par défaut ou une erreur ? Pour GET, valeurs par défaut est plus souple.
             current_params = {
                 "departement": "", "zone": "", "api_holidays_url": "", "country_code_holidays": "FR",
                 "vacances_ics_base_url_manuel": None, "sonnerie_ppms": None, "sonnerie_attentat": None,
-                "sonnerie_fin_alerte": None, "nom_peripherique_audio_sonneries": None
+                "sonnerie_fin_alerte": None
             }
 
+        # Charger la liste des sonneries depuis donnees_sonneries.json
         sonneries_data_path = os.path.join(CONFIG_PATH, DONNEES_SONNERIES_FILE)
         available_ringtones = {}
         if os.path.exists(sonneries_data_path):
             with open(sonneries_data_path, 'r', encoding='utf-8') as f:
                 donnees_sonneries = json.load(f)
             available_ringtones = donnees_sonneries.get("sonneries", {})
+            if not isinstance(available_ringtones, dict):
+                logger.warning(f"La section 'sonneries' dans {DONNEES_SONNERIES_FILE} n'est pas un dictionnaire. Renvoyer liste vide.")
+                available_ringtones = {}
         else:
-            logger.warning(f"Fichier {DONNEES_SONNERIES_FILE} introuvable.")
+            logger.warning(f"Fichier {DONNEES_SONNERIES_FILE} introuvable. Aucune sonnerie disponible pour la config.")
 
+        # Préparer les données à renvoyer
+        # On ne renvoie que les clés utiles pour cette page de config
         config_data_to_return = {
             "departement": current_params.get("departement"),
-            "zone": current_params.get("zone"),
+            "zone": current_params.get("zone"), # La zone est aussi lue, elle est souvent liée au département
             "vacances_ics_base_url_manuel": current_params.get("vacances_ics_base_url_manuel"),
             "sonnerie_ppms": current_params.get("sonnerie_ppms"),
             "sonnerie_attentat": current_params.get("sonnerie_attentat"),
-            "sonnerie_fin_alerte": current_params.get("sonnerie_fin_alerte"),
+            "sonnerie_fin_alerte": current_params.get("sonnerie_fin_alerte"), # Ajouté !
             "nom_peripherique_audio_sonneries": current_params.get("nom_peripherique_audio_sonneries"), # LIGNE IMPORTANTE
-            "available_ringtones": available_ringtones
+            "available_ringtones": available_ringtones # Format { "Nom Affiché": "fichier.mp3", ... }
         }
+        # On pourrait aussi inclure api_holidays_url et country_code_holidays si on veut les configurer
 
         logger.debug(f"Config générale et alertes renvoyée: {config_data_to_return}")
         return jsonify(config_data_to_return), 200
+
+    except json.JSONDecodeError as e_json:
+        logger.error(f"Erreur JSON lecture config pour API /api/config/general_and_alerts: {e_json}", exc_info=True)
+        return jsonify({"error": "Erreur de format dans un fichier de configuration."}), 500
     except Exception as e:
         logger.error(f"Erreur API GET /api/config/general_and_alerts: {e}", exc_info=True)
         return jsonify({"error": f"Erreur serveur: {str(e)}"}), 500

@@ -1,4 +1,12 @@
 {
-  "atri": "pbkdf2:sha256:1000000$3aO0c2z0m00ic7E3$7973caa261dafc4cd0b2bd3a85f52e49fc2c1443f19aed66bcdf4d76d3960ebc",
-  "zzdez": "pbkdf2:sha256:1000000$xeLRvkMsbkmHgS9d$f67493c66b95c367030e9c3143408d5a4ed505dbe884f00cda81b3a9cd9020e4"
+  "atri": {
+    "hash": "pbkdf2:sha256:1000000$3aO0c2z0m00ic7E3$7973caa261dafc4cd0b2bd3a85f52e49fc2c1443f19aed66bcdf4d76d3960ebc",
+    "role": "administrateur",
+    "nom_complet": "Nom Complet de l'Utilisateur"
+  },
+  "zzdez": {
+    "hash": "pbkdf2:sha256:1000000$xeLRvkMsbkmHgS9d$f67493c66b95c367030e9c3143408d5a4ed505dbe884f00cda81b3a9cd9020e4",
+    "role": "lecteur",
+    "nom_complet": "Nom Complet pour zzdez" 
+  }
 }

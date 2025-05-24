@@ -23,6 +23,17 @@
        {% endif %}
      </div>
     <!-- FIN LIEN DECONNEXION ET NAVIGATION -->
+        <!-- DEBUT SECTION MESSAGES FLASH -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div id="flash-messages" style="margin-top: 10px; margin-bottom: 10px;">
+        {% for category, message in messages %}
+          <div class="feedback-message {{ category }} show" style="display: block;">{{ message }}</div>
+        {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    <!-- FIN SECTION MESSAGES FLASH -->
     <h1>Interface de Contrôle des Sonneries</h1>
     <!-- Section Contrôle -->
 	<div id="control-section" style="display: none;">
