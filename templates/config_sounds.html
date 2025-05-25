@@ -390,42 +390,82 @@ function disassociateSound(fileName, displayName) {
         });
     }
 
-    function uploadSound() {
+    async function uploadSound() {
         const fileInput = document.getElementById('sound-file-input');
         if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-            showSoundsFeedback("Veuillez sélectionner un fichier MP3 à uploader.", 'error'); return;
+            showSoundsFeedback("Veuillez sélectionner au moins un fichier MP3 à uploader.", 'error');
+            return;
         }
-        const file = fileInput.files[0];
-        if (!file.name.toLowerCase().endsWith('.mp3') && file.type !== 'audio/mpeg') {
-            showSoundsFeedback("Type de fichier invalide. Seuls les fichiers .mp3 sont autorisés.", 'error'); return;
-        }
-        const maxSizeMB = 10;
-        if (file.size > maxSizeMB * 1024 * 1024) {
-            showSoundsFeedback(`Le fichier est trop volumineux (max ${maxSizeMB} MB).`, 'error'); return;
-        }
-        const formData = new FormData();
-        formData.append('soundfile', file);
-        console.log(`Upload de: ${file.name}`);
-        showSoundsFeedback(`Upload de "${file.name}" en cours...`, 'info', 0);
-        fetch('/api/config/sounds/upload', { method: 'POST', body: formData })
-        .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
-        .then(({ ok, status, data }) => {
-            if (ok) {
-                showSoundsFeedback(data.message || "Upload réussi !", 'success');
-                populateSoundsTable(data.configured_sounds || {});
-                fileInput.value = '';
-                if (confirm("Sonnerie uploadée et ajoutée. Voulez-vous recharger la configuration serveur ?")) {
-                    fetch('/api/config/reload', { method: 'POST' })
-                        .then(r => r.json())
-                        .then(d => showSoundsFeedback(d.message || "Rechargement demandé.", r.ok ? 'info' : 'error', 5000));
+
+        const files = fileInput.files;
+        let successfulUploads = 0;
+        let totalFiles = files.length;
+        let anyUploadSucceeded = false;
+
+        // Désactiver le bouton d'upload pour éviter les clics multiples
+        const uploadButton = document.getElementById('upload-btn');
+        if (uploadButton) uploadButton.disabled = true;
+
+        showSoundsFeedback(`Début de l'upload de ${totalFiles} fichier(s)...`, 'info', 3000);
+
+        for (let i = 0; i < totalFiles; i++) {
+            const file = files[i];
+
+            if (!file.name.toLowerCase().endsWith('.mp3') && file.type !== 'audio/mpeg') {
+                showSoundsFeedback(`Fichier "${file.name}": Type invalide (seuls les .mp3 sont autorisés). Ignoré.`, 'warning', 5000);
+                continue;
+            }
+
+            const maxSizeMB = 10;
+            if (file.size > maxSizeMB * 1024 * 1024) {
+                showSoundsFeedback(`Fichier "${file.name}": Trop volumineux (max ${maxSizeMB} MB). Ignoré.`, 'warning', 5000);
+                continue;
+            }
+
+            const formData = new FormData();
+            formData.append('soundfile', file);
+
+            console.log(`Upload de: ${file.name} (${i + 1}/${totalFiles})`);
+            showSoundsFeedback(`Upload de "${file.name}" (${i + 1}/${totalFiles}) en cours...`, 'info', 0); // Message qui sera écrasé ou timeout
+
+            try {
+                const response = await fetch('/api/config/sounds/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    showSoundsFeedback(`"${file.name}": ${data.message || "Upload réussi !"}`, 'success', 4000);
+                    successfulUploads++;
+                    anyUploadSucceeded = true;
+                } else {
+                    throw new Error(data.error || `Erreur ${response.status} pour "${file.name}"`);
                 }
-            } else { throw new Error(data.error || `Erreur ${status}`); }
-        })
-        .catch(error => {
-            console.error("Erreur upload sonnerie:", error);
-            showSoundsFeedback(`Erreur upload: ${error.message}`, 'error');
-            fileInput.value = '';
-        });
+            } catch (error) {
+                console.error(`Erreur upload sonnerie "${file.name}":`, error);
+                showSoundsFeedback(`Erreur upload "${file.name}": ${error.message}`, 'error', 5000);
+            }
+        }
+
+        // Réactiver le bouton d'upload
+        if (uploadButton) uploadButton.disabled = false;
+        fileInput.value = ''; // Réinitialiser le champ de fichier
+
+        showSoundsFeedback(`Upload terminé. ${successfulUploads}/${totalFiles} fichier(s) uploadé(s) avec succès.`, 'info', 5000);
+
+        // Recharger la liste des sonneries pour refléter les changements
+        loadConfiguredSounds();
+
+        if (anyUploadSucceeded) {
+            // Proposer de recharger la configuration serveur une seule fois
+            if (confirm("Au moins une sonnerie a été uploadée et ajoutée. Voulez-vous recharger la configuration serveur pour appliquer les changements ?")) {
+                fetch('/api/config/reload', { method: 'POST' })
+                    .then(r => r.json())
+                    .then(d => showSoundsFeedback(d.message || "Rechargement de la configuration serveur demandé.", r.ok ? 'info' : 'error', 5000))
+                    .catch(e => showSoundsFeedback(`Erreur lors du rechargement de la configuration: ${e.message}`, 'error', 5000));
+            }
+        }
     }
 
     // --------------------------------------------------
