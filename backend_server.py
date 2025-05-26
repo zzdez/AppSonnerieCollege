@@ -258,6 +258,19 @@ def load_users(filename=USERS_FILE):
     except json.JSONDecodeError: logger.error(f"Users file JSON error: {path}"); users_data = {}; return False
     except Exception as e: logger.error(f"Users load error: {path}: {e}", exc_info=True); users_data = {}; return False
 
+def save_users_data(filename=USERS_FILE):
+    """Sauvegarde la configuration des utilisateurs (users_data) dans le fichier JSON."""
+    path = os.path.join(CONFIG_PATH, filename)
+    logger.info(f"Sauvegarde des données utilisateurs dans: {path}")
+    try:
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(users_data, f, indent=2, ensure_ascii=False)
+        logger.info(f"Données utilisateurs sauvegardées avec succès ({len(users_data)} utilisateurs).")
+        return True
+    except Exception as e:
+        logger.error(f"Erreur lors de la sauvegarde du fichier utilisateurs {path}: {e}", exc_info=True)
+        return False
+
 def load_college_params(filename=PARAMS_FILE):
     """Charge les paramètres généraux (parametres_college.json) et lance le chargement API fériés."""
     global college_params, holiday_manager
@@ -455,6 +468,15 @@ def config_sounds_page():
     user_id = current_user.id
     logger.info(f"User '{user_id}' accède à la page /config/sounds")
     return render_template('config_sounds.html', current_user=current_user)
+
+@app.route('/config/users')
+@login_required
+@admin_required
+def config_users_page():
+    """Sert la page de gestion des utilisateurs."""
+    user_id = current_user.id
+    logger.info(f"User '{user_id}' (admin) accède à la page /config/users")
+    return render_template('config_users.html', current_user=current_user)
 
 @app.route('/')
 @login_required # Protéger la page principale
@@ -2088,7 +2110,190 @@ def upload_sound_file():
                 logger.error(f"Erreur lors de la suppression du fichier '{destination_path}' après erreur: {e_remove}")
         return jsonify({"error": f"Erreur serveur lors de l'upload: {str(e)}"}), 500
 
+
+# ==============================================================================
+# Routes API pour la Gestion des Utilisateurs (CRUD)
+# ==============================================================================
+
+MIN_PASSWORD_LENGTH = 8
+VALID_ROLES = list(ROLES_HIERARCHIE.keys()) # ["administrateur", "collaborateur", "lecteur"]
+
+@app.route('/api/users', methods=['GET'])
+@login_required
+@admin_required
+def get_users():
+    """Retourne la liste de tous les utilisateurs avec leurs détails (sans hash)."""
+    logger.info(f"User '{current_user.id}' (admin) requête GET /api/users.")
+    users_list = []
+    for username, data in users_data.items():
+        users_list.append({
+            "username": username,
+            "full_name": data.get("nom_complet", ""),
+            "role": data.get("role", "lecteur") # Default role if missing, though unlikely
+        })
+    return jsonify(users_list), 200
+
+@app.route('/api/users', methods=['POST'])
+@login_required
+@admin_required
+def create_user():
+    """Crée un nouvel utilisateur."""
+    logger.info(f"User '{current_user.id}' (admin) requête POST /api/users (create user).")
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "Données JSON requises."}), 400
+
+    username = data.get('username')
+    password = data.get('password')
+    full_name = data.get('full_name')
+    role = data.get('role')
+
+    if not all([username, password, full_name, role]):
+        return jsonify({"error": "Champs manquants: username, password, full_name, et role sont requis."}), 400
+
+    username = username.strip()
+    if not username: # Après strip
+        return jsonify({"error": "Le nom d'utilisateur ne peut pas être vide."}), 400
+
+    if username in users_data:
+        return jsonify({"error": f"Le nom d'utilisateur '{username}' existe déjà."}), 409 # Conflict
+
+    if role not in VALID_ROLES:
+        return jsonify({"error": f"Rôle invalide. Doit être l'un de: {', '.join(VALID_ROLES)}"}), 400
+
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return jsonify({"error": f"Le mot de passe doit contenir au moins {MIN_PASSWORD_LENGTH} caractères."}), 400
+
+    hashed_password = generate_password_hash(password)
+    users_data[username] = {
+        "hash": hashed_password,
+        "nom_complet": full_name,
+        "role": role
+    }
+
+    if not save_users_data():
+        # Revert in-memory change if save fails
+        if username in users_data: del users_data[username]
+        return jsonify({"error": "Erreur serveur lors de la sauvegarde des données utilisateur."}), 500
+
+    logger.info(f"Utilisateur '{username}' créé avec succès par '{current_user.id}'.")
+    return jsonify({
+        "message": "Utilisateur créé avec succès.",
+        "user": {"username": username, "full_name": full_name, "role": role}
+    }), 201
+
+@app.route('/api/users/<string:username_param>', methods=['PUT'])
+@login_required
+@admin_required
+def update_user(username_param):
+    """Met à jour un utilisateur existant."""
+    logger.info(f"User '{current_user.id}' (admin) requête PUT /api/users/{username_param}.")
+
+    if username_param not in users_data:
+        return jsonify({"error": f"L'utilisateur '{username_param}' n'existe pas."}), 404
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Données JSON requises."}), 400
+
+    user_to_update = users_data[username_param]
+    updated_fields = {}
+
+    if 'full_name' in data:
+        new_full_name = data['full_name'].strip()
+        if not new_full_name:
+            return jsonify({"error": "Le nom complet ne peut pas être vide."}), 400
+        user_to_update['nom_complet'] = new_full_name
+        updated_fields['full_name'] = new_full_name
+        logger.debug(f"User '{username_param}': nom_complet mis à jour.")
+
+    if 'role' in data:
+        new_role = data['role']
+        if new_role not in VALID_ROLES:
+            return jsonify({"error": f"Rôle invalide. Doit être l'un de: {', '.join(VALID_ROLES)}"}), 400
+
+        # Logique de protection si l'admin essaie de se dégrader lui-même et qu'il est le seul admin
+        if username_param == current_user.id and user_to_update.get('role') == "administrateur" and new_role != "administrateur":
+            num_admins = sum(1 for u_data in users_data.values() if u_data.get('role') == "administrateur")
+            if num_admins <= 1:
+                logger.warning(f"Tentative par l'admin '{current_user.id}' de changer son propre rôle alors qu'il est le seul admin.")
+                return jsonify({"error": "Impossible de changer le rôle du seul administrateur restant."}), 403
+
+        user_to_update['role'] = new_role
+        updated_fields['role'] = new_role
+        logger.debug(f"User '{username_param}': role mis à jour.")
+
+    if 'password' in data and data['password']: # Si le mot de passe est fourni et non vide
+        new_password = data['password']
+        if len(new_password) < MIN_PASSWORD_LENGTH:
+            return jsonify({"error": f"Le nouveau mot de passe doit contenir au moins {MIN_PASSWORD_LENGTH} caractères."}), 400
+        user_to_update['hash'] = generate_password_hash(new_password)
+        logger.debug(f"User '{username_param}': mot de passe mis à jour.")
+        # On ne met pas 'password' dans updated_fields
+
+    if not updated_fields and not ('password' in data and data['password']):
+         return jsonify({"message": "Aucune donnée à mettre à jour fournie."}), 200
+
+
+    if not save_users_data():
+        # Potentiellement, ici, on pourrait vouloir recharger users_data pour annuler les modifs en mémoire.
+        # Pour l'instant, on signale juste l'erreur.
+        load_users() # Recharge pour annuler les modifications en mémoire
+        return jsonify({"error": "Erreur serveur lors de la sauvegarde des données utilisateur."}), 500
+
+    logger.info(f"Utilisateur '{username_param}' mis à jour avec succès par '{current_user.id}'. Champs modifiés: {list(updated_fields.keys())}")
+    return jsonify({
+        "message": "Utilisateur mis à jour avec succès.",
+        "user": {
+            "username": username_param,
+            "full_name": user_to_update.get('nom_complet'),
+            "role": user_to_update.get('role')
+        }
+    }), 200
+
+@app.route('/api/users/<string:username_param>', methods=['DELETE'])
+@login_required
+@admin_required
+def delete_user(username_param):
+    """Supprime un utilisateur."""
+    logger.info(f"User '{current_user.id}' (admin) requête DELETE /api/users/{username_param}.")
+
+    if username_param not in users_data:
+        return jsonify({"error": f"L'utilisateur '{username_param}' n'existe pas."}), 404
+
+    user_to_delete_role = users_data[username_param].get('role')
+
+    # Logique de protection: empêcher la suppression du seul admin, surtout si c'est soi-même
+    if user_to_delete_role == "administrateur":
+        num_admins = sum(1 for u_data in users_data.values() if u_data.get('role') == "administrateur")
+        if num_admins <= 1:
+            # Si c'est le seul admin, on ne peut pas le supprimer, qu'il essaie de se supprimer lui-même ou un autre admin (ce qui ne devrait pas arriver s'il est seul).
+            logger.warning(f"Tentative de suppression du dernier administrateur '{username_param}' par '{current_user.id}'.")
+            return jsonify({"error": "Impossible de supprimer le seul compte administrateur restant."}), 403 # Forbidden
+
+    # Empêcher un utilisateur de se supprimer lui-même (même s'il y a d'autres admins)
+    # Cette règle est parfois souhaitée. Si on veut permettre à un admin de se supprimer tant qu'il n'est pas le dernier,
+    # il faudrait affiner la condition ci-dessus.
+    # Pour l'instant, la logique ci-dessus (dernier admin) couvre le cas où current_user est le dernier admin.
+    # Si current_user est admin mais pas le dernier, il peut se supprimer.
+    # Si l'on veut interdire TOUTE auto-suppression pour un admin, ajouter:
+    # if username_param == current_user.id:
+    #    return jsonify({"error": "Les administrateurs ne peuvent pas supprimer leur propre compte directement via cette API."}), 403
+
+
+    del users_data[username_param]
+
+    if not save_users_data():
+        load_users() # Recharge pour annuler la suppression en mémoire
+        return jsonify({"error": "Erreur serveur lors de la sauvegarde des données utilisateur."}), 500
+
+    logger.info(f"Utilisateur '{username_param}' supprimé avec succès par '{current_user.id}'.")
+    return jsonify({"message": f"Utilisateur '{username_param}' supprimé avec succès."}), 200 # Ou 204 No Content
+
+
         # --- FIN NOUVELLES ROUTES POUR LA CONFIGURATION WEB ---
+        # --- FIN ROUTES API POUR LA GESTION DES UTILISATEURS ---
 
 # ==============================================================================
 # Point d'Entrée et Lancement du Serveur / Gestionnaire de Son

@@ -6,7 +6,12 @@
   },
   "zzdez": {
     "hash": "pbkdf2:sha256:1000000$xeLRvkMsbkmHgS9d$f67493c66b95c367030e9c3143408d5a4ed505dbe884f00cda81b3a9cd9020e4",
-    "role": "lecteur",
-    "nom_complet": "Nom Complet pour zzdez" 
+    "role": "collaborateur",
+    "nom_complet": "DeZ"
+  },
+  "Surveillant": {
+    "hash": "scrypt:32768:8:1$4EGJYV5btFOIqLNM$8b1911ea5951ee471366a65ea751f6cbed90c98e220849fa5f2b603f1116f13a036ab04ddb93e7a7ce9a5797434c0518c0da53cb794c54827b962efa3181d17f",
+    "nom_complet": "Paul Bismut",
+    "role": "lecteur"
   }
 }

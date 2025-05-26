@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Gestion des Utilisateurs - Sonneries Collège</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Barre de Navigation -->
+    <div style="text-align: right; margin-bottom: 10px; font-size: 0.9em;">
+       {% if current_user and current_user.is_authenticated %}
+         Connecté: <strong>{{ current_user.id }}</strong> (Rôle: {{ current_user.role }}) |
+         <a href="{{ url_for('index') }}">Contrôle Principal</a> |
+         <a href="{{ url_for('config_general_page') }}">Config Générale</a> |
+         <a href="{{ url_for('config_weekly_page') }}">Config Hebdo</a> |
+         <a href="{{ url_for('config_day_types_page') }}">Journées Types</a> |
+         <a href="{{ url_for('config_exceptions_page') }}">Exceptions</a> |
+         <a href="{{ url_for('config_sounds_page') }}">Sonneries</a> |
+         {# Le lien vers Gestion Utilisateurs est déjà présent et correct fonctionnellement,
+            mais standardisation de la condition pour la cohérence.
+            La condition originale `current_user.role == 'admin'` est fonctionnellement OK
+            car cette page est déjà protégée par @admin_required.
+            `current_user.role == 'administrateur'` est la valeur exacte du rôle.
+         #}
+         {% if current_user and current_user.is_authenticated and current_user.role == 'administrateur' %}
+           <a href="{{ url_for('config_users_page') }}">Gestion Utilisateurs</a> |
+         {% endif %}
+         <a href="{{ url_for('logout') }}">Déconnexion</a>
+       {% else %}
+         (Non Connecté) <a href="{{ url_for('login') }}">Se connecter</a>
+       {% endif %}
+     </div>
+
+    <h1>Gestion des Utilisateurs</h1>
+
+    <div class="config-section">
+        <h2>Liste des Utilisateurs</h2>
+        <button id="show-add-user-form-btn" style="margin-bottom: 10px;">Ajouter un Utilisateur</button>
+        <table id="users-table" class="config-table">
+            <thead>
+                <tr>
+                    <th>Nom d'utilisateur</th>
+                    <th>Nom complet</th>
+                    <th>Rôle</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="users-table-body">
+                <!-- Les lignes d'utilisateurs seront injectées ici par JavaScript -->
+                <tr><td colspan="4">Chargement des utilisateurs...</td></tr>
+            </tbody>
+        </table>
+        <div id="users-feedback" class="feedback-message" style="display: none;"></div>
+    </div>
+
+    <!-- Formulaire d'Ajout d'Utilisateur (initialement caché) -->
+    <div id="add-user-form-container" class="form-container" style="display:none; margin-top: 20px;">
+        <h2>Ajouter un Nouvel Utilisateur</h2>
+        <form id="add-user-form">
+            <div class="form-group">
+                <label for="add-username">Nom d'utilisateur:</label>
+                <input type="text" id="add-username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="add-full-name">Nom complet:</label>
+                <input type="text" id="add-full-name" name="full_name" required>
+            </div>
+            <div class="form-group">
+                <label for="add-password">Mot de passe:</label>
+                <input type="password" id="add-password" name="password" required>
+            </div>
+            <div class="form-group">
+                <label for="add-confirm-password">Confirmer le mot de passe:</label>
+                <input type="password" id="add-confirm-password" name="confirm_password" required>
+            </div>
+            <div class="form-group">
+                <label for="add-role">Rôle:</label>
+                <select id="add-role" name="role">
+                    <option value="lecteur">Lecteur</option>
+                    <option value="collaborateur">Collaborateur</option>
+                    <option value="administrateur">Administrateur</option>
+                </select>
+            </div>
+            <button type="submit">Enregistrer le Nouvel Utilisateur</button>
+            <button type="button" id="cancel-add-user-btn">Annuler</button>
+        </form>
+    </div>
+
+    <!-- Formulaire de Modification d'Utilisateur (initialement caché) -->
+    <div id="edit-user-form-container" class="form-container" style="display:none; margin-top: 20px;">
+        <h2>Modifier l'Utilisateur</h2>
+        <form id="edit-user-form">
+            <input type="hidden" id="edit-original-username" name="original_username">
+            <div class="form-group">
+                <label for="edit-username">Nom d'utilisateur:</label>
+                <input type="text" id="edit-username" name="username" readonly style="background-color: #eee;">
+            </div>
+            <div class="form-group">
+                <label for="edit-full-name">Nom complet:</label>
+                <input type="text" id="edit-full-name" name="full_name" required>
+            </div>
+            <div class="form-group">
+                <label for="edit-password">Nouveau mot de passe (laisser vide pour ne pas changer):</label>
+                <input type="password" id="edit-password" name="password">
+            </div>
+            <div class="form-group">
+                <label for="edit-confirm-password">Confirmer le nouveau mot de passe:</label>
+                <input type="password" id="edit-confirm-password" name="confirm_password">
+            </div>
+            <div class="form-group">
+                <label for="edit-role">Rôle:</label>
+                <select id="edit-role" name="role">
+                    <option value="lecteur">Lecteur</option>
+                    <option value="collaborateur">Collaborateur</option>
+                    <option value="administrateur">Administrateur</option>
+                </select>
+            </div>
+            <button type="submit">Sauvegarder les Modifications</button>
+            <button type="button" id="cancel-edit-user-btn">Annuler</button>
+        </form>
+    </div>
+
+    <script>
+        const MIN_PASSWORD_LENGTH = 8;
+        const VALID_ROLES = ["lecteur", "collaborateur", "administrateur"]; // Corresponds to backend ROLES_HIERARCHIE keys
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- Elements DOM ---
+            const usersTableBody = document.getElementById('users-table-body');
+            const feedbackDiv = document.getElementById('users-feedback');
+
+            const showAddUserFormBtn = document.getElementById('show-add-user-form-btn');
+            const addUserFormContainer = document.getElementById('add-user-form-container');
+            const addUserForm = document.getElementById('add-user-form');
+            const cancelAddUserBtn = document.getElementById('cancel-add-user-btn');
+
+            const editUserFormContainer = document.getElementById('edit-user-form-container');
+            const editUserForm = document.getElementById('edit-user-form');
+            const cancelEditUserBtn = document.getElementById('cancel-edit-user-btn');
+            const editOriginalUsernameField = document.getElementById('edit-original-username'); // Hidden field
+
+            // --- Utility: Feedback ---
+            function showUsersFeedback(message, type = 'info', duration = 4000) {
+                feedbackDiv.textContent = message;
+                feedbackDiv.className = 'feedback-message'; // Reset classes
+                feedbackDiv.classList.add(type, 'show');
+                feedbackDiv.style.display = 'block';
+                setTimeout(() => {
+                    feedbackDiv.classList.remove('show');
+                    setTimeout(() => { if (!feedbackDiv.classList.contains('show')) feedbackDiv.style.display = 'none'; }, 500);
+                }, duration);
+            }
+
+            // --- Utility: Reset Forms ---
+            function resetAndHideForms() {
+                addUserForm.reset();
+                addUserFormContainer.style.display = 'none';
+                editUserForm.reset();
+                editUserFormContainer.style.display = 'none';
+                editOriginalUsernameField.value = '';
+            }
+
+            // --- Load Users ---
+            async function loadUsers() {
+                resetAndHideForms();
+                usersTableBody.innerHTML = '<tr><td colspan="4">Chargement des utilisateurs...</td></tr>';
+                try {
+                    const response = await fetch('/api/users');
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.error || `Erreur HTTP ${response.status}`);
+                    }
+                    const users = await response.json();
+                    populateUsersTable(users);
+                } catch (error) {
+                    console.error("Erreur chargement utilisateurs:", error);
+                    usersTableBody.innerHTML = `<tr><td colspan="4" style="color:red;">Erreur: ${error.message}</td></tr>`;
+                    showUsersFeedback(`Erreur chargement: ${error.message}`, 'error');
+                }
+            }
+
+            function populateUsersTable(users) {
+                usersTableBody.innerHTML = ''; // Clear previous content
+                if (!users || users.length === 0) {
+                    usersTableBody.innerHTML = '<tr><td colspan="4">Aucun utilisateur configuré.</td></tr>';
+                    return;
+                }
+
+                users.forEach(user => {
+                    const row = usersTableBody.insertRow();
+                    row.dataset.username = user.username; // Store username for easy access
+
+                    row.insertCell().textContent = user.username;
+                    row.insertCell().textContent = user.full_name;
+                    row.insertCell().textContent = user.role;
+
+                    const actionsCell = row.insertCell();
+                    const editBtn = document.createElement('button');
+                    editBtn.textContent = 'Modifier';
+                    editBtn.classList.add('btn-small');
+                    editBtn.onclick = () => showEditForm(user.username, user.full_name, user.role);
+                    actionsCell.appendChild(editBtn);
+
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.textContent = 'Supprimer';
+                    deleteBtn.classList.add('btn-small', 'btn-danger'); // Assuming btn-danger for styling
+                    deleteBtn.onclick = () => deleteUser(user.username);
+                    actionsCell.appendChild(deleteBtn);
+                });
+            }
+
+            // --- Add User Form Logic ---
+            showAddUserFormBtn.addEventListener('click', () => {
+                resetAndHideForms();
+                addUserFormContainer.style.display = 'block';
+                document.getElementById('add-username').focus();
+            });
+
+            cancelAddUserBtn.addEventListener('click', () => {
+                resetAndHideForms();
+            });
+
+            addUserForm.addEventListener('submit', async function(event) {
+                event.preventDefault();
+                const username = document.getElementById('add-username').value.trim();
+                const fullName = document.getElementById('add-full-name').value.trim();
+                const password = document.getElementById('add-password').value;
+                const confirmPassword = document.getElementById('add-confirm-password').value;
+                const role = document.getElementById('add-role').value;
+
+                if (!username || !fullName || !password || !confirmPassword || !role) {
+                    showUsersFeedback("Tous les champs sont requis.", 'error'); return;
+                }
+                if (password !== confirmPassword) {
+                    showUsersFeedback("Les mots de passe ne correspondent pas.", 'error'); return;
+                }
+                if (password.length < MIN_PASSWORD_LENGTH) {
+                    showUsersFeedback(`Le mot de passe doit contenir au moins ${MIN_PASSWORD_LENGTH} caractères.`, 'error'); return;
+                }
+
+                try {
+                    const response = await fetch('/api/users', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ username, full_name: fullName, password, role })
+                    });
+                    const data = await response.json();
+                    if (!response.ok) {
+                        throw new Error(data.error || `Erreur HTTP ${response.status}`);
+                    }
+                    showUsersFeedback(data.message || "Utilisateur ajouté avec succès!", 'success');
+                    loadUsers(); // Reload and hide forms
+                } catch (error) {
+                    console.error("Erreur ajout utilisateur:", error);
+                    showUsersFeedback(`Erreur ajout: ${error.message}`, 'error');
+                }
+            });
+
+            // --- Edit User Form Logic ---
+            function showEditForm(username, fullName, role) {
+                resetAndHideForms();
+                editOriginalUsernameField.value = username; // Store the original username
+                document.getElementById('edit-username').value = username; // Display current username (readonly)
+                document.getElementById('edit-full-name').value = fullName;
+                document.getElementById('edit-role').value = role;
+                document.getElementById('edit-password').value = '';
+                document.getElementById('edit-confirm-password').value = '';
+                editUserFormContainer.style.display = 'block';
+                document.getElementById('edit-full-name').focus();
+            }
+
+            cancelEditUserBtn.addEventListener('click', () => {
+                resetAndHideForms();
+            });
+
+            editUserForm.addEventListener('submit', async function(event) {
+                event.preventDefault();
+                const originalUsername = editOriginalUsernameField.value;
+                const fullName = document.getElementById('edit-full-name').value.trim();
+                const password = document.getElementById('edit-password').value;
+                const confirmPassword = document.getElementById('edit-confirm-password').value;
+                const role = document.getElementById('edit-role').value;
+
+                if (!fullName || !role) { // Username is not editable, originalUsername is key
+                    showUsersFeedback("Le nom complet et le rôle sont requis.", 'error'); return;
+                }
+
+                let payload = { full_name: fullName, role: role };
+
+                if (password) { // Password is being changed
+                    if (password !== confirmPassword) {
+                        showUsersFeedback("Les nouveaux mots de passe ne correspondent pas.", 'error'); return;
+                    }
+                    if (password.length < MIN_PASSWORD_LENGTH) {
+                        showUsersFeedback(`Le nouveau mot de passe doit contenir au moins ${MIN_PASSWORD_LENGTH} caractères.`, 'error'); return;
+                    }
+                    payload.password = password;
+                }
+
+                try {
+                    const response = await fetch(`/api/users/${encodeURIComponent(originalUsername)}`, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await response.json();
+                    if (!response.ok) {
+                        throw new Error(data.error || `Erreur HTTP ${response.status}`);
+                    }
+                    showUsersFeedback(data.message || "Utilisateur modifié avec succès!", 'success');
+                    loadUsers(); // Reload and hide forms
+                } catch (error) {
+                    console.error("Erreur modification utilisateur:", error);
+                    showUsersFeedback(`Erreur modification: ${error.message}`, 'error');
+                }
+            });
+
+            // --- Delete User Logic ---
+            async function deleteUser(username) {
+                if (!confirm(`Êtes-vous sûr de vouloir supprimer l'utilisateur "${username}" ? Cette action est irréversible.`)) {
+                    return;
+                }
+                try {
+                    const response = await fetch(`/api/users/${encodeURIComponent(username)}`, {
+                        method: 'DELETE'
+                    });
+                    const data = await response.json(); // Try to parse JSON, even for errors
+                    if (!response.ok) {
+                        throw new Error(data.error || `Erreur HTTP ${response.status}`);
+                    }
+                    showUsersFeedback(data.message || `Utilisateur "${username}" supprimé avec succès.`, 'success');
+                    loadUsers();
+                } catch (error) {
+                    console.error("Erreur suppression utilisateur:", error);
+                    showUsersFeedback(`Erreur suppression: ${error.message}`, 'error');
+                }
+            }
+
+            // --- Initial Load ---
+            loadUsers();
+        });
+    </script>
+
+</body>
+</html>

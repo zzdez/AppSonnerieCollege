@@ -17,12 +17,15 @@
          <a href="{{ url_for('config_day_types_page') }}">Journées Types</a> |
          <a href="{{ url_for('config_exceptions_page') }}">Exceptions</a> |
          <a href="{{ url_for('config_sounds_page') }}">Sonneries</a> |
+         {% if current_user and current_user.is_authenticated and current_user.role == 'administrateur' %}
+           <a href="{{ url_for('config_users_page') }}">Gestion Utilisateurs</a> |
+         {% endif %}
          <a href="{{ url_for('logout') }}">Déconnexion</a>
        {% else %}
          (Non Connecté) <a href="{{ url_for('login') }}">Se connecter</a>
        {% endif %}
      </div>
-     
+
     <!-- FIN LIEN DECONNEXION ET NAVIGATION -->
     <div class="config-page-container"> <!-- Tu as bien ajouté ce conteneur -->
         <h1>Configuration du Planning Hebdomadaire</h1>
@@ -44,7 +47,7 @@
         // --------------------------------------------------
         // 1. Variables Globales
         // --------------------------------------------------
-        const daysOfWeek = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]; 
+        const daysOfWeek = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 
         // --------------------------------------------------
         // 2. Fonctions Utilitaires
@@ -53,7 +56,7 @@
             const feedbackDiv = document.getElementById('weekly-feedback');
             if (!feedbackDiv) return;
             feedbackDiv.textContent = message;
-            feedbackDiv.className = 'feedback-message'; 
+            feedbackDiv.className = 'feedback-message';
             feedbackDiv.classList.add(type, 'show');
             feedbackDiv.style.display = 'block';
             setTimeout(() => {
@@ -72,7 +75,7 @@
             daysOfWeek.forEach(day => {
                 const selectElement = document.getElementById(`select-${day.toLowerCase()}`);
                 if (selectElement) {
-                    newPlanning[day] = selectElement.value; 
+                    newPlanning[day] = selectElement.value;
                 } else {
                     console.error(`Impossible de trouver le select pour le jour ${day}`);
                     isValid = false;
@@ -124,14 +127,14 @@
                 console.error("Élément #weekly-schedule-form introuvable !");
                 return;
             }
-            formDiv.innerHTML = '<p>Chargement du planning...</p>'; 
+            formDiv.innerHTML = '<p>Chargement du planning...</p>';
 
             fetch('/api/config/weekly_schedule')
                 .then(response => {
-                    if (!response.ok) { 
+                    if (!response.ok) {
                         return response.json().then(errData => {
                             throw new Error(`Erreur HTTP ${response.status}: ${errData.error || response.statusText}`);
-                        }).catch(() => { 
+                        }).catch(() => {
                             throw new Error(`Erreur HTTP ${response.status}: ${response.statusText}`);
                         });
                     }
@@ -139,13 +142,13 @@
                 })
                 .then(data => {
                     console.log("Données planning hebdo reçues:", data);
-                    formDiv.innerHTML = ''; 
+                    formDiv.innerHTML = '';
 
                     const availableDayTypes = data.available_day_types || [];
                     const currentPlanning = data.weekly_planning || {};
-                    const aucuneValue = "Aucune"; 
+                    const aucuneValue = "Aucune";
 
-                    const optionsHtml = [`<option value="${aucuneValue}">${aucuneValue}</option>`] 
+                    const optionsHtml = [`<option value="${aucuneValue}">${aucuneValue}</option>`]
                         .concat(availableDayTypes.map(jtName => `<option value="${jtName}">${jtName}</option>`))
                         .join('');
 
@@ -169,7 +172,7 @@
                 })
                 .catch(error => {
                     console.error("Erreur chargement planning hebdo:", error);
-                    formDiv.innerHTML = `<p style="color: red;">Erreur lors du chargement du planning : ${error.message}</p>`; 
+                    formDiv.innerHTML = `<p style="color: red;">Erreur lors du chargement du planning : ${error.message}</p>`;
                     showWeeklyFeedback(`Erreur chargement: ${error.message}`, 'error');
                 });
         }

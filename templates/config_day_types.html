@@ -17,7 +17,9 @@
          <a href="{{ url_for('config_day_types_page') }}">Journées Types</a> |
          <a href="{{ url_for('config_exceptions_page') }}">Exceptions</a> |
          <a href="{{ url_for('config_sounds_page') }}">Sonneries</a> |
-         <!-- Ajouter d'autres futurs liens de config ici -->
+         {% if current_user and current_user.is_authenticated and current_user.role == 'administrateur' %}
+           <a href="{{ url_for('config_users_page') }}">Gestion Utilisateurs</a> |
+         {% endif %}
          <a href="{{ url_for('logout') }}">Déconnexion</a>
        {% else %}
          (Non Connecté) <a href="{{ url_for('login') }}">Se connecter</a>

@@ -335,7 +335,8 @@ class SchedulerManager:
             self.logger.debug(f"---> Commande son: {' '.join(cmd)}")
             flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
 
-            process = subprocess.Popen(cmd, creationflags=flags, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
+            # Correction: Ajout de errors='replace' pour gérer les erreurs de décodage
+            process = subprocess.Popen(cmd, creationflags=flags, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace')
             self.logger.info(f"---> Subprocess lancé pour jouer '{filename}'. PID: {process.pid}")
             try:
                 stdout, stderr = process.communicate(timeout=15) # Read output, timeout 15s

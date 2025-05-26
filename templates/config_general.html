@@ -17,14 +17,16 @@
          <a href="{{ url_for('config_day_types_page') }}">Journées Types</a> |
          <a href="{{ url_for('config_exceptions_page') }}">Exceptions</a> |
          <a href="{{ url_for('config_sounds_page') }}">Sonneries</a> |
-         <!-- Ajouter d'autres futurs liens de config ici -->
+         {% if current_user and current_user.is_authenticated and current_user.role == 'administrateur' %}
+           <a href="{{ url_for('config_users_page') }}">Gestion Utilisateurs</a> |
+         {% endif %}
          <a href="{{ url_for('logout') }}">Déconnexion</a>
        {% else %}
          (Non Connecté) <a href="{{ url_for('login') }}">Se connecter</a>
        {% endif %}
      </div>
     <!-- FIN LIEN DECONNEXION ET NAVIGATION -->
-    <div class="config-page-container"> 
+    <div class="config-page-container">
 
     <h1>Configuration Générale et Alertes</h1>
 
@@ -93,18 +95,18 @@
     // --------------------------------------------------
     // 1. Variables Globales pour la page
     // --------------------------------------------------
-    let departementsData = {{ constants.DEPARTEMENTS_ZONES | tojson }}; 
-    let listeDepartementsSorted = {{ constants.LISTE_DEPARTEMENTS | tojson }}; 
-    
+    let departementsData = {{ constants.DEPARTEMENTS_ZONES | tojson }};
+    let listeDepartementsSorted = {{ constants.LISTE_DEPARTEMENTS | tojson }};
+
     // Variables globales pour la pré-écoute audio
-    let globalCurrentAudioInstance = null; 
+    let globalCurrentAudioInstance = null;
     let globalCurrentPlayingFile = null;
     let globalCurrentButtonPlaying = null; // Le bouton associé au son actif
 
     // --------------------------------------------------
     // 2. Fonctions Utilitaires (Helpers)
     // --------------------------------------------------
-    
+
     function showConfigFeedback(message, type = 'info', duration = 4000) {
         const feedbackDiv = document.getElementById('config-feedback');
         if (!feedbackDiv) return;
@@ -124,12 +126,12 @@ function populateDropdown(selectId, options, selectedValue, addEmptyOptionValue 
         console.error(`[populateDropdown] Select element with ID '${selectId}' not found.`);
         return;
     }
-    select.innerHTML = ''; 
+    select.innerHTML = '';
     console.log(`[populateDropdown] Populating: ${selectId}, SelectedValue (entrée): '${selectedValue}' (type: ${typeof selectedValue})`);
 
     if (addEmptyOptionValue !== null && selectId !== 'audio_device_select') {
         const emptyOpt = document.createElement('option');
-        emptyOpt.value = ""; 
+        emptyOpt.value = "";
         emptyOpt.textContent = addEmptyOptionValue;
         select.appendChild(emptyOpt);
     }
@@ -137,34 +139,34 @@ function populateDropdown(selectId, options, selectedValue, addEmptyOptionValue 
     if (typeof options === 'object' && !Array.isArray(options)) {
         for (const [displayName, fileName] of Object.entries(options)) {
             const option = document.createElement('option');
-            option.value = fileName; 
-            option.textContent = displayName; 
+            option.value = fileName;
+            option.textContent = displayName;
             select.appendChild(option);
         }
-    } else if (Array.isArray(options)) { 
+    } else if (Array.isArray(options)) {
         options.forEach(item => {
             const option = document.createElement('option');
             if (typeof item === 'object' && item !== null && 'id' in item && 'name' in item) {
-                option.value = item.id === null ? "" : item.id; 
+                option.value = item.id === null ? "" : item.id;
                 option.textContent = item.name;
-            } else { 
+            } else {
                 option.value = item;
                 option.textContent = item;
             }
             select.appendChild(option);
         });
     }
-    
+
     console.log(`[populateDropdown] ${selectId} - Attempting to set selected value. Current select.value (before): '${select.value}', Desired selectedValue: '${selectedValue}'`);
 
-    if (selectedValue !== undefined && selectedValue !== null && selectedValue !== "") { 
+    if (selectedValue !== undefined && selectedValue !== null && selectedValue !== "") {
         select.value = selectedValue;
         console.log(`[populateDropdown] ${selectId} - After attempting to set to '${selectedValue}', select.value is now: '${select.value}'`);
         if (select.value !== selectedValue) {
             console.warn(`[populateDropdown] ${selectId} - WARN: select.value ('${select.value}') does not match selectedValue ('${selectedValue}'). Option might be missing or value mismatch.`);
         }
     } else if (selectId === 'audio_device_select' && (selectedValue === null || selectedValue === undefined || selectedValue === "")) {
-        select.value = ""; 
+        select.value = "";
         console.log(`[populateDropdown] ${selectId} - Set to default (value=\""). select.value is now: '${select.value}'`);
     } else if (addEmptyOptionValue !== null && selectId !== 'audio_device_select') {
          select.value = "";
@@ -194,7 +196,7 @@ function populateDropdown(selectId, options, selectedValue, addEmptyOptionValue 
             globalCurrentAudioInstance.onerror = null;
             globalCurrentAudioInstance.onended = null;
             // Important: Ne PAS mettre src="" ici, car ça déclenche une erreur inutile
-            
+
             if (globalCurrentButtonPlaying) {
                 globalCurrentButtonPlaying.innerHTML = '🔊 Écouter'; // Réinitialiser bouton
             }
@@ -236,10 +238,10 @@ function populateDropdown(selectId, options, selectedValue, addEmptyOptionValue 
         const selectElement = document.getElementById(selectId);
         const button = selectElement ? selectElement.nextElementSibling : null;
 
-        if (!selectElement || !button) { 
-             console.error(`Éléments introuvables pour ${selectId}`); 
-             showConfigFeedback(`Erreur interne: éléments UI manquants.`, 'error'); 
-             return; 
+        if (!selectElement || !button) {
+             console.error(`Éléments introuvables pour ${selectId}`);
+             showConfigFeedback(`Erreur interne: éléments UI manquants.`, 'error');
+             return;
         }
 
         const fileName = selectElement.value;
@@ -261,33 +263,33 @@ function populateDropdown(selectId, options, selectedValue, addEmptyOptionValue 
             console.log(`INFO: Un son différent ('${globalCurrentPlayingFile}') jouait. Arrêt avant de lancer le nouveau.`);
             stopCurrentSound(); // Arrête l'ancien son et nettoie les globales/bouton précédent
         }
-        
+
         // Si "Aucune sonnerie" est sélectionnée, on s'arrête ici après avoir potentiellement arrêté l'ancien son
         if (!fileName) {
             console.log("INFO: Aucune sonnerie sélectionnée pour lancement.");
             showConfigFeedback("Aucune sonnerie sélectionnée pour l'écoute.", 'info', 2000);
             // S'assurer que le bouton actuel est sur Écouter (normalement fait par stopCurrentSound si un son jouait avant)
-            if (button.innerHTML !== '🔊 Écouter') button.innerHTML = '🔊 Écouter'; 
+            if (button.innerHTML !== '🔊 Écouter') button.innerHTML = '🔊 Écouter';
             return;
         }
 
         // ACTION 3: Lancer un nouveau son
         const soundUrl = `/api/sound/${encodeURIComponent(fileName)}`;
         console.log(`ACTION: Lancement du son '${fileName}' via URL: ${soundUrl}`);
-        
-        const localAudio = new Audio(soundUrl); 
-        
+
+        const localAudio = new Audio(soundUrl);
+
         // Assigner aux variables globales
         globalCurrentAudioInstance = localAudio;
         globalCurrentPlayingFile = fileName;
         globalCurrentButtonPlaying = button; // Mémoriser le bouton pour ce son
 
-        button.innerHTML = '⏹️ Arrêter'; 
+        button.innerHTML = '⏹️ Arrêter';
 
         // --- Gestionnaires d'événements ---
         localAudio.oncanplaythrough = function() {
             console.log(`EVENT: Audio '${fileName}' oncanplaythrough`);
-            if (globalCurrentAudioInstance === this) { 
+            if (globalCurrentAudioInstance === this) {
                 showConfigFeedback(`Lecture de: ${fileName.split('/').pop()}`, 'info', 2500);
                 this.play().catch(e => {
                      console.error(`ERREUR: play() pour '${fileName}':`, e);
@@ -298,9 +300,9 @@ function populateDropdown(selectId, options, selectedValue, addEmptyOptionValue 
         };
 
         localAudio.onerror = function() {
-            const errorFileName = fileName; 
-            const errorButton = button;     
-            console.error(`EVENT: Audio '${errorFileName}' onerror.`); 
+            const errorFileName = fileName;
+            const errorButton = button;
+            console.error(`EVENT: Audio '${errorFileName}' onerror.`);
             showConfigFeedback(`Erreur chargement son: ${errorFileName.split('/').pop()}`, 'error');
             if (globalCurrentAudioInstance === this && globalCurrentButtonPlaying === errorButton) {
                 stopCurrentSound(); // Nettoyer si erreur sur son actuel
@@ -308,8 +310,8 @@ function populateDropdown(selectId, options, selectedValue, addEmptyOptionValue 
         };
 
         localAudio.onended = function() {
-            const endedFileName = fileName; 
-            const endedButton = button;     
+            const endedFileName = fileName;
+            const endedButton = button;
             console.log(`EVENT: Audio '${endedFileName}' onended`);
             if (globalCurrentAudioInstance === this && globalCurrentButtonPlaying === endedButton) {
                 showConfigFeedback(`Fin de lecture: ${endedFileName.split('/').pop()}`, 'info', 2000);
@@ -321,7 +323,7 @@ function populateDropdown(selectId, options, selectedValue, addEmptyOptionValue 
     // Fonction pour sauvegarder la configuration (appelée par le bouton "Enregistrer")
     function saveConfig() {
         const departement = document.getElementById('departement').value;
-        const zone = document.getElementById('zone').value; 
+        const zone = document.getElementById('zone').value;
         const vacances_ics_url = document.getElementById('vacances_ics_url').value;
         const sonnerie_ppms = document.getElementById('sonnerie_ppms').value;
         const sonnerie_attentat = document.getElementById('sonnerie_attentat').value;
@@ -329,11 +331,11 @@ function populateDropdown(selectId, options, selectedValue, addEmptyOptionValue 
         const selected_audio_device = document.getElementById('audio_device_select').value; // Nouvelle ligne
 
         const configToSave = {
-            departement: departement, 
-            zone: zone, 
-            vacances_ics_base_url_manuel: vacances_ics_url, 
-            sonnerie_ppms: sonnerie_ppms, 
-            sonnerie_attentat: sonnerie_attentat, 
+            departement: departement,
+            zone: zone,
+            vacances_ics_base_url_manuel: vacances_ics_url,
+            sonnerie_ppms: sonnerie_ppms,
+            sonnerie_attentat: sonnerie_attentat,
             sonnerie_fin_alerte: sonnerie_fin_alerte,
             nom_peripherique_audio_sonneries: selected_audio_device === "" ? null : selected_audio_device // Nouvelle ligne, "" devient null
         };
@@ -385,9 +387,9 @@ function populateDropdown(selectId, options, selectedValue, addEmptyOptionValue 
                 console.log("Données de config générale reçues:", data);
 
                 populateDropdown('departement', listeDepartementsSorted, data.departement);
-                updateZoneDisplay(); 
+                updateZoneDisplay();
                 document.getElementById('vacances_ics_url').value = data.vacances_ics_base_url_manuel || '';
-                
+
                 // Peupler les listes déroulantes des sonneries d'alerte
                 populateDropdown('sonnerie_ppms', data.available_ringtones, data.sonnerie_ppms, "Aucune Sonnerie (PPMS)");
                 populateDropdown('sonnerie_attentat', data.available_ringtones, data.sonnerie_attentat, "Aucune Sonnerie (Attentat)");
