@@ -97,9 +97,6 @@
     // 1. Variables Globales
     // --------------------------------------------------
     var canViewExceptionsPage = {{ user_has_permission('page:view_config_exceptions') | tojson }}; // Déjà utilisé pour le bloc global
-    var canCreateException = {{ user_has_permission('exception:create') | tojson }};
-    var canEditException = {{ user_has_permission('exception:edit') | tojson }};
-    var canDeleteException = {{ user_has_permission('exception:delete') | tojson }};
     let availableDayTypesForExceptions = []; // Sera chargé une fois
 
     // --------------------------------------------------
