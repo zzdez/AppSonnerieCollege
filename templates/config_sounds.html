@@ -58,6 +58,13 @@
     <audio id="preview-audio-player" style="display:none;"></audio>
 
 <script>
+    // Permissions (injectées par Jinja2)
+    const canUploadSound = {{ user_has_permission('sound:upload') | tojson }};
+    const canScanDirectory = {{ user_has_permission('sound:scan_folder') | tojson }}; // Corrigé: scan_folder au lieu de scan_directory
+    const canEditDisplayName = {{ user_has_permission('sound:edit_display_name') | tojson }};
+    const canDisassociateSound = {{ user_has_permission('sound:disassociate') | tojson }};
+    const canDeletePhysicalFile = {{ user_has_permission('sound:delete_file') | tojson }}; // Corrigé: delete_file au lieu de delete_physical_file
+
     // --------------------------------------------------
     // 1. Variables Globales
     // --------------------------------------------------
@@ -158,8 +165,8 @@
             // Cellule 0: Actions (Éditer Nom Convivial, Désassocier)
             const cellActions = row.insertCell();
             cellActions.innerHTML = `
-                <button class="edit-name-btn btn-small" onclick="toggleEditDisplayName(this)" title="Modifier nom convivial">✏️</button>
-                <button class="disassociate-btn btn-small" onclick="disassociateSound('${fileName}', '${displayName}')" title="Désassocier cette sonnerie (garde le fichier MP3)">🔗</button>
+                <button class="edit-name-btn btn-small" onclick="toggleEditDisplayName(this)" title="Modifier nom convivial" ${!canEditDisplayName ? 'disabled' : ''}>✏️</button>
+                <button class="disassociate-btn btn-small" onclick="disassociateSound('${fileName}', '${displayName}')" title="Désassocier cette sonnerie (garde le fichier MP3)" ${!canDisassociateSound ? 'disabled' : ''}>🔗</button>
             `;
 
             // Cellule 1: Nom Convivial (avec input caché et boutons Sauver/Annuler cachés)
@@ -176,7 +183,7 @@
             // Cellule 2: Nom de Fichier MP3 (avec bouton Supprimer Fichier à gauche)
             const cellFileName = row.insertCell();
             cellFileName.innerHTML = `
-                <button class="delete-file-btn btn-small" onclick="confirmAndDeletePhysicalSound('${fileName}', '${displayName}')" title="Supprimer le fichier MP3 du serveur et l'association">🗑️</button>
+                <button class="delete-file-btn btn-small" onclick="confirmAndDeletePhysicalSound('${fileName}', '${displayName}')" title="Supprimer le fichier MP3 du serveur et l'association" ${!canDeletePhysicalFile ? 'disabled' : ''}>🗑️</button>
                 <span>${fileName}</span>
             `;
 
@@ -192,6 +199,10 @@
     }
 
     function toggleEditDisplayName(editButtonElement) {
+        if (!canEditDisplayName) {
+            showSoundsFeedback("Vous n'avez pas la permission de modifier le nom.", 'error');
+            return;
+        }
         const row = editButtonElement.closest('tr');
         // Récupérer les infos depuis les data-attributes de la ligne
         const fileName = row.dataset.fileName;
@@ -270,6 +281,10 @@
     }
 
     function scanMp3Directory() {
+        if (!canScanDirectory) { // Utilisation de la variable JS corrigée
+            showSoundsFeedback("Vous n'avez pas la permission de scanner le dossier MP3.", 'error');
+            return;
+        }
         console.log("Demande de scan du dossier MP3...");
         showSoundsFeedback("Scan du dossier MP3 en cours...", 'info', 0);
         fetch('/api/config/sounds/scan', { method: 'POST' })
@@ -344,6 +359,10 @@
     }
 
 function disassociateSound(fileName, displayName) {
+    if (!canDisassociateSound) {
+        showSoundsFeedback("Vous n'avez pas la permission de désassocier cette sonnerie.", 'error');
+        return;
+    }
     if (!confirm(`Voulez-vous désassocier la sonnerie "${displayName}" (fichier: ${fileName}) ?\nLe fichier MP3 restera sur le serveur et pourra être retrouvé par un nouveau scan.`)) {
         return;
     }
@@ -369,6 +388,10 @@ function disassociateSound(fileName, displayName) {
 }
 
     function confirmAndDeletePhysicalSound(fileName, displayName) {
+        if (!canDeletePhysicalFile) { // Utilisation de la variable JS corrigée
+            showSoundsFeedback("Vous n'avez pas la permission de supprimer ce fichier.", 'error');
+            return;
+        }
         if (!confirm(`ATTENTION : ACTION DESTRUCTIVE !\n\nÊtes-vous sûr de vouloir supprimer DÉFINITIVEMENT le fichier MP3 '${fileName}' du serveur ET son association dans la configuration pour "${displayName}" ?\n\nCette action est IRRÉVERSIBLE.`)) {
             return;
         }
@@ -393,6 +416,10 @@ function disassociateSound(fileName, displayName) {
     }
 
     async function uploadSound() {
+        if (!canUploadSound) {
+            showSoundsFeedback("Vous n'avez pas la permission d'uploader des sonneries.", 'error');
+            return;
+        }
         const fileInput = document.getElementById('sound-file-input');
         if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
             showSoundsFeedback("Veuillez sélectionner au moins un fichier MP3 à uploader.", 'error');

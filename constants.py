@@ -68,6 +68,7 @@ except Exception as e_global:
 DONNEES_SONNERIES_FILE = "donnees_sonneries.json"
 PARAMS_FILE = "parametres_college.json"
 USERS_FILE = "users.json"
+ROLES_CONFIG_FILE = "roles_config.json"
 
 # Nom pour le fichier ICS temporaire (dans le dossier du script ou cache_dir de HolidayManager)
 # Laisser HolidayManager gérer son chemin temporaire est peut-être mieux.
@@ -168,7 +169,10 @@ AVAILABLE_PERMISSIONS = [
     "user:delete",
 
     # Permission spéciale pour les administrateurs
-    "admin:has_all_permissions"
+    "admin:has_all_permissions",
+
+    # Nouvelle permission pour la gestion des permissions des rôles
+    "user_management:edit_role_permissions"
 ]
 # --- FIN Permissions Granulaires ---
 
@@ -216,12 +220,109 @@ FRIENDLY_PERMISSION_NAMES = {
     "user:edit_details": "Modifier les détails d'un utilisateur (nom complet)",
     "user:edit_password": "Modifier le mot de passe d'un utilisateur",
     "user:edit_role": "Modifier le rôle d'un utilisateur",
-    "user:edit_permissions": "Modifier les permissions spécifiques d'un utilisateur",
+    "user:edit_permissions": "Modifier les permissions spécifiques d'un utilisateur", # Cette permission sera probablement retirée ou renommée
     "user:delete": "Supprimer des utilisateurs",
+
+    "user_management:edit_role_permissions": "Modifier les permissions associées à chaque rôle"
 }
 # --- FIN Noms Conviviaux ---
 
+# --- Modèle de Permissions pour l'UI de Configuration des Rôles ---
+# Ce modèle aide à structurer l'affichage des permissions dans l'interface utilisateur.
+PERMISSIONS_MODEL = {
+    "page_access": { # Accès aux pages principales (onglet "Accès Pages")
+        "label": "Accès aux Pages Principales",
+        "permissions": {
+            "page:view_control": FRIENDLY_PERMISSION_NAMES.get("page:view_control"),
+            "page:view_config_general": FRIENDLY_PERMISSION_NAMES.get("page:view_config_general"),
+            "page:view_config_weekly": FRIENDLY_PERMISSION_NAMES.get("page:view_config_weekly"),
+            "page:view_config_day_types": FRIENDLY_PERMISSION_NAMES.get("page:view_config_day_types"),
+            "page:view_config_exceptions": FRIENDLY_PERMISSION_NAMES.get("page:view_config_exceptions"),
+            "page:view_config_sounds": FRIENDLY_PERMISSION_NAMES.get("page:view_config_sounds"),
+            "page:view_config_users": FRIENDLY_PERMISSION_NAMES.get("page:view_config_users"),
+            # La page de config des rôles sera implicitement protégée par "user_management:edit_role_permissions"
+        }
+    },
+    "control_panel": { # Actions sur la page de Contrôle (onglet "Panneau Contrôle")
+        "label": "Panneau de Contrôle",
+        "permissions": {
+            "control:scheduler_activate": FRIENDLY_PERMISSION_NAMES.get("control:scheduler_activate"),
+            "control:scheduler_deactivate": FRIENDLY_PERMISSION_NAMES.get("control:scheduler_deactivate"),
+            "control:config_reload": FRIENDLY_PERMISSION_NAMES.get("control:config_reload"),
+            "control:alert_trigger_ppms": FRIENDLY_PERMISSION_NAMES.get("control:alert_trigger_ppms"),
+            "control:alert_trigger_attentat": FRIENDLY_PERMISSION_NAMES.get("control:alert_trigger_attentat"),
+            "control:alert_trigger_any": FRIENDLY_PERMISSION_NAMES.get("control:alert_trigger_any"),
+            "control:alert_stop": FRIENDLY_PERMISSION_NAMES.get("control:alert_stop"),
+            "control:alert_end": FRIENDLY_PERMISSION_NAMES.get("control:alert_end"),
+        }
+    },
+    "general_config": { # Configuration Générale (onglet "Config Générale")
+        "label": "Configuration Générale",
+        "permissions": {
+            "config_general:edit_settings": FRIENDLY_PERMISSION_NAMES.get("config_general:edit_settings"),
+            "config_general:edit_alert_sounds": FRIENDLY_PERMISSION_NAMES.get("config_general:edit_alert_sounds"),
+        }
+    },
+    "weekly_planning_config": { # Configuration Planning Hebdomadaire (onglet "Config Hebdo")
+        "label": "Configuration Planning Hebdomadaire",
+        "permissions": {
+            "config_weekly:edit_planning": FRIENDLY_PERMISSION_NAMES.get("config_weekly:edit_planning"),
+        }
+    },
+    "day_types_config": { # Configuration Journées Types (onglet "Config Journées Types")
+        "label": "Configuration Journées Types",
+        "permissions": {
+            "day_type:create": FRIENDLY_PERMISSION_NAMES.get("day_type:create"),
+            "day_type:rename": FRIENDLY_PERMISSION_NAMES.get("day_type:rename"),
+            "day_type:delete": FRIENDLY_PERMISSION_NAMES.get("day_type:delete"),
+            "day_type:edit_periods": FRIENDLY_PERMISSION_NAMES.get("day_type:edit_periods"),
+        }
+    },
+    "exceptions_config": { # Configuration Exceptions (onglet "Config Exceptions")
+        "label": "Configuration Exceptions de Planning",
+        "permissions": {
+            "exception:create": FRIENDLY_PERMISSION_NAMES.get("exception:create"),
+            "exception:edit": FRIENDLY_PERMISSION_NAMES.get("exception:edit"),
+            "exception:delete": FRIENDLY_PERMISSION_NAMES.get("exception:delete"),
+        }
+    },
+    "sounds_config": { # Gestion des Sonneries (onglet "Config Sonneries")
+        "label": "Gestion des Sonneries",
+        "permissions": {
+            "sound:upload": FRIENDLY_PERMISSION_NAMES.get("sound:upload"),
+            "sound:scan_folder": FRIENDLY_PERMISSION_NAMES.get("sound:scan_folder"),
+            "sound:edit_display_name": FRIENDLY_PERMISSION_NAMES.get("sound:edit_display_name"),
+            "sound:disassociate": FRIENDLY_PERMISSION_NAMES.get("sound:disassociate"),
+            "sound:delete_file": FRIENDLY_PERMISSION_NAMES.get("sound:delete_file"),
+        }
+    },
+    "user_management": { # Gestion des Utilisateurs et Rôles (onglet "Config Utilisateurs")
+        "label": "Gestion Utilisateurs et Rôles",
+        "permissions": {
+            "user:view_list": FRIENDLY_PERMISSION_NAMES.get("user:view_list"),
+            "user:create": FRIENDLY_PERMISSION_NAMES.get("user:create"),
+            "user:edit_details": FRIENDLY_PERMISSION_NAMES.get("user:edit_details"),
+            "user:edit_password": FRIENDLY_PERMISSION_NAMES.get("user:edit_password"),
+            "user:edit_role": FRIENDLY_PERMISSION_NAMES.get("user:edit_role"),
+            # "user:edit_permissions" est maintenant géré par "user_management:edit_role_permissions"
+            "user:delete": FRIENDLY_PERMISSION_NAMES.get("user:delete"),
+            "user_management:edit_role_permissions": FRIENDLY_PERMISSION_NAMES.get("user_management:edit_role_permissions"),
+        }
+    },
+    "special_permissions": { # Permissions spéciales (onglet "Avancé" ou "Spécial")
+        "label": "Permissions Spéciales",
+        "permissions": {
+            "admin:has_all_permissions": FRIENDLY_PERMISSION_NAMES.get("admin:has_all_permissions", "Accès total administrateur (non modifiable)"),
+        }
+    }
+}
+# --- FIN Modèle de Permissions ---
+
+
 # --- Permissions par Défaut pour chaque Rôle ---
+# Ces listes sont maintenant obsolètes car les permissions sont définies dans roles_config.json
+# Elles sont conservées ici temporairement pour référence ou si une logique de fallback devait être réintroduite.
+# Il est recommandé de supprimer cette constante une fois le nouveau système de rôles pleinement validé.
 DEFAULT_ROLE_PERMISSIONS = {
     "lecteur": [
         "page:view_control",

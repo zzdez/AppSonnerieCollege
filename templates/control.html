@@ -38,13 +38,13 @@
     <!-- Section Contrôle -->
 	<div id="control-section" style="display: none;">
 		<h2>Contrôles</h2>
-		<button onclick="sendCommand('activate')">Activer Planning</button>
-		<button onclick="sendCommand('deactivate')">Désactiver Planning</button>
-		<button onclick="triggerAlert('PPMS')">Déclencher Alerte PPMS</button>
-		<button onclick="triggerAlert('Attentat')">Déclencher Alerte Attentat</button>
-		<button onclick="stopAlert()" style="background-color: #ffc107; color: black;" title="Arrêt immédiat sans son de fin">Arrêt Urgence</button>
-		<button onclick="endAlert()" style="background-color: #198754;" title="Arrête l'alerte et joue le son de fin">Fin d'Alerte</button>
-		<button onclick="reloadConfig()">Recharger Configuration</button>
+		<button onclick="sendCommand('activate')" {% if not user_has_permission('control:scheduler_activate') %}disabled{% endif %}>Activer Planning</button>
+		<button onclick="sendCommand('deactivate')" {% if not user_has_permission('control:scheduler_deactivate') %}disabled{% endif %}>Désactiver Planning</button>
+		<button onclick="triggerAlert('PPMS')" {% if not user_has_permission('control:alert_trigger_ppms') %}disabled{% endif %}>Déclencher Alerte PPMS</button>
+		<button onclick="triggerAlert('Attentat')" {% if not user_has_permission('control:alert_trigger_attentat') %}disabled{% endif %}>Déclencher Alerte Attentat</button>
+		<button onclick="stopAlert()" style="background-color: #ffc107; color: black;" title="Arrêt immédiat sans son de fin" {% if not user_has_permission('control:alert_stop') %}disabled{% endif %}>Arrêt Urgence</button>
+		<button onclick="endAlert()" style="background-color: #198754;" title="Arrête l'alerte et joue le son de fin" {% if not user_has_permission('control:alert_end') %}disabled{% endif %}>Fin d'Alerte</button>
+		<button onclick="reloadConfig()" {% if not user_has_permission('control:config_reload') %}disabled{% endif %}>Recharger Configuration</button>
 	<!-- Zone pour afficher les messages de feedback des contrôles -->
 	<div id="control-message" class="feedback-message" style="display: none; margin-top: 15px;">
 		<!-- Message ajouté par JavaScript -->
@@ -54,16 +54,21 @@
     <!-- Section Statut -->
     <div id="status-section">
         <h2>Statut du Système</h2>
+        {% if user_has_permission('control:view_status') %}
         <p>État du Scheduler: <span id="scheduler-status" class="status-unknown">Chargement...</span></p>
         <p>Prochaine Sonnerie: <span id="next-ring" class="status-unknown">Chargement...</span></p>
         <p>Dernière Erreur: <span id="last-error" class="status-unknown">Chargement...</span></p>
         <p>Alerte Active: <span id="alert-active" class="status-unknown">Chargement...</span></p>
         <p>Authentifié: <span id="auth-status" class="status-error">Non</span></p>
+        {% else %}
+        <p><em>Vous n'avez pas la permission de voir le statut détaillé du système.</em></p>
+        {% endif %}
     </div>
 
     <!-- Section Calendrier -->
     <div id="calendar-section">
         <h2>Calendrier <span id="calendar-title-year">Annuel</span></h2>
+        {% if user_has_permission('control:view_calendar') %}
         <div id="calendar-selector"> <!-- Sélecteur année scolaire -->
             <label for="academic-year-select">Afficher l'année scolaire :</label>
             <select id="academic-year-select" onchange="changeAcademicYear()">
@@ -75,6 +80,9 @@
         </div>
         <!-- La div #schedule-details n'est plus utilisée pour l'affichage -->
         <!-- <div id="schedule-details"></div> -->
+        {% else %}
+        <p><em>Vous n'avez pas la permission de voir le calendrier.</em></p>
+        {% endif %}
     </div>
 
     <!-- Fenêtre Modale (initialement cachée) -->

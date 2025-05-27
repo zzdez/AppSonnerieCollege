@@ -55,32 +55,32 @@
                 <input type="hidden" id="editing-date" value="">
                 <div class="form-group">
                     <label for="exception-date">Date :</label>
-                    <input type="date" id="exception-date" required {% if not user_has_permission('exception:create') %}disabled{% endif %}>
+                    <input type="date" id="exception-date" required {% if not (user_has_permission('exception:create') or user_has_permission('exception:edit')) %}disabled{% endif %}>
                 </div>
                 <div class="form-group">
                     <label>Action :</label>
                     <div class="radio-group">
                         <div>
-                            <input type="radio" id="action-silence" name="exception-action" value="silence" checked onchange="toggleDayTypeSelect()" {% if not user_has_permission('exception:create') %}disabled{% endif %}>
+                            <input type="radio" id="action-silence" name="exception-action" value="silence" checked onchange="toggleDayTypeSelect()" {% if not (user_has_permission('exception:create') or user_has_permission('exception:edit')) %}disabled{% endif %}>
                             <label for="action-silence">Silence</label>
                         </div>
                         <div>
-                            <input type="radio" id="action-utiliser-jt" name="exception-action" value="utiliser_jt" onchange="toggleDayTypeSelect()" {% if not user_has_permission('exception:create') %}disabled{% endif %}>
+                            <input type="radio" id="action-utiliser-jt" name="exception-action" value="utiliser_jt" onchange="toggleDayTypeSelect()" {% if not (user_has_permission('exception:create') or user_has_permission('exception:edit')) %}disabled{% endif %}>
                             <label for="action-utiliser-jt">Utiliser Journée Type</label>
                         </div>
                     </div>
                 </div>
                 <div class="form-group" id="day-type-select-group" style="display: none;">
                     <label for="exception-day-type">Journée Type :</label>
-                    <select id="exception-day-type" {% if not user_has_permission('exception:create') %}disabled{% endif %}>
+                    <select id="exception-day-type" {% if not (user_has_permission('exception:create') or user_has_permission('exception:edit')) %}disabled{% endif %}>
                         <!-- Options chargées par JS -->
                     </select>
                 </div>
                 <div class="form-group">
                     <label for="exception-description">Description (optionnel) :</label>
-                    <input type="text" id="exception-description" placeholder="Ex: Journée pédagogique" {% if not user_has_permission('exception:create') %}disabled{% endif %}>
+                    <input type="text" id="exception-description" placeholder="Ex: Journée pédagogique" {% if not (user_has_permission('exception:create') or user_has_permission('exception:edit')) %}disabled{% endif %}>
                 </div>
-                <button type="button" class="config-page-save-button" onclick="submitExceptionForm()" {% if not user_has_permission('exception:create') %}disabled{% endif %}>Sauvegarder Exception</button>
+                <button type="button" class="config-page-save-button" onclick="submitExceptionForm()" {% if not (user_has_permission('exception:create') or user_has_permission('exception:edit')) %}disabled{% endif %}>Sauvegarder Exception</button>
                 <button type="button" class="config-page-save-button" onclick="clearExceptionForm()">Effacer / Annuler</button>
             </form>
             <div id="exception-feedback" class="feedback-message" style="display: none;"></div>
@@ -267,6 +267,17 @@
     function submitExceptionForm() {
         const editingDate = document.getElementById('editing-date').value;
         const dateStr = document.getElementById('exception-date').value;
+
+        // Vérification des permissions côté client
+        if (!editingDate && !canCreateException) {
+            showExceptionFeedback("Vous n'avez pas la permission de créer une exception.", 'error');
+            return;
+        }
+        if (editingDate && !canEditException) {
+            showExceptionFeedback("Vous n'avez pas la permission de modifier cette exception.", 'error');
+            return;
+        }
+
         const action = document.querySelector('input[name="exception-action"]:checked').value;
         const description = document.getElementById('exception-description').value.trim();
         const dayTypeName = (action === 'utiliser_jt') ? document.getElementById('exception-day-type').value : null;

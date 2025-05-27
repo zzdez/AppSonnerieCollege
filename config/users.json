@@ -1,53 +1,17 @@
 {
   "atri": {
     "hash": "pbkdf2:sha256:1000000$3aO0c2z0m00ic7E3$7973caa261dafc4cd0b2bd3a85f52e49fc2c1443f19aed66bcdf4d76d3960ebc",
-    "role": "administrateur",
-    "nom_complet": "Nom Complet de l'Utilisateur",
-    "permissions": [
-      "admin:has_all_permissions"
-    ]
+    "role": "Administrateur",
+    "nom_complet": "Nom Complet de l'Utilisateur"
   },
   "zzdez": {
     "hash": "pbkdf2:sha256:1000000$xeLRvkMsbkmHgS9d$f67493c66b95c367030e9c3143408d5a4ed505dbe884f00cda81b3a9cd9020e4",
-    "role": "collaborateur",
-    "nom_complet": "DeZ",
-    "permissions": [
-      "page:view_control",
-      "page:view_config_general",
-      "page:view_config_weekly",
-      "page:view_config_day_types",
-      "page:view_config_exceptions",
-      "page:view_config_sounds",
-      "control:scheduler_activate",
-      "control:scheduler_deactivate",
-      "control:alert_trigger_ppms",
-      "control:alert_trigger_attentat",
-      "control:alert_stop",
-      "control:alert_end",
-      "config_general:edit_settings",
-      "config_general:edit_alert_sounds",
-      "config_weekly:edit_planning",
-      "day_type:create",
-      "day_type:rename",
-      "day_type:delete",
-      "day_type:edit_periods",
-      "exception:create",
-      "exception:edit",
-      "exception:delete",
-      "sound:upload",
-      "sound:scan_folder",
-      "sound:edit_display_name",
-      "sound:disassociate",
-      "sound:delete_file"
-    ]
+    "role": "Collaborateur",
+    "nom_complet": "DeZ"
   },
   "Surveillant": {
     "hash": "scrypt:32768:8:1$4EGJYV5btFOIqLNM$8b1911ea5951ee471366a65ea751f6cbed90c98e220849fa5f2b603f1116f13a036ab04ddb93e7a7ce9a5797434c0518c0da53cb794c54827b962efa3181d17f",
     "nom_complet": "Paul Bismut",
-    "role": "lecteur",
-    "permissions": [
-      "page:view_control",
-      "sound:upload"
-    ]
+    "role": "Lecteur"
   }
 }

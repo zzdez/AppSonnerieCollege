@@ -86,7 +86,7 @@
         </div>
     </div>
 
-    <button class="config-page-save-button" onclick="saveConfig()" {% if not (user_has_permission('config_general:edit_settings') and user_has_permission('config_general:edit_alert_sounds')) %}disabled{% endif %}>Enregistrer les Modifications</button>
+    <button class="config-page-save-button" onclick="saveConfig()" {% if not (user_has_permission('config_general:edit_settings') or user_has_permission('config_general:edit_alert_sounds')) %}disabled{% endif %}>Enregistrer les Modifications</button>
     <div id="config-feedback" class="feedback-message" style="display: none;"></div>
 
     </div> <!-- Fin de config-page-container -->

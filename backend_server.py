@@ -26,9 +26,9 @@ from functools import wraps
 try:
     from scheduler import SchedulerManager
     from constants import (CONFIG_PATH, MP3_PATH, USERS_FILE, PARAMS_FILE,
-                           DONNEES_SONNERIES_FILE,
+                           DONNEES_SONNERIES_FILE, ROLES_CONFIG_FILE,
                            DEPARTEMENTS_ZONES, LISTE_DEPARTEMENTS, JOURS_SEMAINE_ASSIGNATION, AUCUNE_SONNERIE,
-                           AVAILABLE_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS, FRIENDLY_PERMISSION_NAMES) # Ajout des nouvelles constantes
+                           AVAILABLE_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS, FRIENDLY_PERMISSION_NAMES, PERMISSIONS_MODEL) # Ajout des nouvelles constantes
     from holiday_manager import HolidayManager
     MODULES_LOADED = True
 except ImportError as e_imp:
@@ -97,15 +97,41 @@ def user_has_permission(user, permission_name: str) -> bool:
     if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
         return False # Utilisateur non valide ou non authentifié
 
-    # L'objet User doit avoir un attribut 'permissions' (liste) et 'role' (str)
-    user_permissions = getattr(user, 'permissions', [])
-    if not isinstance(user_permissions, list):
-        logger.error(f"Attribut 'permissions' manquant ou invalide pour l'utilisateur '{user.id}'.")
-        user_permissions = [] # Traiter comme si aucune permission pour la sécurité
+    user_permissions = getattr(user, 'permissions', {}) # Devrait être un dict
+    if not isinstance(user_permissions, dict):
+        logger.error(f"Attribut 'permissions' invalide pour l'utilisateur '{user.id}'. Attendu: dict, Reçu: {type(user_permissions)}")
+        return False # Traiter comme si aucune permission pour la sécurité
 
-    if "admin:has_all_permissions" in user_permissions:
+    # Vérification de la permission spéciale 'admin:has_all_permissions'
+    if user_permissions.get("admin:has_all_permissions") is True:
+        logger.debug(f"Permission accordée à '{user.id}' via 'admin:has_all_permissions' pour '{permission_name}'.")
         return True
-    return permission_name in user_permissions
+
+    # Logique principale de vérification
+    if ":" in permission_name:
+        section, action = permission_name.split(":", 1)
+        if section == "page":
+            # Les permissions de type "page:..." sont des clés directes
+            has_perm = user_permissions.get(permission_name) is True
+            logger.debug(f"Check perm page: '{permission_name}' for user '{user.id}'. Result: {has_perm}. User perms: {user_permissions}")
+            return has_perm
+        else:
+            # Permissions granulaires (ex: "sound:upload")
+            section_permissions = user_permissions.get(section)
+            if isinstance(section_permissions, dict):
+                has_perm = section_permissions.get(action) is True
+                logger.debug(f"Check perm granular: '{permission_name}' (section '{section}', action '{action}') for user '{user.id}'. Result: {has_perm}. Section perms: {section_permissions}")
+                return has_perm
+            else:
+                # Si la section n'est pas un dict (ou n'existe pas, get renverra None), l'action n'est pas autorisée
+                logger.debug(f"Check perm granular: Section '{section}' non trouvée ou invalide pour '{permission_name}' for user '{user.id}'. User perms: {user_permissions}")
+                return False
+    else:
+        # Fallback pour permissions sans ':' (ancien style, ne devrait plus arriver)
+        # Ou pour des permissions de premier niveau qui ne sont pas des pages (ex: "admin:has_all_permissions" déjà géré)
+        has_perm = user_permissions.get(permission_name) is True
+        logger.debug(f"Check perm direct: '{permission_name}' for user '{user.id}'. Result: {has_perm}. User perms: {user_permissions}")
+        return has_perm
 
 def permission_access_denied(permission_name: str):
     """
@@ -213,7 +239,7 @@ class User(UserMixin):
         self.id = id
         self.role = role
         self.nom_complet = nom_complet
-        self.permissions = permissions or []
+        self.permissions = permissions if permissions is not None else {}
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -222,11 +248,15 @@ def load_user(user_id):
     if user_info and isinstance(user_info, dict):
         user_role = user_info.get("role", "lecteur")
         user_nom_complet = user_info.get("nom_complet", "")
-        user_permissions = user_info.get("permissions", []) # Récupérer les permissions
-        return User(user_id, role=user_role, nom_complet=user_nom_complet, permissions=user_permissions)
-    elif isinstance(user_info, str): # Fallback pour ancien format (juste le hash)
-         logger.warning(f"Utilisateur '{user_id}' avec ancien format de données. Rôle 'lecteur' par défaut, permissions vides.")
-         return User(user_id, role="lecteur", nom_complet="Utilisateur (format obsolète)", permissions=[])
+        # Récupérer les permissions pour ce rôle depuis roles_config_data
+        role_permissions_dict = roles_config_data.get("roles", {}).get(user_role, {}).get("permissions", {})
+        logger.debug(f"Permissions pour utilisateur '{user_id}' (rôle '{user_role}'): {role_permissions_dict}")
+        return User(user_id, role=user_role, nom_complet=user_nom_complet, permissions=role_permissions_dict.copy())
+    elif isinstance(user_info, str): # Fallback pour ancien format (juste le hash, users.json ne devrait plus en avoir)
+         logger.warning(f"Utilisateur '{user_id}' avec ancien format de données (hash seul). Rôle 'lecteur' par défaut.")
+         # Pour le fallback, on assigne les permissions du rôle "lecteur" depuis roles_config_data
+         fallback_role_permissions = roles_config_data.get("roles", {}).get("lecteur", {}).get("permissions", {})
+         return User(user_id, role="lecteur", nom_complet="Utilisateur (format obsolète)", permissions=fallback_role_permissions.copy())
     logger.warning(f"Tentative chargement utilisateur inexistant ou format invalide: {user_id}")
     return None # Indique à Flask-Login que l'utilisateur n'est plus valide
 
@@ -236,6 +266,7 @@ college_params = {}
 day_types = {}
 weekly_planning = {}
 planning_exceptions = {}
+roles_config_data = {}
 
 # --- Instances des gestionnaires ---
 # Initialiser HolidayManager (passe le logger et le dossier cache)
@@ -279,33 +310,63 @@ def load_users(filename=USERS_FILE):
         users_data = users_data_from_file # Assigner quand même pour que le reste du système voie la structure vide.
         return False # Indiquer un échec de chargement partiel/total
 
-    # Migration des données
-    for username, user_info in list(users_data_from_file.items()): # Utiliser list() pour permettre la modification du dict pendant l'itération
+    # Vérification et normalisation des données utilisateur
+    default_role_for_migration = "lecteur" # Rôle par défaut si manquant ou invalide
+
+    for username, user_info in list(users_data_from_file.items()):
+        made_change = False
         if isinstance(user_info, str): # Ancien format (hash direct)
-            logger.warning(f"Utilisateur '{username}': Ancien format détecté (hash seul). Migration...")
-            default_role = "lecteur" # Ou un autre rôle par défaut si pertinent
+            logger.warning(f"Utilisateur '{username}': Ancien format détecté (hash seul). Migration vers structure dictionnaire.")
             users_data_from_file[username] = {
                 "hash": user_info,
-                "nom_complet": "Utilisateur (migré)", # Nom par défaut
-                "role": default_role,
-                "permissions": list(DEFAULT_ROLE_PERMISSIONS.get(default_role, [])) # Copie de la liste
+                "nom_complet": "Utilisateur (migré)",
+                "role": default_role_for_migration
+                # Pas de champ 'permissions' ici, il sera chargé dynamiquement via le rôle
             }
-            logger.info(f"Utilisateur '{username}' migré vers nouveau format. Rôle: '{default_role}', permissions par défaut appliquées.")
-            needs_saving = True
+            made_change = True
         elif isinstance(user_info, dict):
-            if "permissions" not in user_info or user_info["permissions"] is None:
-                user_role = user_info.get("role", "lecteur") # Fallback rôle lecteur
-                default_perms = DEFAULT_ROLE_PERMISSIONS.get(user_role, [])
-                user_info["permissions"] = list(default_perms) # Assurer une copie
-                logger.info(f"Utilisateur '{username}': Champ 'permissions' manquant. Permissions par défaut pour le rôle '{user_role}' appliquées.")
-                needs_saving = True
-            # S'assurer que 'nom_complet' existe
-            if "nom_complet" not in user_info:
-                user_info["nom_complet"] = "" # Valeur par défaut pour nom_complet
-                logger.info(f"Utilisateur '{username}': Champ 'nom_complet' manquant. Ajout d'une valeur par défaut.")
-                needs_saving = True
+            # 1. Vérifier et assigner 'nom_complet'
+            if "nom_complet" not in user_info or not user_info["nom_complet"]: # Aussi si vide
+                user_info["nom_complet"] = f"Utilisateur {username}" # Nom par défaut
+                logger.info(f"Utilisateur '{username}': Champ 'nom_complet' manquant ou vide. Ajout d'une valeur par défaut.")
+                made_change = True
 
-    users_data = users_data_from_file # Affecter les données (potentiellement migrées) à la variable globale
+            # 2. Vérifier et assigner 'role' (case-insensitive validation)
+            user_role_from_file = user_info.get("role")
+            defined_roles_map_lower_to_original = {r.lower(): r for r in roles_config_data.get("roles", {}).keys()}
+
+            if not user_role_from_file:
+                logger.warning(f"Utilisateur '{username}': Champ 'role' manquant. Assignation du rôle par défaut '{default_role_for_migration}'.")
+                user_info["role"] = default_role_for_migration
+                made_change = True
+            else:
+                user_role_from_file_lower = user_role_from_file.lower()
+                if user_role_from_file_lower in defined_roles_map_lower_to_original:
+                    correctly_cased_role = defined_roles_map_lower_to_original[user_role_from_file_lower]
+                    if user_info["role"] != correctly_cased_role: # Check if casing is different
+                        logger.info(f"Utilisateur '{username}': Rôle '{user_info['role']}' normalisé en '{correctly_cased_role}' (casse corrigée).")
+                        user_info["role"] = correctly_cased_role
+                        made_change = True
+                    # Si la casse était déjà correcte, made_change reste false pour cette partie, ce qui est OK.
+                else:
+                    logger.warning(f"Utilisateur '{username}': Rôle '{user_role_from_file}' invalide (non défini dans roles_config.json, même insensible à la casse). Assignation du rôle par défaut '{default_role_for_migration}'.")
+                    user_info["role"] = default_role_for_migration
+                    made_change = True
+
+            # 3. Supprimer l'ancien champ 'permissions' s'il existe
+            if "permissions" in user_info:
+                logger.info(f"Utilisateur '{username}': Suppression de l'ancien champ 'permissions' stocké dans users.json.")
+                del user_info["permissions"]
+                made_change = True
+        else:
+            logger.error(f"Format de données utilisateur inconnu pour '{username}': {type(user_info)}. Ignoré.")
+            # On pourrait le supprimer ou tenter une migration plus agressive. Pour l'instant, on logue et ignore.
+            continue # Passer au suivant
+
+        if made_change:
+            needs_saving = True
+
+    users_data = users_data_from_file # Affecter les données (potentiellement migrées/nettoyées) à la variable globale
 
     if needs_saving:
         logger.info("Modifications détectées lors du chargement des utilisateurs (migration ou correction). Sauvegarde du fichier users.json...")
@@ -317,6 +378,53 @@ def load_users(filename=USERS_FILE):
 
     logger.info(f"Chargement utilisateurs terminé. {len(users_data)} utilisateurs en mémoire.")
     return True
+
+def load_roles_config(filename=ROLES_CONFIG_FILE):
+    """Charge la configuration des rôles (roles_config.json)."""
+    global roles_config_data
+    path = os.path.join(CONFIG_PATH, filename)
+    logger.info(f"Chargement du fichier de configuration des rôles: {path}")
+
+    default_roles_config = {"roles": {}} # Structure par défaut minimale
+
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            loaded_data = json.load(f)
+        # Valider la structure de base (doit contenir une clé "roles" qui est un dict)
+        if isinstance(loaded_data, dict) and isinstance(loaded_data.get("roles"), dict):
+            roles_config_data = loaded_data
+            logger.info(f"Fichier de configuration des rôles '{filename}' chargé ({len(roles_config_data.get('roles', {}))} rôles).")
+        else:
+            logger.error(f"Structure JSON invalide dans '{filename}'. La clé 'roles' doit être un dictionnaire. Utilisation de la configuration par défaut.")
+            roles_config_data = default_roles_config
+            # On pourrait considérer cela comme une erreur et retourner False si la structure est critique
+            # Pour l'instant, on initialise par défaut et on continue (True)
+        return True
+    except FileNotFoundError:
+        logger.info(f"Fichier de configuration des rôles '{filename}' non trouvé. Initialisation avec une structure par défaut vide.")
+        roles_config_data = default_roles_config
+        return True # Pas une erreur fatale, on utilise la structure par défaut
+    except json.JSONDecodeError:
+        logger.error(f"Erreur de décodage JSON dans '{filename}'. Le fichier est peut-être corrompu. Initialisation avec une structure par défaut.")
+        roles_config_data = default_roles_config
+        return False # Erreur de parsing est plus sérieuse
+    except Exception as e:
+        logger.error(f"Erreur inattendue lors du chargement de '{filename}': {e}", exc_info=True)
+        roles_config_data = default_roles_config # Sécurité
+        return False # Autre erreur majeure
+
+def save_roles_config(filename=ROLES_CONFIG_FILE):
+    """Sauvegarde la configuration des rôles (roles_config_data) dans le fichier JSON."""
+    path = os.path.join(CONFIG_PATH, filename)
+    logger.info(f"Sauvegarde de la configuration des rôles dans: {path}")
+    try:
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(roles_config_data, f, indent=2, ensure_ascii=False)
+        logger.info(f"Configuration des rôles sauvegardée avec succès ({len(roles_config_data.get('roles', {}))} rôles).")
+        return True
+    except Exception as e:
+        logger.error(f"Erreur lors de la sauvegarde du fichier de configuration des rôles {path}: {e}", exc_info=True)
+        return False
 
 def save_users_data(filename=USERS_FILE):
     """Sauvegarde la configuration des utilisateurs (users_data) dans le fichier JSON."""
@@ -368,11 +476,12 @@ def load_sonneries_data(filename=DONNEES_SONNERIES_FILE):
 def load_all_configs():
     """Charge toutes les configurations dans le bon ordre."""
     logger.info("Chargement de toutes les configurations...")
-    # Ordre: Params (pour zone/URL) -> Sonneries (utilise params) -> Users
+    # Ordre: Params (pour zone/URL) -> Sonneries (utilise params) -> Roles -> Users (utilise roles)
     success_params = load_college_params()
     success_sonneries = load_sonneries_data()
-    success_users = load_users()
-    all_ok = success_users and success_params and success_sonneries
+    success_roles = load_roles_config()
+    success_users = load_users() # load_users peut dépendre de roles_config pour la validation des rôles
+    all_ok = success_params and success_sonneries and success_roles and success_users
     if all_ok: logger.info("Chargement configs terminé (sans erreur de format).")
     else: logger.error("Erreur de format ou inattendue lors chargement config.")
     return all_ok
@@ -2421,9 +2530,84 @@ def delete_user(username_param):
     logger.info(f"Utilisateur '{username_param}' supprimé avec succès par '{current_user.id}'.")
     return jsonify({"message": f"Utilisateur '{username_param}' supprimé avec succès."}), 200 # Ou 204 No Content
 
+# ==============================================================================
+# Routes API pour la Gestion des Rôles et Permissions
+# ==============================================================================
+
+@app.route('/api/roles_config', methods=['GET'])
+@login_required
+@require_permission("user_management:edit_role_permissions") # Protégé par la nouvelle permission
+def get_roles_config():
+    """
+    Récupère la configuration actuelle des rôles et le modèle des permissions disponibles.
+    """
+    user_id = current_user.id
+    logger.info(f"User '{user_id}' requête GET /api/roles_config.")
+
+    # roles_config_data est déjà chargé globalement
+    # PERMISSIONS_MODEL est importé depuis constants.py
+
+    return jsonify({
+        "roles_config": roles_config_data,
+        "permissions_model": PERMISSIONS_MODEL
+    }), 200
+
+@app.route('/api/roles_config/<string:role_name>', methods=['PUT'])
+@login_required
+@require_permission("user_management:edit_role_permissions") # Protégé par la nouvelle permission
+def update_role_permissions(role_name):
+    """
+    Met à jour les permissions pour un rôle spécifique.
+    """
+    user_id = current_user.id
+    logger.info(f"User '{user_id}' requête PUT /api/roles_config/{role_name}.")
+
+    # Pour la sécurité, interdire la modification du rôle Administrateur pour le moment
+    # et aussi de rôles non prévus (même si la validation ci-dessous le ferait aussi)
+    if role_name not in ["Collaborateur", "Lecteur", "collaborateur", "lecteur"]: # Accepter minuscules aussi
+        logger.warning(f"User '{user_id}': Tentative de modification du rôle '{role_name}' non autorisée via API.")
+        return jsonify({"error": f"La modification du rôle '{role_name}' n'est pas autorisée via cette API."}), 403
+
+    # S'assurer que le rôle existe dans la configuration actuelle
+    # Normaliser le nom du rôle (première lettre majuscule) comme dans roles_config.json
+    normalized_role_name = role_name.capitalize()
+    if normalized_role_name not in roles_config_data.get("roles", {}):
+        logger.warning(f"User '{user_id}': Tentative de modification d'un rôle inexistant '{normalized_role_name}'.")
+        return jsonify({"error": f"Le rôle '{normalized_role_name}' n'existe pas."}), 404
+
+    new_permissions_for_role = request.get_json()
+    if not isinstance(new_permissions_for_role, dict):
+        logger.warning(f"User '{user_id}': Données JSON invalides pour la mise à jour du rôle '{normalized_role_name}'. Attendu: dict.")
+        return jsonify({"error": "Format de données invalide. Un dictionnaire de permissions est attendu."}), 400
+
+    # Mettre à jour les permissions pour le rôle spécifié
+    # Il est important de ne pas écraser d'autres métadonnées du rôle si elles existent (ex: "description")
+    if "permissions" in roles_config_data["roles"][normalized_role_name]:
+        roles_config_data["roles"][normalized_role_name]["permissions"] = new_permissions_for_role
+        logger.info(f"Permissions pour le rôle '{normalized_role_name}' mises à jour par user '{user_id}'.")
+    else:
+        # Ce cas ne devrait pas arriver si roles_config.json est bien structuré
+        logger.error(f"Structure inattendue pour le rôle '{normalized_role_name}' dans roles_config_data: clé 'permissions' manquante.")
+        return jsonify({"error": "Erreur de configuration interne du serveur pour ce rôle."}), 500
+
+    # Sauvegarder la configuration des rôles mise à jour
+    if not save_roles_config():
+        # En cas d'échec de sauvegarde, il serait prudent de recharger l'ancienne config pour éviter une désynchronisation
+        load_roles_config() # Recharge l'ancienne version depuis le disque
+        logger.error(f"Échec de la sauvegarde de roles_config.json après modification du rôle '{normalized_role_name}'. Les modifications ont été annulées en mémoire.")
+        return jsonify({"error": "Erreur serveur lors de la sauvegarde de la configuration des rôles."}), 500
+
+    logger.info(f"Configuration des rôles sauvegardée avec succès après mise à jour du rôle '{normalized_role_name}'.")
+    return jsonify({
+        "message": f"Permissions pour le rôle '{normalized_role_name}' mises à jour avec succès.",
+        "role_name": normalized_role_name,
+        "updated_permissions": new_permissions_for_role
+    }), 200
+
 
         # --- FIN NOUVELLES ROUTES POUR LA CONFIGURATION WEB ---
         # --- FIN ROUTES API POUR LA GESTION DES UTILISATEURS ---
+        # --- FIN ROUTES API POUR LA GESTION DES RÔLES ---
 
 # Retirer l'ancienne infrastructure de rôles
 # ROLES_HIERARCHIE, role_access_denied, require_role,
