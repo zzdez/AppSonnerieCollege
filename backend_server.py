@@ -27,7 +27,8 @@ try:
     from scheduler import SchedulerManager
     from constants import (CONFIG_PATH, MP3_PATH, USERS_FILE, PARAMS_FILE,
                            DONNEES_SONNERIES_FILE,
-                           DEPARTEMENTS_ZONES, LISTE_DEPARTEMENTS, JOURS_SEMAINE_ASSIGNATION, AUCUNE_SONNERIE)  # <--- AJOUTE CES DEUX LIGNES ICI
+                           DEPARTEMENTS_ZONES, LISTE_DEPARTEMENTS, JOURS_SEMAINE_ASSIGNATION, AUCUNE_SONNERIE,
+                           AVAILABLE_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS) # Ajout des nouvelles constantes
     from holiday_manager import HolidayManager
     MODULES_LOADED = True
 except ImportError as e_imp:
@@ -60,6 +61,16 @@ except Exception as e_sd:
 
 app = Flask(__name__)
 
+@app.context_processor
+def utility_processor():
+    """Injecte des fonctions utilitaires dans le contexte des templates Jinja2."""
+    def check_permission(permission_name):
+        # S'assurer que current_user est disponible et authentifié
+        if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
+            return user_has_permission(current_user, permission_name)
+        return False
+    return dict(user_has_permission=check_permission)
+
 # --- Clé Secrète (TRÈS IMPORTANT) ---
 # À CHANGER ABSOLUMENT pour une valeur complexe et unique en production !
 # Générer avec : python -c "import os; print(os.urandom(24))"
@@ -74,69 +85,60 @@ login_manager.login_message = "Veuillez vous connecter pour accéder à cette pa
 login_manager.login_message_category = "info" # Classe CSS pour les messages flash (Bootstrap)
 # ---------------------------------
 
-# --- Décorateurs de Rôle ---
+# ==============================================================================
+# Mécanisme de Vérification des Permissions Granulaires
+# ==============================================================================
 
-ROLES_HIERARCHIE = {
-    "administrateur": 3,
-    "collaborateur": 2,
-    "lecteur": 1
-}
+def user_has_permission(user, permission_name: str) -> bool:
+    """
+    Vérifie si un utilisateur possède une permission spécifique.
+    Prend en compte la permission spéciale 'admin:has_all_permissions'.
+    """
+    if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
+        return False # Utilisateur non valide ou non authentifié
 
-def role_access_denied(required_role_name_for_message):
-    # Action commune en cas de refus d'accès.
+    # L'objet User doit avoir un attribut 'permissions' (liste) et 'role' (str)
+    user_permissions = getattr(user, 'permissions', [])
+    if not isinstance(user_permissions, list):
+        logger.error(f"Attribut 'permissions' manquant ou invalide pour l'utilisateur '{user.id}'.")
+        user_permissions = [] # Traiter comme si aucune permission pour la sécurité
+
+    if "admin:has_all_permissions" in user_permissions:
+        return True
+    return permission_name in user_permissions
+
+def permission_access_denied(permission_name: str):
+    """
+    Action commune en cas de refus d'accès basé sur une permission manquante.
+    """
     user_display_name = current_user.id if current_user.is_authenticated else 'Anonyme'
     user_actual_role = getattr(current_user, 'role', 'N/A') if current_user.is_authenticated else 'N/A'
 
-    logger.warning(f"Accès refusé pour l'utilisateur '{user_display_name}' (rôle: {user_actual_role}) à une ressource nécessitant au moins le rôle '{required_role_name_for_message}'.")
-    flash(f"Accès refusé. Vous devez avoir au moins le rôle '{required_role_name_for_message}' pour accéder à cette ressource.", "error")
+    logger.warning(f"Accès refusé pour l'utilisateur '{user_display_name}' (rôle: {user_actual_role}) à une ressource nécessitant la permission '{permission_name}'.")
+    flash(f"Accès refusé. La permission '{permission_name}' est requise pour accéder à cette ressource.", "error")
     return redirect(url_for('index'))
 
-
-def require_role(required_role_name):
-    # Décorateur générique pour vérifier un rôle minimum.
-    required_role_level = ROLES_HIERARCHIE.get(required_role_name)
-
-    if required_role_level is None:
-        logger.error(f"ERREUR DE CONFIGURATION: Nom de rôle requis invalide ('{required_role_name}') utilisé dans un décorateur @require_role.")
-        # Cette fonction lambda retourne une autre fonction qui ignore ses arguments et appelle role_access_denied.
-        # Essentiellement, si le nom du rôle est mal configuré dans le code, personne ne peut accéder à la route.
-        def actual_decorator(func_to_decorate):
-            @wraps(func_to_decorate)
-            def wrapper(*a, **kw):
-                return role_access_denied("rôle mal configuré en interne")
-            return wrapper
-        return actual_decorator
-
+def require_permission(permission_name: str):
+    """
+    Décorateur pour vérifier si l'utilisateur courant a une permission spécifique.
+    Doit être utilisé APRÈS @login_required.
+    """
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            # @login_required devrait être utilisé en premier sur la route pour s'assurer que current_user est authentifié.
             if not current_user.is_authenticated:
-                # Redirection gérée par Flask-Login si @login_required est présent.
-                # Sinon, comportement par défaut de Flask-Login (souvent un abort 401).
-                # Pourrait explicitement appeler login_manager.unauthorized() ici si @login_required n'est pas garanti.
-                # Mais la convention est d'empiler @login_required puis @<role>_required.
-                pass # On suppose que @login_required a fait son travail ou que Flask-Login gère.
+                # Normalement géré par @login_required, mais double sécurité.
+                # Flask-Login redirigera vers la page de login.
+                # On pourrait aussi appeler login_manager.unauthorized()
+                logger.warning(f"Tentative d'accès à une ressource protégée par permission ('{permission_name}') par un utilisateur non authentifié.")
+                return login_manager.unauthorized()
 
-            user_role_str = getattr(current_user, 'role', None) # Obtient le rôle de l'objet User
-            user_role_level = ROLES_HIERARCHIE.get(user_role_str, 0) # 0 si rôle inconnu ou non défini
 
-            if user_role_level < required_role_level:
-                return role_access_denied(required_role_name) # Message inclut le nom du rôle attendu
+            if not user_has_permission(current_user, permission_name):
+                return permission_access_denied(permission_name)
             return f(*args, **kwargs)
         return decorated_function
     return decorator
-
-def lecteur_required(f):
-    return require_role("lecteur")(f)
-
-def collaborateur_required(f):
-    return require_role("collaborateur")(f)
-
-def admin_required(f):
-    return require_role("administrateur")(f)
-
-# --- Fin Décorateurs de Rôle ---
 
 # ==============================================================================
 # Configuration du Logging Principal
@@ -207,10 +209,11 @@ if not MP3_PATH or not os.path.isdir(MP3_PATH):
 # --- Classe Utilisateur pour Flask-Login ---
 class User(UserMixin):
     """Représente un utilisateur connecté."""
-    def __init__(self, id, role="lecteur", nom_complet=""):
+    def __init__(self, id, role="lecteur", nom_complet="", permissions=None):
         self.id = id
         self.role = role
         self.nom_complet = nom_complet
+        self.permissions = permissions or []
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -219,10 +222,11 @@ def load_user(user_id):
     if user_info and isinstance(user_info, dict):
         user_role = user_info.get("role", "lecteur")
         user_nom_complet = user_info.get("nom_complet", "")
-        return User(user_id, role=user_role, nom_complet=user_nom_complet)
+        user_permissions = user_info.get("permissions", []) # Récupérer les permissions
+        return User(user_id, role=user_role, nom_complet=user_nom_complet, permissions=user_permissions)
     elif isinstance(user_info, str): # Fallback pour ancien format (juste le hash)
-         logger.warning(f"Utilisateur '{user_id}' avec ancien format de données. Rôle 'lecteur' par défaut.")
-         return User(user_id, role="lecteur", nom_complet="Utilisateur (format obsolète)")
+         logger.warning(f"Utilisateur '{user_id}' avec ancien format de données. Rôle 'lecteur' par défaut, permissions vides.")
+         return User(user_id, role="lecteur", nom_complet="Utilisateur (format obsolète)", permissions=[])
     logger.warning(f"Tentative chargement utilisateur inexistant ou format invalide: {user_id}")
     return None # Indique à Flask-Login que l'utilisateur n'est plus valide
 
@@ -248,15 +252,71 @@ alert_process = None # Référence au subprocess de l'alerte active
 # ==============================================================================
 
 def load_users(filename=USERS_FILE):
-    """Charge le fichier des utilisateurs (users.json)."""
+    """Charge le fichier des utilisateurs (users.json) et migre les anciens formats."""
     global users_data
-    path = os.path.join(CONFIG_PATH, filename); logger.info(f"Load users: {path}")
+    path = os.path.join(CONFIG_PATH, filename)
+    logger.info(f"Chargement du fichier utilisateurs: {path}")
+
+    users_data_from_file = {}
+    needs_saving = False
+
     try:
-        with open(path, 'r', encoding='utf-8') as f: users_data = json.load(f)
-        logger.info(f"Users OK ({len(users_data)})."); return True
-    except FileNotFoundError: logger.info(f"Users file not found: {path}. Init vide."); users_data = {}; return True
-    except json.JSONDecodeError: logger.error(f"Users file JSON error: {path}"); users_data = {}; return False
-    except Exception as e: logger.error(f"Users load error: {path}: {e}", exc_info=True); users_data = {}; return False
+        with open(path, 'r', encoding='utf-8') as f:
+            users_data_from_file = json.load(f)
+        logger.info(f"Fichier utilisateurs '{filename}' chargé ({len(users_data_from_file)} entrées).")
+    except FileNotFoundError:
+        logger.info(f"Fichier utilisateurs '{filename}' non trouvé. Initialisation avec un dictionnaire vide.")
+        users_data_from_file = {}
+        # Le fichier sera créé si save_users_data() est appelé plus tard (par exemple après une migration ou création d'utilisateur)
+    except json.JSONDecodeError:
+        logger.error(f"Erreur de décodage JSON dans '{filename}'. Le fichier est peut-être corrompu. Initialisation avec un dictionnaire vide.")
+        users_data_from_file = {} # Réinitialiser pour éviter d'utiliser des données corrompues
+        needs_saving = True # Forcer la sauvegarde pour écraser le fichier corrompu avec une structure vide (ou migrée)
+    except Exception as e:
+        logger.error(f"Erreur inattendue lors du chargement de '{filename}': {e}", exc_info=True)
+        users_data_from_file = {} # Sécurité
+        # On ne force pas la sauvegarde ici, car l'erreur est inconnue.
+        users_data = users_data_from_file # Assigner quand même pour que le reste du système voie la structure vide.
+        return False # Indiquer un échec de chargement partiel/total
+
+    # Migration des données
+    for username, user_info in list(users_data_from_file.items()): # Utiliser list() pour permettre la modification du dict pendant l'itération
+        if isinstance(user_info, str): # Ancien format (hash direct)
+            logger.warning(f"Utilisateur '{username}': Ancien format détecté (hash seul). Migration...")
+            default_role = "lecteur" # Ou un autre rôle par défaut si pertinent
+            users_data_from_file[username] = {
+                "hash": user_info,
+                "nom_complet": "Utilisateur (migré)", # Nom par défaut
+                "role": default_role,
+                "permissions": list(DEFAULT_ROLE_PERMISSIONS.get(default_role, [])) # Copie de la liste
+            }
+            logger.info(f"Utilisateur '{username}' migré vers nouveau format. Rôle: '{default_role}', permissions par défaut appliquées.")
+            needs_saving = True
+        elif isinstance(user_info, dict):
+            if "permissions" not in user_info or user_info["permissions"] is None:
+                user_role = user_info.get("role", "lecteur") # Fallback rôle lecteur
+                default_perms = DEFAULT_ROLE_PERMISSIONS.get(user_role, [])
+                user_info["permissions"] = list(default_perms) # Assurer une copie
+                logger.info(f"Utilisateur '{username}': Champ 'permissions' manquant. Permissions par défaut pour le rôle '{user_role}' appliquées.")
+                needs_saving = True
+            # S'assurer que 'nom_complet' existe
+            if "nom_complet" not in user_info:
+                user_info["nom_complet"] = "" # Valeur par défaut pour nom_complet
+                logger.info(f"Utilisateur '{username}': Champ 'nom_complet' manquant. Ajout d'une valeur par défaut.")
+                needs_saving = True
+
+    users_data = users_data_from_file # Affecter les données (potentiellement migrées) à la variable globale
+
+    if needs_saving:
+        logger.info("Modifications détectées lors du chargement des utilisateurs (migration ou correction). Sauvegarde du fichier users.json...")
+        if save_users_data(): # save_users_data utilise la variable globale users_data
+            logger.info("Fichier users.json mis à jour avec succès après migration/correction.")
+        else:
+            logger.error("Échec de la sauvegarde du fichier users.json après migration/correction.")
+            return False # Indiquer un problème de sauvegarde
+
+    logger.info(f"Chargement utilisateurs terminé. {len(users_data)} utilisateurs en mémoire.")
+    return True
 
 def save_users_data(filename=USERS_FILE):
     """Sauvegarde la configuration des utilisateurs (users_data) dans le fichier JSON."""
@@ -383,7 +443,7 @@ def logout():
 
 @app.route('/config/general')
 @login_required
-@collaborateur_required
+@require_permission("page:view_config_general")
 def config_general_page():
     """Sert la page de configuration générale et des alertes."""
     user_id = current_user.id
@@ -397,7 +457,7 @@ def config_general_page():
 
 @app.route('/config/weekly')
 @login_required
-@collaborateur_required
+@require_permission("page:view_config_weekly")
 def config_weekly_page():
     """Sert la page de configuration du planning hebdomadaire."""
     user_id = current_user.id
@@ -407,7 +467,7 @@ def config_weekly_page():
 
 @app.route('/config/day_types')
 @login_required
-@collaborateur_required
+@require_permission("page:view_config_day_types")
 def config_day_types_page():
     """Sert la page de configuration des journées types."""
     user_id = current_user.id
@@ -418,7 +478,7 @@ def config_day_types_page():
 
 @app.route('/config/exceptions')
 @login_required
-@collaborateur_required
+@require_permission("page:view_config_exceptions")
 def config_exceptions_page():
     """Sert la page de configuration des exceptions de planning."""
     user_id = current_user.id
@@ -427,7 +487,7 @@ def config_exceptions_page():
     return render_template('config_exceptions.html', current_user=current_user)
 @app.route('/api/config/sounds', methods=['GET'])
 @login_required
-
+@require_permission("page:view_config_sounds")
 def get_configured_sounds():
     """
     Retourne la liste des sonneries configurées (nom convivial -> nom de fichier).
@@ -462,7 +522,7 @@ def get_configured_sounds():
 
 @app.route('/config/sounds')
 @login_required
-@collaborateur_required
+@require_permission("page:view_config_sounds")
 def config_sounds_page():
     """Sert la page de configuration des sonneries disponibles."""
     user_id = current_user.id
@@ -471,15 +531,19 @@ def config_sounds_page():
 
 @app.route('/config/users')
 @login_required
-@admin_required
+@require_permission("page:view_config_users")
 def config_users_page():
     """Sert la page de gestion des utilisateurs."""
     user_id = current_user.id
     logger.info(f"User '{user_id}' (admin) accède à la page /config/users")
-    return render_template('config_users.html', current_user=current_user)
+    return render_template('config_users.html',
+                           current_user=current_user,
+                           available_permissions=AVAILABLE_PERMISSIONS,
+                           default_role_permissions=DEFAULT_ROLE_PERMISSIONS)
 
 @app.route('/')
-@login_required # Protéger la page principale
+@login_required
+@require_permission("page:view_control")
 def index():
     """Sert la page de contrôle principale (control.html)."""
     user = current_user.id; logger.info(f"User '{user}' accède à '/'...")
@@ -504,7 +568,7 @@ def api_status():
 
 @app.route('/api/planning/activate', methods=['POST'])
 @login_required
-@collaborateur_required
+@require_permission("control:scheduler_activate")
 def activate_planning():
     """Active le scheduler."""
     user = current_user.id; logger.info(f"User '{user}': Activate planning"); msg = "Planning déjà actif."; code = 200
@@ -516,7 +580,7 @@ def activate_planning():
 
 @app.route('/api/planning/deactivate', methods=['POST'])
 @login_required
-@collaborateur_required
+@require_permission("control:scheduler_deactivate")
 def deactivate_planning():
     """Désactive le scheduler."""
     user = current_user.id; logger.info(f"User '{user}': Deactivate planning"); msg = "Planning déjà inactif."; code = 200
@@ -543,7 +607,7 @@ def stop_current_alert_process():
 
 @app.route('/api/alert/trigger/<filename>', methods=['POST'])
 @login_required
-@lecteur_required
+@require_permission("control:alert_trigger_any")
 def trigger_alert(filename):
     """Déclenche une alerte (arrête la précédente si besoin)."""
     user = current_user.id; logger.info(f"User '{user}': Trigger alert: {filename}"); global alert_process
@@ -552,6 +616,16 @@ def trigger_alert(filename):
     sound_path = os.path.join(MP3_PATH, filename)
     if not os.path.isfile(sound_path): logger.error(f"Alert file not found: {sound_path}"); return jsonify({"error": f"Fichier alerte '{filename}' introuvable."}), 404
     try:
+        # Vérifications de permission spécifiques pour PPMS et Attentat
+        is_ppms = (filename == college_params.get("sonnerie_ppms"))
+        is_attentat = (filename == college_params.get("sonnerie_attentat"))
+
+        if is_ppms and not user_has_permission(current_user, "control:alert_trigger_ppms"):
+            return permission_access_denied("control:alert_trigger_ppms")
+        if is_attentat and not user_has_permission(current_user, "control:alert_trigger_attentat"):
+            return permission_access_denied("control:alert_trigger_attentat")
+        # Si ce n'est ni PPMS ni Attentat, la permission "control:alert_trigger_any" est suffisante.
+
         logger.info(f"Lancement processus alerte '{filename}' (non-boucle)...")
         audio_device_name = college_params.get("nom_peripherique_audio_sonneries")
         cmd = [sys.executable, __file__, '--play-sound', sound_path]
@@ -567,7 +641,7 @@ def trigger_alert(filename):
 
 @app.route('/api/alert/stop', methods=['POST'])
 @login_required
-@lecteur_required
+@require_permission("control:alert_stop")
 def stop_alert():
     """Arrête l'alerte active."""
     user = current_user.id; logger.info(f"User '{user}': Stop alert via API")
@@ -576,7 +650,7 @@ def stop_alert():
 
 @app.route('/api/alert/end', methods=['POST'])
 @login_required
-@lecteur_required
+@require_permission("control:alert_end")
 def end_alert():
     """Arrête l'alerte en cours ET joue le son de fin d'alerte."""
     user = current_user.id
@@ -625,7 +699,7 @@ def end_alert():
 
 @app.route('/api/config/reload', methods=['POST'])
 @login_required
-@admin_required
+@require_permission("control:config_reload")
 def reload_config_route():
     """Recharge tous les fichiers de configuration et met à jour le scheduler."""
     user = current_user.id; logger.info(f"User '{user}': Reload config"); msg=""
@@ -648,6 +722,7 @@ def reload_config_route():
 
 @app.route('/api/config/settings')
 @login_required
+@require_permission("page:view_control")
 def api_config_settings():
     """Retourne les paramètres utiles à l'UI (noms fichiers alerte)."""
     user = current_user.id; logger.debug(f"User '{user}' requête /api/config/settings")
@@ -658,6 +733,7 @@ def api_config_settings():
 
 @app.route('/api/audio_devices', methods=['GET'])
 @login_required
+@require_permission("page:view_config_general") # Utilisé dans config_general.html
 def get_audio_devices():
     user_id = current_user.id
     logger.info(f"User '{user_id}' requête GET /api/audio_devices")
@@ -730,8 +806,8 @@ def get_audio_devices():
         return jsonify({"audio_devices": [default_device_option], "error": str(e)}), 500
 
 @app.route('/api/calendar_view')
-@login_required # Protéger l'accès au calendrier détaillé
-@lecteur_required
+@login_required
+@require_permission("page:view_control")
 def api_calendar_view():
     """Fournit les données pour le calendrier annuel/scolaire."""
     user = current_user.id; logger.debug(f"User '{user}' requête /api/calendar_view")
@@ -769,7 +845,7 @@ def get_calendar_view_data_range(start_date, end_date):
 
 @app.route('/api/daily_schedule')
 @login_required
-@lecteur_required
+@require_permission("page:view_control")
 def api_daily_schedule():
     """Fournit le planning détaillé pour une date."""
     user = current_user.id; date_str = request.args.get('date'); logger.debug(f"User '{user}' requête /api/daily_schedule?date={date_str}")
@@ -790,6 +866,7 @@ def get_daily_schedule_data(date_str):
 
 @app.route('/api/config/general_and_alerts', methods=['GET'])
 @login_required
+@require_permission("page:view_config_general")
 def get_general_and_alerts_config():
     """
     Fournit les paramètres généraux et d'alerte, ainsi que la liste des sonneries.
@@ -852,6 +929,7 @@ def get_general_and_alerts_config():
 
 @app.route('/api/config/general_and_alerts', methods=['POST'])
 @login_required
+@require_permission("config_general:edit_settings")
 def set_general_and_alerts_config():
     """
     Met à jour les paramètres généraux et d'alerte dans parametres_college.json.
@@ -945,6 +1023,9 @@ def set_general_and_alerts_config():
 
 @app.route('/api/sound/<path:filename>')
 @login_required
+# Utilisé pour la pré-écoute sur config_sounds et config_general
+# On pourrait créer une permission "sound:preview" ou utiliser une des pages
+@require_permission("page:view_config_sounds") # Ou une permission plus générique si besoin
 def serve_sound_file(filename):
     """
     Sert un fichier son depuis le dossier MP3_PATH.
@@ -976,6 +1057,7 @@ def serve_sound_file(filename):
 
 @app.route('/api/config/weekly_schedule', methods=['GET'])
 @login_required
+@require_permission("page:view_config_weekly")
 def get_weekly_schedule_config():
     """
     Fournit le planning hebdomadaire actuel et la liste des journées types disponibles.
@@ -1029,6 +1111,7 @@ def get_weekly_schedule_config():
 
 @app.route('/api/config/weekly_schedule', methods=['POST'])
 @login_required
+@require_permission("config_weekly:edit_planning")
 def set_weekly_schedule_config():
     """
     Met à jour la section 'planning_hebdomadaire' dans donnees_sonneries.json.
@@ -1100,6 +1183,7 @@ def set_weekly_schedule_config():
 
 @app.route('/api/config/day_types', methods=['GET'])
 @login_required
+@require_permission("page:view_config_day_types")
 def get_day_type_list():
     """
     Retourne la liste des noms des journées types existantes.
@@ -1136,6 +1220,7 @@ def get_day_type_list():
 
 @app.route('/api/config/day_types/<path:day_type_name>', methods=['GET'])
 @login_required
+@require_permission("page:view_config_day_types")
 def get_day_type_details(day_type_name):
     """
     Retourne les détails (nom, périodes) d'une journée type spécifique.
@@ -1186,6 +1271,7 @@ def get_day_type_details(day_type_name):
 
 @app.route('/api/config/day_types', methods=['POST'])
 @login_required
+@require_permission("day_type:create")
 def create_day_type():
     """
     Crée une nouvelle journée type (avec un nom, initialement sans périodes).
@@ -1249,6 +1335,7 @@ def create_day_type():
         return jsonify({"error": f"Erreur serveur: {str(e)}"}), 500
 @app.route('/api/config/day_types/<path:day_type_name>', methods=['DELETE'])
 @login_required
+@require_permission("day_type:delete")
 def delete_day_type_entry(day_type_name): # Renommé pour éviter conflit avec get_day_type_details
     """
     Supprime une journée type existante.
@@ -1330,6 +1417,7 @@ def delete_day_type_entry(day_type_name): # Renommé pour éviter conflit avec g
 
 @app.route('/api/config/day_types/<path:day_type_name_url>', methods=['PUT'])
 @login_required
+@require_permission("day_type:edit_periods") # Base permission
 def update_day_type_entry(day_type_name_url):
     """
     Met à jour une journée type existante:
@@ -1365,6 +1453,11 @@ def update_day_type_entry(day_type_name_url):
         return jsonify({"error": "Erreur lecture configuration."}), 500
 
     # ----- Logique de mise à jour -----
+    # Vérification permission renommage si applicable
+    if 'new_name' in data_from_client and data_from_client['new_name'].strip() != day_type_name_url:
+        if not user_has_permission(current_user, "day_type:rename"):
+            return permission_access_denied("day_type:rename")
+
     current_day_type_key_in_file = day_type_name_url # Le nom actuel tel qu'il est dans le fichier et l'URL
     day_type_data_to_update = donnees_sonneries["journees_types"][current_day_type_key_in_file].copy()
 
@@ -1455,6 +1548,7 @@ def update_day_type_entry(day_type_name_url):
 
 @app.route('/api/config/exceptions', methods=['GET'])
 @login_required
+@require_permission("page:view_config_exceptions")
 def get_all_exceptions():
     """
     Retourne toutes les exceptions de planning configurées.
@@ -1493,6 +1587,7 @@ def get_all_exceptions():
 
 @app.route('/api/config/exceptions/<string:date_str>', methods=['PUT']) # date_str est une string YYYY-MM-DD
 @login_required
+@require_permission("exception:edit")
 def update_exception(date_str):
     """
     Modifie une exception existante pour une date donnée.
@@ -1573,6 +1668,7 @@ def update_exception(date_str):
 
 @app.route('/api/config/exceptions/<string:date_str>', methods=['DELETE'])
 @login_required
+@require_permission("exception:delete")
 def delete_exception(date_str):
     """
     Supprime une exception de planning pour une date donnée.
@@ -1616,6 +1712,7 @@ def delete_exception(date_str):
 
 @app.route('/api/config/exceptions', methods=['POST'])
 @login_required
+@require_permission("exception:create")
 def add_exception():
     """
     Ajoute une nouvelle exception de planning.
@@ -1697,6 +1794,7 @@ def add_exception():
 
 @app.route('/api/config/sounds/scan', methods=['POST'])
 @login_required
+@require_permission("sound:scan_folder")
 def scan_mp3_folder_and_update_config():
     """
     Scanne le dossier MP3_PATH, compare avec les sonneries configurées
@@ -1779,6 +1877,7 @@ def scan_mp3_folder_and_update_config():
 
 @app.route('/api/config/sounds/display_name/<path:file_name>', methods=['PUT'])
 @login_required
+@require_permission("sound:edit_display_name")
 def update_sound_display_name(file_name):
     """
     Modifie le nom convivial d'une sonnerie existante.
@@ -1857,7 +1956,7 @@ def update_sound_display_name(file_name):
 # Fonction pour DÉSASSOCIATION SEULE (garde le fichier physique)
 @app.route('/api/config/sounds/<path:file_name>/dissociate_only', methods=['DELETE'])
 @login_required
-@collaborateur_required
+@require_permission("sound:disassociate")
 def dissociate_sound_only(file_name):
     user_id = current_user.id
     logger.info(f"User '{user_id}' - DELETE /api/config/sounds/{file_name}/dissociate_only: Tentative de DÉSASSOCIATION seule.")
@@ -1924,7 +2023,7 @@ def dissociate_sound_only(file_name):
 
 @app.route('/api/config/sounds/<path:file_name>', methods=['DELETE'])
 @login_required
-@collaborateur_required
+@require_permission("sound:delete_file")
 def delete_sound_association_and_file(file_name):
     user_id = current_user.id
     logger.info(f"User '{user_id}' - DELETE /api/config/sounds/{file_name}: Tentative de suppression d'association ET du fichier physique.")
@@ -2017,6 +2116,7 @@ def delete_sound_association_and_file(file_name):
 # Route pour uploader un nouveau fichier son
 @app.route('/api/config/sounds/upload', methods=['POST'])
 @login_required
+@require_permission("sound:upload")
 def upload_sound_file():
     """
     Reçoit un fichier MP3 uploadé, le sauvegarde dans MP3_PATH,
@@ -2120,7 +2220,7 @@ VALID_ROLES = list(ROLES_HIERARCHIE.keys()) # ["administrateur", "collaborateur"
 
 @app.route('/api/users', methods=['GET'])
 @login_required
-@admin_required
+@require_permission("user:view_list")
 def get_users():
     """Retourne la liste de tous les utilisateurs avec leurs détails (sans hash)."""
     logger.info(f"User '{current_user.id}' (admin) requête GET /api/users.")
@@ -2129,13 +2229,14 @@ def get_users():
         users_list.append({
             "username": username,
             "full_name": data.get("nom_complet", ""),
-            "role": data.get("role", "lecteur") # Default role if missing, though unlikely
+            "role": data.get("role", "lecteur"), # Default role if missing, though unlikely
+            "permissions": data.get("permissions", [])
         })
     return jsonify(users_list), 200
 
 @app.route('/api/users', methods=['POST'])
 @login_required
-@admin_required
+@require_permission("user:create")
 def create_user():
     """Crée un nouvel utilisateur."""
     logger.info(f"User '{current_user.id}' (admin) requête POST /api/users (create user).")
@@ -2169,7 +2270,8 @@ def create_user():
     users_data[username] = {
         "hash": hashed_password,
         "nom_complet": full_name,
-        "role": role
+        "role": role,
+        "permissions": data.get("permissions", []) # Ajout du champ permissions
     }
 
     if not save_users_data():
@@ -2180,12 +2282,18 @@ def create_user():
     logger.info(f"Utilisateur '{username}' créé avec succès par '{current_user.id}'.")
     return jsonify({
         "message": "Utilisateur créé avec succès.",
-        "user": {"username": username, "full_name": full_name, "role": role}
+        "user": {
+            "username": username,
+            "full_name": full_name,
+            "role": role,
+            "permissions": users_data[username].get("permissions", [])
+        }
     }), 201
 
 @app.route('/api/users/<string:username_param>', methods=['PUT'])
 @login_required
-@admin_required
+# Base permission, specific field changes will be checked inside
+@require_permission("user:edit_details")
 def update_user(username_param):
     """Met à jour un utilisateur existant."""
     logger.info(f"User '{current_user.id}' (admin) requête PUT /api/users/{username_param}.")
@@ -2223,8 +2331,28 @@ def update_user(username_param):
         user_to_update['role'] = new_role
         updated_fields['role'] = new_role
         logger.debug(f"User '{username_param}': role mis à jour.")
+    elif 'role' in data and data['role'] == user_to_update.get('role'): # Role provided but not changed
+        pass # No specific permission needed if role isn't actually changing
+
+    if 'permissions' in data:
+        new_permissions = data['permissions']
+        if not isinstance(new_permissions, list):
+            return jsonify({"error": "Le champ 'permissions' doit être une liste."}), 400
+        # TODO: Valider que toutes les permissions dans la liste sont valides (contre AVAILABLE_PERMISSIONS)
+        # Pour l'instant, on accepte la liste telle quelle.
+        # Check if permissions actually changed before requiring the permission
+        if data['permissions'] != user_to_update.get('permissions', []):
+            if not user_has_permission(current_user, "user:edit_permissions"):
+                return permission_access_denied("user:edit_permissions")
+            user_to_update['permissions'] = new_permissions
+            updated_fields['permissions'] = new_permissions # Log that permissions were part of the payload
+            logger.debug(f"User '{username_param}': permissions mises à jour.")
+        else:
+            pass # Permissions provided but identical to current
 
     if 'password' in data and data['password']: # Si le mot de passe est fourni et non vide
+        if not user_has_permission(current_user, "user:edit_password"):
+            return permission_access_denied("user:edit_password")
         new_password = data['password']
         if len(new_password) < MIN_PASSWORD_LENGTH:
             return jsonify({"error": f"Le nouveau mot de passe doit contenir au moins {MIN_PASSWORD_LENGTH} caractères."}), 400
@@ -2248,13 +2376,14 @@ def update_user(username_param):
         "user": {
             "username": username_param,
             "full_name": user_to_update.get('nom_complet'),
-            "role": user_to_update.get('role')
+            "role": user_to_update.get('role'),
+            "permissions": user_to_update.get('permissions', [])
         }
     }), 200
 
 @app.route('/api/users/<string:username_param>', methods=['DELETE'])
 @login_required
-@admin_required
+@require_permission("user:delete")
 def delete_user(username_param):
     """Supprime un utilisateur."""
     logger.info(f"User '{current_user.id}' (admin) requête DELETE /api/users/{username_param}.")
@@ -2294,6 +2423,10 @@ def delete_user(username_param):
 
         # --- FIN NOUVELLES ROUTES POUR LA CONFIGURATION WEB ---
         # --- FIN ROUTES API POUR LA GESTION DES UTILISATEURS ---
+
+# Retirer l'ancienne infrastructure de rôles
+# ROLES_HIERARCHIE, role_access_denied, require_role,
+# lecteur_required, collaborateur_required, admin_required
 
 # ==============================================================================
 # Point d'Entrée et Lancement du Serveur / Gestionnaire de Son

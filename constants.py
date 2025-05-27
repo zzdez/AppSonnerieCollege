@@ -111,6 +111,114 @@ JOURS_SEMAINE_MAP_INDEX = {0: "Lundi", 1: "Mardi", 2: "Mercredi", 3: "Jeudi", 4:
 
 AUCUNE_SONNERIE = "Aucune"
 
+# --- Permissions Granulaires ---
+AVAILABLE_PERMISSIONS = [
+    # Permissions Générales / Accès aux Pages Principales
+    "page:view_control",
+    "page:view_config_general",
+    "page:view_config_weekly",
+    "page:view_config_day_types",
+    "page:view_config_exceptions",
+    "page:view_config_sounds",
+    "page:view_config_users",
+
+    # Permissions pour la Page de Contrôle (control.html)
+    "control:scheduler_activate",
+    "control:scheduler_deactivate",
+    "control:config_reload",
+    "control:alert_trigger_ppms",
+    "control:alert_trigger_attentat",
+    "control:alert_trigger_any", # Permission générale pour déclencher une alerte
+    "control:alert_stop",
+    "control:alert_end",
+
+    # Permissions pour la Configuration Générale (config_general.html)
+    "config_general:edit_settings",
+    "config_general:edit_alert_sounds",
+
+    # Permissions pour la Configuration Hebdomadaire (config_weekly.html)
+    "config_weekly:edit_planning",
+
+    # Permissions pour les Journées Types (config_day_types.html)
+    "day_type:create",
+    "day_type:rename",
+    "day_type:delete",
+    "day_type:edit_periods", # Gère l'ajout, modification, suppression de périodes
+
+    # Permissions pour les Exceptions (config_exceptions.html)
+    "exception:create",
+    "exception:edit",
+    "exception:delete",
+
+    # Permissions pour la Gestion des Sonneries (config_sounds.html)
+    "sound:upload",
+    "sound:scan_folder",
+    "sound:edit_display_name",
+    "sound:disassociate",
+    "sound:delete_file",
+
+    # Permissions pour la Gestion des Utilisateurs (config_users.html)
+    # Note: page:view_config_users contrôle l'accès à la page elle-même.
+    "user:view_list", # Pour voir la liste des utilisateurs (API GET /api/users)
+    "user:create",
+    "user:edit_details", # nom_complet, etc. (hors rôle et permissions)
+    "user:edit_password",
+    "user:edit_role", # Changer le rôle de base d'un utilisateur
+    "user:edit_permissions", # Modifier la liste fine des permissions d'un utilisateur
+    "user:delete",
+
+    # Permission spéciale pour les administrateurs
+    "admin:has_all_permissions"
+]
+# --- FIN Permissions Granulaires ---
+
+# --- Permissions par Défaut pour chaque Rôle ---
+DEFAULT_ROLE_PERMISSIONS = {
+    "lecteur": [
+        "page:view_control",
+        "page:view_config_general", # Souvent utile de voir la config audio/alertes
+        # "control:alert_trigger_ppms", # Commenté suite à demande utilisateur
+        # "control:alert_trigger_attentat",
+        # "control:alert_stop",
+        # "control:alert_end",
+    ],
+    "collaborateur": [
+        "page:view_control",
+        "page:view_config_general",
+        "page:view_config_weekly",
+        "page:view_config_day_types",
+        "page:view_config_exceptions",
+        "page:view_config_sounds",
+        # Accès aux actions de la page de contrôle (sauf reload)
+        "control:scheduler_activate",
+        "control:scheduler_deactivate",
+        "control:alert_trigger_ppms",
+        "control:alert_trigger_attentat",
+        "control:alert_stop",
+        "control:alert_end",
+        # Accès à la modification des configurations
+        "config_general:edit_settings",
+        "config_general:edit_alert_sounds",
+        "config_weekly:edit_planning",
+        "day_type:create",
+        "day_type:rename",
+        "day_type:delete",
+        "day_type:edit_periods",
+        "exception:create",
+        "exception:edit",
+        "exception:delete",
+        "sound:upload",
+        "sound:scan_folder",
+        "sound:edit_display_name",
+        "sound:disassociate",
+        "sound:delete_file",
+    ],
+    "administrateur": [
+        "admin:has_all_permissions" # L'admin a toutes les permissions via cette permission spéciale
+    ]
+}
+# --- FIN Permissions par Défaut ---
+
 # --- NOUVELLE CONSTANTE ---
 # URL de base pour le téléchargement des calendriers ICS des vacances scolaires
 # (Vérifiée le 2024-04-15, peut nécessiter une mise à jour future)
