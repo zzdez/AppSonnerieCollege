@@ -172,6 +172,55 @@ AVAILABLE_PERMISSIONS = [
 ]
 # --- FIN Permissions Granulaires ---
 
+# --- Noms Conviviaux pour les Permissions (pour affichage UI) ---
+FRIENDLY_PERMISSION_NAMES = {
+    "page:view_control": "Voir la page de Contrôle Principal",
+    "page:view_config_general": "Voir la configuration Générale et Alertes",
+    "page:view_config_weekly": "Voir la configuration du Planning Hebdomadaire",
+    "page:view_config_day_types": "Voir la configuration des Journées Types",
+    "page:view_config_exceptions": "Voir la configuration des Exceptions de planning",
+    "page:view_config_sounds": "Voir la configuration des Sonneries",
+    "page:view_config_users": "Voir la page de Gestion des Utilisateurs",
+
+    "control:scheduler_activate": "Activer le planning des sonneries",
+    "control:scheduler_deactivate": "Désactiver le planning des sonneries",
+    "control:config_reload": "Recharger la configuration du serveur",
+    "control:alert_trigger_ppms": "Déclencher l'alerte PPMS",
+    "control:alert_trigger_attentat": "Déclencher l'alerte Attentat",
+    "control:alert_trigger_any": "Déclencher une alerte sonore (générique)",
+    "control:alert_stop": "Arrêter l'alerte sonore en cours",
+    "control:alert_end": "Déclencher le son de fin d'alerte",
+
+    "config_general:edit_settings": "Modifier les paramètres généraux (département, API vacances, etc.)",
+    "config_general:edit_alert_sounds": "Modifier les sonneries d'alerte (PPMS, attentat, fin d'alerte)",
+
+    "config_weekly:edit_planning": "Modifier le planning hebdomadaire (assigner journées types)",
+
+    "day_type:create": "Créer de nouvelles journées types",
+    "day_type:rename": "Renommer des journées types existantes",
+    "day_type:delete": "Supprimer des journées types",
+    "day_type:edit_periods": "Modifier les périodes (horaires, sonneries) d'une journée type",
+
+    "exception:create": "Créer des exceptions au planning (jours fériés, événements)",
+    "exception:edit": "Modifier des exceptions de planning existantes",
+    "exception:delete": "Supprimer des exceptions de planning",
+
+    "sound:upload": "Uploader de nouveaux fichiers son",
+    "sound:scan_folder": "Scanner le dossier MP3 pour de nouveaux sons",
+    "sound:edit_display_name": "Modifier le nom d'affichage des sonneries",
+    "sound:disassociate": "Désassocier une sonnerie (garder le fichier)",
+    "sound:delete_file": "Supprimer les fichiers son du disque et leur association",
+
+    "user:view_list": "Voir la liste des utilisateurs",
+    "user:create": "Créer de nouveaux utilisateurs",
+    "user:edit_details": "Modifier les détails d'un utilisateur (nom complet)",
+    "user:edit_password": "Modifier le mot de passe d'un utilisateur",
+    "user:edit_role": "Modifier le rôle d'un utilisateur",
+    "user:edit_permissions": "Modifier les permissions spécifiques d'un utilisateur",
+    "user:delete": "Supprimer des utilisateurs",
+}
+# --- FIN Noms Conviviaux ---
+
 # --- Permissions par Défaut pour chaque Rôle ---
 DEFAULT_ROLE_PERMISSIONS = {
     "lecteur": [

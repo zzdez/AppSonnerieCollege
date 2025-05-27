@@ -11,21 +11,21 @@
     <div style="text-align: right; margin-bottom: 10px; font-size: 0.9em;">
        {% if current_user and current_user.is_authenticated %}
          Connecté: <strong>{{ current_user.id }}</strong> |
-         <a href="{{ url_for('index') }}">Contrôle Principal</a> |
-         <a href="{{ url_for('config_general_page') }}">Config Générale</a> |
-         <a href="{{ url_for('config_weekly_page') }}">Config Hebdo</a> |
-         <a href="{{ url_for('config_day_types_page') }}">Journées Types</a> |
-         <a href="{{ url_for('config_exceptions_page') }}">Exceptions</a> |
-         <a href="{{ url_for('config_sounds_page') }}">Sonneries</a> |
-         {% if current_user and current_user.is_authenticated and current_user.role == 'administrateur' %}
-           <a href="{{ url_for('config_users_page') }}">Gestion Utilisateurs</a> |
-         {% endif %}
+         {% if user_has_permission('page:view_control') %}<a href="{{ url_for('index') }}">Contrôle Principal</a> |{% endif %}
+         {% if user_has_permission('page:view_config_general') %}<a href="{{ url_for('config_general_page') }}">Config Générale</a> |{% endif %}
+         {% if user_has_permission('page:view_config_weekly') %}<a href="{{ url_for('config_weekly_page') }}">Config Hebdo</a> |{% endif %}
+         {% if user_has_permission('page:view_config_day_types') %}<a href="{{ url_for('config_day_types_page') }}">Journées Types</a> |{% endif %}
+         {% if user_has_permission('page:view_config_exceptions') %}<a href="{{ url_for('config_exceptions_page') }}">Exceptions</a> |{% endif %}
+         {% if user_has_permission('page:view_config_sounds') %}<a href="{{ url_for('config_sounds_page') }}">Sonneries</a> |{% endif %}
+         {% if user_has_permission('page:view_config_users') %}<a href="{{ url_for('config_users_page') }}">Gestion Utilisateurs</a> |{% endif %}
          <a href="{{ url_for('logout') }}">Déconnexion</a>
        {% else %}
          (Non Connecté) <a href="{{ url_for('login') }}">Se connecter</a>
        {% endif %}
      </div>
     <!-- FIN LIEN DECONNEXION ET NAVIGATION -->
+
+    {% if user_has_permission('page:view_config_general') %}
     <div class="config-page-container">
 
     <h1>Configuration Générale et Alertes</h1>
@@ -34,15 +34,15 @@
         <h2>Paramètres des Vacances et Jours Fériés</h2>
         <div class="form-group">
             <label for="departement">Département :</label>
-            <select id="departement" name="departement" onchange="updateZoneDisplay()"></select>
+            <select id="departement" name="departement" onchange="updateZoneDisplay()" {% if not user_has_permission('config_general:edit_settings') %}disabled{% endif %}></select>
         </div>
         <div class="form-group">
             <label for="zone">Zone Académique :</label>
-            <input type="text" id="zone" name="zone" readonly>
+            <input type="text" id="zone" name="zone" readonly {% if not user_has_permission('config_general:edit_settings') %}disabled{% endif %}> {# Readonly est déjà là, mais disabled assure la non-soumission #}
         </div>
         <div class="form-group">
             <label for="vacances_ics_url">URL ICS Manuelle pour Vacances (Optionnel) :</label>
-            <input type="url" id="vacances_ics_url" name="vacances_ics_url" placeholder="Laissez vide pour utiliser l'URL par défaut (via zone)">
+            <input type="url" id="vacances_ics_url" name="vacances_ics_url" placeholder="Laissez vide pour utiliser l'URL par défaut (via zone)" {% if not user_has_permission('config_general:edit_settings') %}disabled{% endif %}>
             <p class="help-text">Si renseignée, cette URL sera prioritaire sur le téléchargement automatique par zone.</p>
         </div>
     </div>
@@ -52,7 +52,7 @@
         <div class="form-group">
             <label for="sonnerie_ppms">Sonnerie PPMS :</label>
             <div class="sound-control-group">
-                <select id="sonnerie_ppms" name="sonnerie_ppms" onchange="onSelectChange('sonnerie_ppms')"></select>
+                <select id="sonnerie_ppms" name="sonnerie_ppms" onchange="onSelectChange('sonnerie_ppms')" {% if not user_has_permission('config_general:edit_alert_sounds') %}disabled{% endif %}></select>
                 <button type="button" onclick="previewSound('sonnerie_ppms')" title="Écouter la sonnerie sélectionnée">🔊 Écouter</button>
             </div>
         </div>
@@ -60,7 +60,7 @@
         <div class="form-group">
             <label for="sonnerie_attentat">Sonnerie Attentat :</label>
             <div class="sound-control-group">
-                <select id="sonnerie_attentat" name="sonnerie_attentat" onchange="onSelectChange('sonnerie_attentat')"></select>
+                <select id="sonnerie_attentat" name="sonnerie_attentat" onchange="onSelectChange('sonnerie_attentat')" {% if not user_has_permission('config_general:edit_alert_sounds') %}disabled{% endif %}></select>
                 <button type="button" onclick="previewSound('sonnerie_attentat')" title="Écouter la sonnerie sélectionnée">🔊 Écouter</button>
             </div>
         </div>
@@ -68,7 +68,7 @@
         <div class="form-group">
             <label for="sonnerie_fin_alerte">Sonnerie Fin d'Alerte :</label>
             <div class="sound-control-group">
-                <select id="sonnerie_fin_alerte" name="sonnerie_fin_alerte" onchange="onSelectChange('sonnerie_fin_alerte')"></select>
+                <select id="sonnerie_fin_alerte" name="sonnerie_fin_alerte" onchange="onSelectChange('sonnerie_fin_alerte')" {% if not user_has_permission('config_general:edit_alert_sounds') %}disabled{% endif %}></select>
                 <button type="button" onclick="previewSound('sonnerie_fin_alerte')" title="Écouter la sonnerie sélectionnée">🔊 Écouter</button>
             </div>
         </div>
@@ -78,7 +78,7 @@
         <h2>Configuration du Périphérique Audio de Sortie</h2>
         <div class="form-group">
             <label for="audio_device_select">Périphérique Audio pour les Sonneries :</label>
-            <select id="audio_device_select" name="audio_device_select">
+            <select id="audio_device_select" name="audio_device_select" {% if not user_has_permission('config_general:edit_settings') %}disabled{% endif %}>
                 <!-- Les options seront peuplées par JavaScript -->
             </select>
             <p class="help-text">Sélectionnez le périphérique audio sur lequel les sonneries et alertes doivent être jouées.
@@ -86,8 +86,17 @@
         </div>
     </div>
 
-    <button class="config-page-save-button" onclick="saveConfig()">Enregistrer les Modifications</button>
+    <button class="config-page-save-button" onclick="saveConfig()" {% if not (user_has_permission('config_general:edit_settings') and user_has_permission('config_general:edit_alert_sounds')) %}disabled{% endif %}>Enregistrer les Modifications</button>
     <div id="config-feedback" class="feedback-message" style="display: none;"></div>
+
+    </div> <!-- Fin de config-page-container -->
+    {% else %}
+    <div class="config-page-container">
+        <h1>Accès Refusé</h1>
+        <p>Vous n'avez pas la permission nécessaire pour voir cette page.</p>
+        <p><a href="{{ url_for('index') }}">Retour à la page d'accueil</a></p>
+    </div>
+    {% endif %}
 </body>
 </html>
 

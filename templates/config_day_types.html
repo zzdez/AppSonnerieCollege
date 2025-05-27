@@ -11,21 +11,20 @@
     <div style="text-align: right; margin-bottom: 10px; font-size: 0.9em;">
        {% if current_user and current_user.is_authenticated %}
          Connecté: <strong>{{ current_user.id }}</strong> |
-         <a href="{{ url_for('index') }}">Contrôle Principal</a> |
-         <a href="{{ url_for('config_general_page') }}">Config Générale</a> |
-         <a href="{{ url_for('config_weekly_page') }}">Config Hebdo</a> |
-         <a href="{{ url_for('config_day_types_page') }}">Journées Types</a> |
-         <a href="{{ url_for('config_exceptions_page') }}">Exceptions</a> |
-         <a href="{{ url_for('config_sounds_page') }}">Sonneries</a> |
-         {% if current_user and current_user.is_authenticated and current_user.role == 'administrateur' %}
-           <a href="{{ url_for('config_users_page') }}">Gestion Utilisateurs</a> |
-         {% endif %}
+         {% if user_has_permission('page:view_control') %}<a href="{{ url_for('index') }}">Contrôle Principal</a> |{% endif %}
+         {% if user_has_permission('page:view_config_general') %}<a href="{{ url_for('config_general_page') }}">Config Générale</a> |{% endif %}
+         {% if user_has_permission('page:view_config_weekly') %}<a href="{{ url_for('config_weekly_page') }}">Config Hebdo</a> |{% endif %}
+         {% if user_has_permission('page:view_config_day_types') %}<a href="{{ url_for('config_day_types_page') }}">Journées Types</a> |{% endif %}
+         {% if user_has_permission('page:view_config_exceptions') %}<a href="{{ url_for('config_exceptions_page') }}">Exceptions</a> |{% endif %}
+         {% if user_has_permission('page:view_config_sounds') %}<a href="{{ url_for('config_sounds_page') }}">Sonneries</a> |{% endif %}
+         {% if user_has_permission('page:view_config_users') %}<a href="{{ url_for('config_users_page') }}">Gestion Utilisateurs</a> |{% endif %}
          <a href="{{ url_for('logout') }}">Déconnexion</a>
        {% else %}
          (Non Connecté) <a href="{{ url_for('login') }}">Se connecter</a>
        {% endif %}
      </div>
-<table id="periods-table" class="config-table">
+
+    {% if user_has_permission('page:view_config_day_types') %}
     <h1>Gestion des Journées Types</h1>
 
     <div class="container">
@@ -36,9 +35,9 @@
                 <li>Chargement...</li>
             </ul>
             <div class="action-buttons">
-                <button onclick="prepareAddDayType()">➕ Ajouter</button>
-                <button onclick="prepareEditDayType()">✏️ Renommer</button>
-                <button onclick="deleteDayType()">❌ Supprimer</button>
+                <button onclick="prepareAddDayType()" {% if not user_has_permission('day_type:create') %}disabled{% endif %}>➕ Ajouter</button>
+                <button onclick="prepareEditDayType()" {% if not user_has_permission('day_type:rename') %}disabled{% endif %}>✏️ Renommer</button>
+                <button onclick="deleteDayType()" {% if not user_has_permission('day_type:delete') %}disabled{% endif %}>❌ Supprimer</button>
             </div>
             <div id="list-feedback" class="feedback-message" style="display: none; margin-top: 10px;"></div>
         </div>
@@ -58,6 +57,11 @@
     // --------------------------------------------------
     // 1. Variables Globales
     // --------------------------------------------------
+    const canCreateDayType = {{ user_has_permission('day_type:create') | tojson }};
+    const canRenameDayType = {{ user_has_permission('day_type:rename') | tojson }};
+    const canDeleteDayType = {{ user_has_permission('day_type:delete') | tojson }};
+    const canEditDayTypePeriods = {{ user_has_permission('day_type:edit_periods') | tojson }};
+
     let availableRingtones = {};
     let currentSelectedDayTypeName = null;
     let editingPeriodIndex = null;
@@ -229,11 +233,11 @@
                         const sonD = p.sonnerie_debut; const sonF = p.sonnerie_fin;
                         const sonDDisplay = sonD ? `<em>${findRingtoneDisplayName(sonD)}</em> (${sonD})` : '<em>Silence</em>';
                         const sonFDisplay = sonF ? `<em>${findRingtoneDisplayName(sonF)}</em> (${sonF})` : '<em>Silence</em>';
-                        html += `<tr><td>${debut.substring(0,5)}</td><td>${fin.substring(0,5)}</td><td>${nom}</td><td>${sonDDisplay}</td><td>${sonFDisplay}</td><td><button onclick="editPeriod('${name}', ${index})" class='btn-small' title='Modifier'>✏️</button><button onclick="deletePeriod('${name}', ${index})" class='btn-small' title='Supprimer'>❌</button></td></tr>`;
+                        html += `<tr><td>${debut.substring(0,5)}</td><td>${fin.substring(0,5)}</td><td>${nom}</td><td>${sonDDisplay}</td><td>${sonFDisplay}</td><td><button onclick="editPeriod('${name}', ${index})" class='btn-small' title='Modifier' ${!canEditDayTypePeriods ? 'disabled' : ''}>✏️</button><button onclick="deletePeriod('${name}', ${index})" class='btn-small' title='Supprimer' ${!canEditDayTypePeriods ? 'disabled' : ''}>❌</button></td></tr>`;
                     });
                     html += `</tbody></table>`;
                 } else { html += `<p>Aucune période définie pour cette journée type.</p>`; }
-                html += `<div class="action-buttons" style="margin-top:15px;"><button id="btn-show-add-period-form" onclick="addPeriod('${name}')">➕ Ajouter une Période</button></div>`;
+                html += `<div class="action-buttons" style="margin-top:15px;"><button id="btn-show-add-period-form" onclick="addPeriod('${name}')" ${!canEditDayTypePeriods ? 'disabled' : ''}>➕ Ajouter une Période</button></div>`;
                 detailsContent.innerHTML = html;
                 setGlobalAddPeriodButtonState(true); // S'assurer qu'il est visible après chargement
             })
@@ -256,7 +260,7 @@
         const buttonText = (periodData ? "Enregistrer Modifications" : "Ajouter cette Période");
         const defaultStartTime = periodData?.heure_debut?.substring(0,5) || suggestedStartTime || '08:00';
         const defaultEndTime = periodData?.heure_fin?.substring(0,5) || (suggestedStartTime ? incrementTime(suggestedStartTime, 60) : '09:00');
-        let formHtml = `<div id="period-form-section" class="form-container-style"><h4>${formTitle}</h4><div class="form-group"><label for="period-nom">Nom de la période :</label><input type="text" id="period-nom" value="${periodData?.nom || 'Nouveau Cours'}"></div><div class="time-input-group"><div class="form-group"><label for="period-heure-debut">Heure Début :</label><input type="time" id="period-heure-debut" value="${defaultStartTime}" step="60"></div><div class="form-group"><label for="period-heure-fin">Heure Fin :</label><input type="time" id="period-heure-fin" value="${defaultEndTime}" step="60"></div></div><div class="form-group"><label for="period-sonnerie-debut">Sonnerie Début :</label><select id="period-sonnerie-debut"></select></div><div class="form-group"><label for="period-sonnerie-fin">Sonnerie Fin :</label><select id="period-sonnerie-fin"></select></div><button type="button" onclick="submitPeriodForm('${dayTypeName}')">${buttonText}</button>`;
+        let formHtml = `<div id="period-form-section" class="form-container-style"><h4>${formTitle}</h4><div class="form-group"><label for="period-nom">Nom de la période :</label><input type="text" id="period-nom" value="${periodData?.nom || 'Nouveau Cours'}" ${!canEditDayTypePeriods ? 'disabled' : ''}></div><div class="time-input-group"><div class="form-group"><label for="period-heure-debut">Heure Début :</label><input type="time" id="period-heure-debut" value="${defaultStartTime}" step="60" ${!canEditDayTypePeriods ? 'disabled' : ''}></div><div class="form-group"><label for="period-heure-fin">Heure Fin :</label><input type="time" id="period-heure-fin" value="${defaultEndTime}" step="60" ${!canEditDayTypePeriods ? 'disabled' : ''}></div></div><div class="form-group"><label for="period-sonnerie-debut">Sonnerie Début :</label><select id="period-sonnerie-debut" ${!canEditDayTypePeriods ? 'disabled' : ''}></select></div><div class="form-group"><label for="period-sonnerie-fin">Sonnerie Fin :</label><select id="period-sonnerie-fin" ${!canEditDayTypePeriods ? 'disabled' : ''}></select></div><button type="button" onclick="submitPeriodForm('${dayTypeName}')" ${!canEditDayTypePeriods ? 'disabled' : ''}>${buttonText}</button>`;
         formHtml += ` <button type="button" class="cancel-button" onclick="cancelPeriodEdit('${dayTypeName}')">Annuler</button>`; // Toujours un bouton Annuler
         formHtml += `</div>`;
         const tableContainer = detailsContent.querySelector('#periods-table') || detailsContent.querySelector('p') || detailsContent.querySelector('.action-buttons[style*="margin-top:15px"]'); // Cibler le conteneur du bouton "Ajouter une Période"
@@ -294,7 +298,7 @@
         const detailsTitle = document.getElementById('details-title');
         const detailsContent = document.getElementById('details-content');
         detailsTitle.textContent = "Ajouter une Nouvelle Journée Type";
-        detailsContent.innerHTML = `<div id="add-day-type-form" class="form-container-style"><h4>Nouvelle Journée Type</h4><div class="form-group"><label for="new-day-type-name">Nom :</label><input type="text" id="new-day-type-name"></div><button type="button" onclick="createDayType()">Créer</button><button type="button" class="cancel-button" onclick="cancelAddDayType()">Annuler</button></div>`;
+        detailsContent.innerHTML = `<div id="add-day-type-form" class="form-container-style"><h4>Nouvelle Journée Type</h4><div class="form-group"><label for="new-day-type-name">Nom :</label><input type="text" id="new-day-type-name" ${!canCreateDayType ? 'disabled' : ''}></div><button type="button" onclick="createDayType()" ${!canCreateDayType ? 'disabled' : ''}>Créer</button><button type="button" class="cancel-button" onclick="cancelAddDayType()">Annuler</button></div>`;
         showDayTypeFeedback('', 'info');
         const nameInput = document.getElementById('new-day-type-name');
         if(nameInput) nameInput.focus();
@@ -481,3 +485,10 @@
     document.addEventListener('DOMContentLoaded', initPage);
 
 </script>
+    {% else %}
+    <div class="config-page-container"> <!-- Utilisation d'une classe commune pour le message d'accès refusé -->
+        <h1>Accès Refusé</h1>
+        <p>Vous n'avez pas la permission nécessaire pour voir cette page.</p>
+        <p><a href="{{ url_for('index') }}">Retour à la page d'accueil</a></p>
+    </div>
+    {% endif %}

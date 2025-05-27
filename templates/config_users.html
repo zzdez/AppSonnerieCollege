@@ -10,21 +10,13 @@
     <div style="text-align: right; margin-bottom: 10px; font-size: 0.9em;">
        {% if current_user and current_user.is_authenticated %}
          Connecté: <strong>{{ current_user.id }}</strong> (Rôle: {{ current_user.role }}) |
-         <a href="{{ url_for('index') }}">Contrôle Principal</a> |
-         <a href="{{ url_for('config_general_page') }}">Config Générale</a> |
-         <a href="{{ url_for('config_weekly_page') }}">Config Hebdo</a> |
-         <a href="{{ url_for('config_day_types_page') }}">Journées Types</a> |
-         <a href="{{ url_for('config_exceptions_page') }}">Exceptions</a> |
-         <a href="{{ url_for('config_sounds_page') }}">Sonneries</a> |
-         {# Le lien vers Gestion Utilisateurs est déjà présent et correct fonctionnellement,
-            mais standardisation de la condition pour la cohérence.
-            La condition originale `current_user.role == 'admin'` est fonctionnellement OK
-            car cette page est déjà protégée par @admin_required.
-            `current_user.role == 'administrateur'` est la valeur exacte du rôle.
-         #}
-         {% if current_user and current_user.is_authenticated and current_user.role == 'administrateur' %}
-           <a href="{{ url_for('config_users_page') }}">Gestion Utilisateurs</a> |
-         {% endif %}
+         {% if user_has_permission('page:view_control') %}<a href="{{ url_for('index') }}">Contrôle Principal</a> |{% endif %}
+         {% if user_has_permission('page:view_config_general') %}<a href="{{ url_for('config_general_page') }}">Config Générale</a> |{% endif %}
+         {% if user_has_permission('page:view_config_weekly') %}<a href="{{ url_for('config_weekly_page') }}">Config Hebdo</a> |{% endif %}
+         {% if user_has_permission('page:view_config_day_types') %}<a href="{{ url_for('config_day_types_page') }}">Journées Types</a> |{% endif %}
+         {% if user_has_permission('page:view_config_exceptions') %}<a href="{{ url_for('config_exceptions_page') }}">Exceptions</a> |{% endif %}
+         {% if user_has_permission('page:view_config_sounds') %}<a href="{{ url_for('config_sounds_page') }}">Sonneries</a> |{% endif %}
+         {% if user_has_permission('page:view_config_users') %}<a href="{{ url_for('config_users_page') }}">Gestion Utilisateurs</a> |{% endif %}
          <a href="{{ url_for('logout') }}">Déconnexion</a>
        {% else %}
          (Non Connecté) <a href="{{ url_for('login') }}">Se connecter</a>
@@ -133,10 +125,12 @@
     </div>
 
     <script>
-        // Conceptual: These would be populated by Flask/Jinja2
-        var globalAvailablePermissions = [];
-        var globalDefaultRolePermissions = {};
-
+        // Inject Flask data into JavaScript global variables
+        var globalAvailablePermissions = {{ available_permissions | tojson }};
+        var globalDefaultRolePermissions = {{ default_role_permissions | tojson }};
+        var globalFriendlyPermissionNames = {{ friendly_permission_names | tojson }}; // Ajout de cette ligne
+    </script>
+    <script>
         const MIN_PASSWORD_LENGTH = 8;
         const VALID_ROLES = ["lecteur", "collaborateur", "administrateur"];
 
@@ -376,7 +370,7 @@
                     checkbox.value = permission;
                     const label = document.createElement('label');
                     label.htmlFor = uniqueId;
-                    label.textContent = permission;
+                    label.textContent = (globalFriendlyPermissionNames && globalFriendlyPermissionNames[permission]) ? globalFriendlyPermissionNames[permission] : permission;
                     checkboxDiv.appendChild(checkbox);
                     checkboxDiv.appendChild(label);
                     fragment.appendChild(checkboxDiv);

@@ -28,7 +28,7 @@ try:
     from constants import (CONFIG_PATH, MP3_PATH, USERS_FILE, PARAMS_FILE,
                            DONNEES_SONNERIES_FILE,
                            DEPARTEMENTS_ZONES, LISTE_DEPARTEMENTS, JOURS_SEMAINE_ASSIGNATION, AUCUNE_SONNERIE,
-                           AVAILABLE_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS) # Ajout des nouvelles constantes
+                           AVAILABLE_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS, FRIENDLY_PERMISSION_NAMES) # Ajout des nouvelles constantes
     from holiday_manager import HolidayManager
     MODULES_LOADED = True
 except ImportError as e_imp:
@@ -539,7 +539,8 @@ def config_users_page():
     return render_template('config_users.html',
                            current_user=current_user,
                            available_permissions=AVAILABLE_PERMISSIONS,
-                           default_role_permissions=DEFAULT_ROLE_PERMISSIONS)
+                           default_role_permissions=DEFAULT_ROLE_PERMISSIONS,
+                           friendly_permission_names=FRIENDLY_PERMISSION_NAMES)
 
 @app.route('/')
 @login_required
@@ -2216,7 +2217,7 @@ def upload_sound_file():
 # ==============================================================================
 
 MIN_PASSWORD_LENGTH = 8
-VALID_ROLES = list(ROLES_HIERARCHIE.keys()) # ["administrateur", "collaborateur", "lecteur"]
+VALID_ROLES = list(DEFAULT_ROLE_PERMISSIONS.keys()) # ["administrateur", "collaborateur", "lecteur"]
 
 @app.route('/api/users', methods=['GET'])
 @login_required

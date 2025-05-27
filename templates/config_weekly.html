@@ -11,15 +11,13 @@
     <div style="text-align: right; margin-bottom: 10px; font-size: 0.9em;">
        {% if current_user and current_user.is_authenticated %}
          Connecté: <strong>{{ current_user.id }}</strong> |
-         <a href="{{ url_for('index') }}">Contrôle Principal</a> |
-         <a href="{{ url_for('config_general_page') }}">Config Générale</a> |
-         <a href="{{ url_for('config_weekly_page') }}">Config Hebdo</a> |
-         <a href="{{ url_for('config_day_types_page') }}">Journées Types</a> |
-         <a href="{{ url_for('config_exceptions_page') }}">Exceptions</a> |
-         <a href="{{ url_for('config_sounds_page') }}">Sonneries</a> |
-         {% if current_user and current_user.is_authenticated and current_user.role == 'administrateur' %}
-           <a href="{{ url_for('config_users_page') }}">Gestion Utilisateurs</a> |
-         {% endif %}
+         {% if user_has_permission('page:view_control') %}<a href="{{ url_for('index') }}">Contrôle Principal</a> |{% endif %}
+         {% if user_has_permission('page:view_config_general') %}<a href="{{ url_for('config_general_page') }}">Config Générale</a> |{% endif %}
+         {% if user_has_permission('page:view_config_weekly') %}<a href="{{ url_for('config_weekly_page') }}">Config Hebdo</a> |{% endif %}
+         {% if user_has_permission('page:view_config_day_types') %}<a href="{{ url_for('config_day_types_page') }}">Journées Types</a> |{% endif %}
+         {% if user_has_permission('page:view_config_exceptions') %}<a href="{{ url_for('config_exceptions_page') }}">Exceptions</a> |{% endif %}
+         {% if user_has_permission('page:view_config_sounds') %}<a href="{{ url_for('config_sounds_page') }}">Sonneries</a> |{% endif %}
+         {% if user_has_permission('page:view_config_users') %}<a href="{{ url_for('config_users_page') }}">Gestion Utilisateurs</a> |{% endif %}
          <a href="{{ url_for('logout') }}">Déconnexion</a>
        {% else %}
          (Non Connecté) <a href="{{ url_for('login') }}">Se connecter</a>
@@ -27,6 +25,7 @@
      </div>
 
     <!-- FIN LIEN DECONNEXION ET NAVIGATION -->
+    {% if user_has_permission('page:view_config_weekly') %}
     <div class="config-page-container"> <!-- Tu as bien ajouté ce conteneur -->
         <h1>Configuration du Planning Hebdomadaire</h1>
 
@@ -38,12 +37,21 @@
                 <p>Chargement du planning...</p>
             </div>
             <!-- Modification ici : id -> class -->
-            <button class="config-page-save-button" onclick="saveWeeklySchedule()">Enregistrer les Modifications</button>
+            <button class="config-page-save-button" onclick="saveWeeklySchedule()" {% if not user_has_permission('config_weekly:edit_planning') %}disabled{% endif %}>Enregistrer les Modifications</button>
             <div id="weekly-feedback" class="feedback-message" style="display: none;"></div>  <!-- Cette classe est déjà correcte -->
         </div>
     </div>
-
+    {% else %}
+    <div class="config-page-container">
+        <h1>Accès Refusé</h1>
+        <p>Vous n'avez pas la permission nécessaire pour voir cette page.</p>
+        <p><a href="{{ url_for('index') }}">Retour à la page d'accueil</a></p>
+    </div>
+    {% endif %}
     <script>
+        // Variable pour stocker l'état de la permission d'édition
+        const canEditWeeklyPlanning = {{ user_has_permission('config_weekly:edit_planning') | tojson }};
+
         // --------------------------------------------------
         // 1. Variables Globales
         // --------------------------------------------------
@@ -164,6 +172,11 @@
                         select.innerHTML = optionsHtml;
 
                         select.value = currentPlanning[day] || aucuneValue;
+
+                        // Désactiver le select si l'utilisateur n'a pas la permission
+                        if (!canEditWeeklyPlanning) {
+                            select.disabled = true;
+                        }
 
                         formDiv.appendChild(select);
                     });
