@@ -130,7 +130,7 @@
         const MIN_PASSWORD_LENGTH = 8;
 
         document.addEventListener('DOMContentLoaded', function() {
-            // --- Elements DOM --- 
+            // --- Elements DOM ---
             const usersTableBody = document.getElementById('users-table-body');
             const feedbackDiv = document.getElementById('users-feedback');
             const rolesConfigFeedbackDiv = document.getElementById('roles-config-feedback');
@@ -364,10 +364,10 @@
                             option.value = roleName;
                             option.textContent = roleName;
                             roleSelector.appendChild(option.cloneNode(true));
-                            
+
                             // Pour les formulaires add/edit, la valeur est en minuscule
                             const formOption = document.createElement('option');
-                            formOption.value = roleName.toLowerCase(); 
+                            formOption.value = roleName.toLowerCase();
                             formOption.textContent = roleName;
                             addRoleSelect.appendChild(formOption.cloneNode(true));
                             editRoleSelect.appendChild(formOption.cloneNode(true));
@@ -408,9 +408,9 @@
                 function checkPerm(permissionsObject, permKeyString) {
                     if (permKeyString.includes(':')) {
                         const [mainKey, subKey] = permKeyString.split(':', 2);
-                        if (mainKey === "page") { 
+                        if (mainKey === "page") {
                             return permissionsObject[permKeyString] === true;
-                        } else { 
+                        } else {
                             return (permissionsObject[mainKey] && permissionsObject[mainKey][subKey] === true);
                         }
                     } else {
@@ -438,7 +438,6 @@
                         checkbox.dataset.pageViewKey = pageViewKey;
                         checkbox.dataset.isFunctional = 'true';
                     }
-                    
                     checkbox.checked = checkPerm(currentRolePermissions, permKey);
                     if (isAdministrateur) {
                         checkbox.checked = true;
@@ -448,7 +447,6 @@
                     const label = document.createElement('label');
                     label.htmlFor = checkbox.id;
                     label.textContent = permLabel || permKey;
-                    
                     permDiv.appendChild(checkbox);
                     permDiv.appendChild(label);
                     return permDiv;
@@ -555,7 +553,6 @@
                                 if (funcCb.dataset.sectionKey === currentSectionKey && 
                                     funcCb.dataset.isFunctional === 'true' &&
                                     funcCb.dataset.pageViewKey === pageViewKeyForThisCb) {
-                                    
                                     if (!this.checked) { // Page view is unchecked
                                         funcCb.checked = false;
                                         funcCb.disabled = true;
@@ -582,7 +579,7 @@
 
                 const newPermissionsPayload = {};
                 const checkboxes = rolePermissionsTreeDiv.querySelectorAll('input[type="checkbox"]');
-                
+
                 checkboxes.forEach(cb => {
                     const permKeyString = cb.dataset.permString;
                     const isChecked = cb.checked;
@@ -615,11 +612,11 @@
                         throw new Error(data.error || `Erreur HTTP ${response.status}`);
                     }
                     showRolesConfigFeedback(data.message || "Permissions du rôle sauvegardées avec succès!", 'success');
-                    
+
                     // Mettre à jour rolesConfigData localement et rafraîchir l'affichage
                     if (data.updated_permissions && rolesConfigData.roles[selectedRoleName]) {
                          rolesConfigData.roles[selectedRoleName].permissions = data.updated_permissions;
-                         displayRolePermissions(selectedRoleName); 
+                         displayRolePermissions(selectedRoleName);
                     }
                 } catch (error) {
                     console.error("Erreur sauvegarde permissions rôle:", error);
