@@ -180,11 +180,11 @@ AVAILABLE_PERMISSIONS = [
 # --- Noms Conviviaux pour les Permissions (pour affichage UI) ---
 FRIENDLY_PERMISSION_NAMES = {
     "page:view_control": "Voir la page de Contrôle Principal",
-    "page:view_config_general": "Voir la configuration Générale et Alertes",
-    "page:view_config_weekly": "Voir la configuration du Planning Hebdomadaire",
-    "page:view_config_day_types": "Voir la configuration des Journées Types",
-    "page:view_config_exceptions": "Voir la configuration des Exceptions de planning",
-    "page:view_config_sounds": "Voir la configuration des Sonneries",
+    "page:view_config_general": "Voir la page de configuration Générale et Alertes",
+    "page:view_config_weekly": "Voir la page de configuration du Planning Hebdomadaire",
+    "page:view_config_day_types": "Voir la page de configuration des Journées Types",
+    "page:view_config_exceptions": "Voir la page de configuration des Exceptions de planning",
+    "page:view_config_sounds": "Voir la page de configuration des Sonneries",
     "page:view_config_users": "Voir la page de Gestion des Utilisateurs",
 
     "control:scheduler_activate": "Activer le planning des sonneries",
@@ -232,10 +232,13 @@ FRIENDLY_PERMISSION_NAMES = {
 # --- Modèle de Permissions pour l'UI de Configuration des Rôles ---
 # Ce modèle aide à structurer l'affichage des permissions dans l'interface utilisateur.
 PERMISSIONS_MODEL = {
-    "control_panel": { # Actions sur la page de Contrôle (onglet "Panneau Contrôle")
+    "control_panel": {
         "label": "Panneau de Contrôle",
-        "permissions": {
-            "page:view_control": FRIENDLY_PERMISSION_NAMES.get("page:view_control"),
+        "page_view_meta": {
+            "key": "page:view_control",
+            "label": FRIENDLY_PERMISSION_NAMES.get("page:view_control")
+        },
+        "functional_permissions": {
             "control:scheduler_activate": FRIENDLY_PERMISSION_NAMES.get("control:scheduler_activate"),
             "control:scheduler_deactivate": FRIENDLY_PERMISSION_NAMES.get("control:scheduler_deactivate"),
             "control:config_reload": FRIENDLY_PERMISSION_NAMES.get("control:config_reload"),
@@ -246,44 +249,59 @@ PERMISSIONS_MODEL = {
             "control:alert_end": FRIENDLY_PERMISSION_NAMES.get("control:alert_end"),
         }
     },
-    "general_config": { # Configuration Générale (onglet "Config Générale")
+    "general_config": {
         "label": "Configuration Générale et Alertes",
-        "permissions": {
-            "page:view_config_general": FRIENDLY_PERMISSION_NAMES.get("page:view_config_general"),
+        "page_view_meta": {
+            "key": "page:view_config_general",
+            "label": FRIENDLY_PERMISSION_NAMES.get("page:view_config_general")
+        },
+        "functional_permissions": {
             "config_general:edit_settings": FRIENDLY_PERMISSION_NAMES.get("config_general:edit_settings"),
             "config_general:edit_alert_sounds": FRIENDLY_PERMISSION_NAMES.get("config_general:edit_alert_sounds"),
         }
     },
-    "weekly_planning_config": { # Configuration Planning Hebdomadaire (onglet "Config Hebdo")
+    "weekly_planning_config": {
         "label": "Configuration Planning Hebdomadaire",
-        "permissions": {
-            "page:view_config_weekly": FRIENDLY_PERMISSION_NAMES.get("page:view_config_weekly"),
+        "page_view_meta": {
+            "key": "page:view_config_weekly",
+            "label": FRIENDLY_PERMISSION_NAMES.get("page:view_config_weekly")
+        },
+        "functional_permissions": {
             "config_weekly:edit_planning": FRIENDLY_PERMISSION_NAMES.get("config_weekly:edit_planning"),
         }
     },
-    "day_types_config": { # Configuration Journées Types (onglet "Config Journées Types")
+    "day_types_config": {
         "label": "Configuration Journées Types",
-        "permissions": {
-            "page:view_config_day_types": FRIENDLY_PERMISSION_NAMES.get("page:view_config_day_types"),
+        "page_view_meta": {
+            "key": "page:view_config_day_types",
+            "label": FRIENDLY_PERMISSION_NAMES.get("page:view_config_day_types")
+        },
+        "functional_permissions": {
             "day_type:create": FRIENDLY_PERMISSION_NAMES.get("day_type:create"),
             "day_type:rename": FRIENDLY_PERMISSION_NAMES.get("day_type:rename"),
             "day_type:delete": FRIENDLY_PERMISSION_NAMES.get("day_type:delete"),
             "day_type:edit_periods": FRIENDLY_PERMISSION_NAMES.get("day_type:edit_periods"),
         }
     },
-    "exceptions_config": { # Configuration Exceptions (onglet "Config Exceptions")
+    "exceptions_config": {
         "label": "Configuration Exceptions de Planning",
-        "permissions": {
-            "page:view_config_exceptions": FRIENDLY_PERMISSION_NAMES.get("page:view_config_exceptions"),
+        "page_view_meta": {
+            "key": "page:view_config_exceptions",
+            "label": FRIENDLY_PERMISSION_NAMES.get("page:view_config_exceptions")
+        },
+        "functional_permissions": {
             "exception:create": FRIENDLY_PERMISSION_NAMES.get("exception:create"),
             "exception:edit": FRIENDLY_PERMISSION_NAMES.get("exception:edit"),
             "exception:delete": FRIENDLY_PERMISSION_NAMES.get("exception:delete"),
         }
     },
-    "sounds_config": { # Gestion des Sonneries (onglet "Config Sonneries")
+    "sounds_config": {
         "label": "Gestion des Sonneries",
-        "permissions": {
-            "page:view_config_sounds": FRIENDLY_PERMISSION_NAMES.get("page:view_config_sounds"),
+        "page_view_meta": {
+            "key": "page:view_config_sounds",
+            "label": FRIENDLY_PERMISSION_NAMES.get("page:view_config_sounds")
+        },
+        "functional_permissions": {
             "sound:upload": FRIENDLY_PERMISSION_NAMES.get("sound:upload"),
             "sound:scan_folder": FRIENDLY_PERMISSION_NAMES.get("sound:scan_folder"),
             "sound:edit_display_name": FRIENDLY_PERMISSION_NAMES.get("sound:edit_display_name"),
@@ -292,23 +310,25 @@ PERMISSIONS_MODEL = {
             "sound:preview": FRIENDLY_PERMISSION_NAMES.get("sound:preview")
         }
     },
-    "user_management": { # Gestion des Utilisateurs et Rôles (onglet "Config Utilisateurs")
+    "user_management": {
         "label": "Gestion Utilisateurs et Rôles",
-        "permissions": {
-            "page:view_config_users": FRIENDLY_PERMISSION_NAMES.get("page:view_config_users"),
+        "page_view_meta": {
+            "key": "page:view_config_users",
+            "label": FRIENDLY_PERMISSION_NAMES.get("page:view_config_users")
+        },
+        "functional_permissions": {
             "user:view_list": FRIENDLY_PERMISSION_NAMES.get("user:view_list"),
             "user:create": FRIENDLY_PERMISSION_NAMES.get("user:create"),
             "user:edit_details": FRIENDLY_PERMISSION_NAMES.get("user:edit_details"),
             "user:edit_password": FRIENDLY_PERMISSION_NAMES.get("user:edit_password"),
             "user:edit_role": FRIENDLY_PERMISSION_NAMES.get("user:edit_role"),
-            # "user:edit_permissions" est maintenant géré par "user_management:edit_role_permissions"
             "user:delete": FRIENDLY_PERMISSION_NAMES.get("user:delete"),
             "user_management:edit_role_permissions": FRIENDLY_PERMISSION_NAMES.get("user_management:edit_role_permissions"),
         }
     },
     "special_permissions": { # Permissions spéciales (onglet "Avancé" ou "Spécial")
         "label": "Permissions Spéciales",
-        "permissions": {
+        "permissions": { # This section remains unchanged
             "admin:has_all_permissions": FRIENDLY_PERMISSION_NAMES.get("admin:has_all_permissions", "Accès total administrateur (non modifiable)"),
         }
     }
