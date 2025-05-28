@@ -338,6 +338,23 @@
             }
 
             // --- Nouvelle Logique pour la Configuration des Rôles ---
+
+            // Mappings for permission dependencies based on new PERMISSIONS_MODEL structure
+            const sectionKeyToPageViewPermKey = {
+                'control_panel': 'page:view_control',
+                'general_config': 'page:view_config_general',
+                'weekly_planning_config': 'page:view_config_weekly',
+                'day_types_config': 'page:view_config_day_types',
+                'exceptions_config': 'page:view_config_exceptions',
+                'sounds_config': 'page:view_config_sounds',
+                'user_management': 'page:view_config_users'
+            };
+
+            const pageViewPermKeyToSectionKey = {};
+            for (const key in sectionKeyToPageViewPermKey) {
+                pageViewPermKeyToSectionKey[sectionKeyToPageViewPermKey[key]] = key;
+            }
+
             async function initializeRolesConfigUI() {
                 try {
                     const response = await fetch('/api/roles_config');
@@ -430,6 +447,7 @@
                         permDiv.classList.add('permission-item');
                         const checkbox = document.createElement('input');
                         checkbox.type = 'checkbox';
+                        // Consistent ID generation
                         checkbox.id = `role-perm-${sectionKey}-${permKey.replace(/:/g, '-')}`;
                         checkbox.dataset.permString = permKey; // Stocker la chaîne de permission originale
                         checkbox.dataset.sectionKey = sectionKey; // Stocker la section principale pour reconstruction
@@ -450,6 +468,61 @@
                     }
                     rolePermissionsTreeDiv.appendChild(sectionDiv);
                 }
+
+                // --- New logic for permission dependencies ---
+
+                const allCheckboxes = rolePermissionsTreeDiv.querySelectorAll('input[type="checkbox"]');
+
+                // Initial state adjustment: Disable functional perms if their page view is not checked
+                allCheckboxes.forEach(cb => {
+                    const permKey = cb.dataset.permString;
+                    const cbSectionKey = cb.dataset.sectionKey;
+
+                    if (!permKey.startsWith('page:view_') && sectionKeyToPageViewPermKey.hasOwnProperty(cbSectionKey)) {
+                        const pageViewPermKey = sectionKeyToPageViewPermKey[cbSectionKey];
+                        const pageViewCheckboxId = `role-perm-${cbSectionKey}-${pageViewPermKey.replace(/:/g, '-')}`;
+                        const pageViewCheckbox = document.getElementById(pageViewCheckboxId);
+                        if (pageViewCheckbox && !pageViewCheckbox.checked) {
+                            cb.disabled = true;
+                        }
+                    }
+                });
+
+                // Add event listeners
+                allCheckboxes.forEach(cb => {
+                    const permKey = cb.dataset.permString;
+                    const currentSectionKey = cb.dataset.sectionKey;
+
+                    // If cb is a functional permission
+                    if (!permKey.startsWith('page:view_') && sectionKeyToPageViewPermKey.hasOwnProperty(currentSectionKey)) {
+                        cb.addEventListener('change', function() {
+                            if (this.checked) {
+                                const pageViewPermKey = sectionKeyToPageViewPermKey[currentSectionKey];
+                                const pageViewCheckboxId = `role-perm-${currentSectionKey}-${pageViewPermKey.replace(/:/g, '-')}`;
+                                const pageViewCheckbox = document.getElementById(pageViewCheckboxId);
+                                if (pageViewCheckbox) {
+                                    pageViewCheckbox.checked = true;
+                                    pageViewCheckbox.dispatchEvent(new Event('change'));
+                                }
+                            }
+                        });
+                    }
+                    // If cb is a page view permission
+                    else if (permKey.startsWith('page:view_') && pageViewPermKeyToSectionKey.hasOwnProperty(permKey) && currentSectionKey === pageViewPermKeyToSectionKey[permKey]) {
+                        cb.addEventListener('change', function() {
+                            allCheckboxes.forEach(funcCb => {
+                                if (funcCb.dataset.sectionKey === currentSectionKey && !funcCb.dataset.permString.startsWith('page:view_')) {
+                                    if (!this.checked) { // Page view permission is unchecked
+                                        funcCb.checked = false;
+                                        funcCb.disabled = true;
+                                    } else { // Page view permission is checked
+                                        funcCb.disabled = false;
+                                    }
+                                }
+                            });
+                        });
+                    }
+                });
             }
 
             async function saveRolePermissions() {

@@ -232,22 +232,10 @@ FRIENDLY_PERMISSION_NAMES = {
 # --- Modèle de Permissions pour l'UI de Configuration des Rôles ---
 # Ce modèle aide à structurer l'affichage des permissions dans l'interface utilisateur.
 PERMISSIONS_MODEL = {
-    "page_access": { # Accès aux pages principales (onglet "Accès Pages")
-        "label": "Accès aux Pages Principales",
-        "permissions": {
-            "page:view_control": FRIENDLY_PERMISSION_NAMES.get("page:view_control"),
-            "page:view_config_general": FRIENDLY_PERMISSION_NAMES.get("page:view_config_general"),
-            "page:view_config_weekly": FRIENDLY_PERMISSION_NAMES.get("page:view_config_weekly"),
-            "page:view_config_day_types": FRIENDLY_PERMISSION_NAMES.get("page:view_config_day_types"),
-            "page:view_config_exceptions": FRIENDLY_PERMISSION_NAMES.get("page:view_config_exceptions"),
-            "page:view_config_sounds": FRIENDLY_PERMISSION_NAMES.get("page:view_config_sounds"),
-            "page:view_config_users": FRIENDLY_PERMISSION_NAMES.get("page:view_config_users"),
-            # La page de config des rôles sera implicitement protégée par "user_management:edit_role_permissions"
-        }
-    },
     "control_panel": { # Actions sur la page de Contrôle (onglet "Panneau Contrôle")
         "label": "Panneau de Contrôle",
         "permissions": {
+            "page:view_control": FRIENDLY_PERMISSION_NAMES.get("page:view_control"),
             "control:scheduler_activate": FRIENDLY_PERMISSION_NAMES.get("control:scheduler_activate"),
             "control:scheduler_deactivate": FRIENDLY_PERMISSION_NAMES.get("control:scheduler_deactivate"),
             "control:config_reload": FRIENDLY_PERMISSION_NAMES.get("control:config_reload"),
@@ -259,8 +247,9 @@ PERMISSIONS_MODEL = {
         }
     },
     "general_config": { # Configuration Générale (onglet "Config Générale")
-        "label": "Configuration Générale",
+        "label": "Configuration Générale et Alertes",
         "permissions": {
+            "page:view_config_general": FRIENDLY_PERMISSION_NAMES.get("page:view_config_general"),
             "config_general:edit_settings": FRIENDLY_PERMISSION_NAMES.get("config_general:edit_settings"),
             "config_general:edit_alert_sounds": FRIENDLY_PERMISSION_NAMES.get("config_general:edit_alert_sounds"),
         }
@@ -268,12 +257,14 @@ PERMISSIONS_MODEL = {
     "weekly_planning_config": { # Configuration Planning Hebdomadaire (onglet "Config Hebdo")
         "label": "Configuration Planning Hebdomadaire",
         "permissions": {
+            "page:view_config_weekly": FRIENDLY_PERMISSION_NAMES.get("page:view_config_weekly"),
             "config_weekly:edit_planning": FRIENDLY_PERMISSION_NAMES.get("config_weekly:edit_planning"),
         }
     },
     "day_types_config": { # Configuration Journées Types (onglet "Config Journées Types")
         "label": "Configuration Journées Types",
         "permissions": {
+            "page:view_config_day_types": FRIENDLY_PERMISSION_NAMES.get("page:view_config_day_types"),
             "day_type:create": FRIENDLY_PERMISSION_NAMES.get("day_type:create"),
             "day_type:rename": FRIENDLY_PERMISSION_NAMES.get("day_type:rename"),
             "day_type:delete": FRIENDLY_PERMISSION_NAMES.get("day_type:delete"),
@@ -283,6 +274,7 @@ PERMISSIONS_MODEL = {
     "exceptions_config": { # Configuration Exceptions (onglet "Config Exceptions")
         "label": "Configuration Exceptions de Planning",
         "permissions": {
+            "page:view_config_exceptions": FRIENDLY_PERMISSION_NAMES.get("page:view_config_exceptions"),
             "exception:create": FRIENDLY_PERMISSION_NAMES.get("exception:create"),
             "exception:edit": FRIENDLY_PERMISSION_NAMES.get("exception:edit"),
             "exception:delete": FRIENDLY_PERMISSION_NAMES.get("exception:delete"),
@@ -291,6 +283,7 @@ PERMISSIONS_MODEL = {
     "sounds_config": { # Gestion des Sonneries (onglet "Config Sonneries")
         "label": "Gestion des Sonneries",
         "permissions": {
+            "page:view_config_sounds": FRIENDLY_PERMISSION_NAMES.get("page:view_config_sounds"),
             "sound:upload": FRIENDLY_PERMISSION_NAMES.get("sound:upload"),
             "sound:scan_folder": FRIENDLY_PERMISSION_NAMES.get("sound:scan_folder"),
             "sound:edit_display_name": FRIENDLY_PERMISSION_NAMES.get("sound:edit_display_name"),
@@ -302,6 +295,7 @@ PERMISSIONS_MODEL = {
     "user_management": { # Gestion des Utilisateurs et Rôles (onglet "Config Utilisateurs")
         "label": "Gestion Utilisateurs et Rôles",
         "permissions": {
+            "page:view_config_users": FRIENDLY_PERMISSION_NAMES.get("page:view_config_users"),
             "user:view_list": FRIENDLY_PERMISSION_NAMES.get("user:view_list"),
             "user:create": FRIENDLY_PERMISSION_NAMES.get("user:create"),
             "user:edit_details": FRIENDLY_PERMISSION_NAMES.get("user:edit_details"),
