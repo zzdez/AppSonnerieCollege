@@ -69,6 +69,9 @@
       "description": "Peut modifier la plupart des configurations, mais ne gère pas les utilisateurs.",
       "permissions": {
         "control": {
+          "view_status": true,
+          "view_calendar": true,
+          "view_day_details": true,
           "alert_end": false,
           "alert_stop": false,
           "alert_trigger_any": false,
@@ -131,6 +134,9 @@
       "description": "Accès en lecture seule à la plupart des informations.",
       "permissions": {
         "control": {
+          "view_status": true,
+          "view_calendar": true,
+          "view_day_details": true,
           "alert_end": false,
           "alert_stop": false,
           "alert_trigger_any": false,
@@ -159,7 +165,7 @@
         "page:view_config_exceptions": true,
         "page:view_config_general": true,
         "page:view_config_sounds": true,
-        "page:view_config_users": true,
+        "page:view_config_users": false,
         "page:view_config_weekly": true,
         "page:view_control": true,
         "sound": {
