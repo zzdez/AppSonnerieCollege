@@ -101,9 +101,7 @@ def user_has_permission(user, permission_name: str) -> bool:
     if not isinstance(user_permissions, dict):
         logger.error(f"Attribut 'permissions' invalide pour l'utilisateur '{user.id}'. Attendu: dict, Reçu: {type(user_permissions)}")
         return False # Traiter comme si aucune permission pour la sécurité
-    # --- Ligne de log ajoutée ---
-    logger.info(f"UserPermCheck: User '{user.id}' (Role '{getattr(user, 'role', 'N/A')}') checking '{permission_name}'. Permissions Obj: {user_permissions}")
-    # --- Fin de la ligne de log ajoutée ---
+
     # Vérification de la permission spéciale 'admin:has_all_permissions'
     if user_permissions.get("admin:has_all_permissions") is True:
         logger.debug(f"Permission accordée à '{user.id}' via 'admin:has_all_permissions' pour '{permission_name}'.")

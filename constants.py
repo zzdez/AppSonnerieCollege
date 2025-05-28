@@ -187,6 +187,10 @@ FRIENDLY_PERMISSION_NAMES = {
     "page:view_config_sounds": "Voir la page de configuration des Sonneries",
     "page:view_config_users": "Voir la page de Gestion des Utilisateurs",
 
+    "control:view_status": "Voir le statut détaillé du système",
+    "control:view_calendar": "Voir le calendrier scolaire et les types de jours",
+    "control:view_day_details": "Voir les détails d'une journée spécifique du calendrier",
+
     "control:scheduler_activate": "Activer le planning des sonneries",
     "control:scheduler_deactivate": "Désactiver le planning des sonneries",
     "control:config_reload": "Recharger la configuration du serveur",
@@ -239,6 +243,9 @@ PERMISSIONS_MODEL = {
             "label": FRIENDLY_PERMISSION_NAMES.get("page:view_control")
         },
         "functional_permissions": {
+            "control:view_status": FRIENDLY_PERMISSION_NAMES.get("control:view_status"),
+            "control:view_calendar": FRIENDLY_PERMISSION_NAMES.get("control:view_calendar"),
+            "control:view_day_details": FRIENDLY_PERMISSION_NAMES.get("control:view_day_details"),
             "control:scheduler_activate": FRIENDLY_PERMISSION_NAMES.get("control:scheduler_activate"),
             "control:scheduler_deactivate": FRIENDLY_PERMISSION_NAMES.get("control:scheduler_deactivate"),
             "control:config_reload": FRIENDLY_PERMISSION_NAMES.get("control:config_reload"),
