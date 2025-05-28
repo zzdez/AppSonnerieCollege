@@ -70,14 +70,17 @@
       "permissions": {
         "page:view_control": true,
         "control": {
-          "alert_end": false,
-          "alert_stop": false,
-          "alert_trigger_any": false,
-          "alert_trigger_attentat": false,
-          "alert_trigger_ppms": false,
-          "config_reload": false,
-          "scheduler_activate": false,
-          "scheduler_deactivate": false
+          "alert_end": true,
+          "alert_stop": true,
+          "alert_trigger_any": true,
+          "alert_trigger_attentat": true,
+          "alert_trigger_ppms": true,
+          "config_reload": true,
+          "scheduler_activate": true,
+          "scheduler_deactivate": true,
+          "view_calendar": true,
+          "view_day_details": true,
+          "view_status": true
         },
         "page:view_config_day_types": true,
         "day_type": {
@@ -121,7 +124,9 @@
         "user_management": {
           "edit_role_permissions": false
         },
-        "page:view_config_weekly": false,
+
+        "page:view_config_weekly": true,
+
         "config_weekly": {
           "edit_planning": false
         }
@@ -130,6 +135,7 @@
     "Lecteur": {
       "description": "Accès en lecture seule à la plupart des informations.",
       "permissions": {
+        "page:view_control": true,
         "control": {
           "view_status": true,
           "view_calendar": true,
@@ -141,23 +147,30 @@
           "alert_trigger_ppms": false,
           "config_reload": true,
           "scheduler_activate": false,
-          "scheduler_deactivate": false
+          "scheduler_deactivate": false,
+          "view_calendar": true,
+          "view_day_details": true,
+          "view_status": true
         },
+        "page:view_config_day_types": false,
         "day_type": {
           "create": false,
           "delete": false,
           "edit_periods": false,
           "rename": false
         },
+        "page:view_config_exceptions": false,
         "exception": {
           "create": false,
           "delete": false,
           "edit": false
         },
+        "page:view_config_general": false,
         "config_general": {
           "edit_alert_sounds": false,
           "edit_settings": false
         },
+
         "page:view_config_day_types": true,
         "page:view_config_exceptions": true,
         "page:view_config_general": true,
@@ -165,17 +178,20 @@
         "page:view_config_users": false,
         "page:view_config_weekly": true,
         "page:view_control": true,
+
         "sound": {
           "delete_file": false,
           "disassociate": false,
           "edit_display_name": false,
+          "preview": false,
           "scan_folder": false,
-          "upload": false,
-          "preview": true
+          "upload": false
+
         },
         "admin": {
           "has_all_permissions": false
         },
+        "page:view_config_users": false,
         "user": {
           "create": false,
           "delete": false,
@@ -187,6 +203,7 @@
         "user_management": {
           "edit_role_permissions": false
         },
+        "page:view_config_weekly": false,
         "config_weekly": {
           "edit_planning": false
         }

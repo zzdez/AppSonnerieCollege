@@ -438,7 +438,6 @@
                         checkbox.dataset.pageViewKey = pageViewKey;
                         checkbox.dataset.isFunctional = 'true';
                     }
-
                     checkbox.checked = checkPerm(currentRolePermissions, permKey);
                     if (isAdministrateur) {
                         checkbox.checked = true;
@@ -448,7 +447,6 @@
                     const label = document.createElement('label');
                     label.htmlFor = checkbox.id;
                     label.textContent = permLabel || permKey;
-
                     permDiv.appendChild(checkbox);
                     permDiv.appendChild(label);
                     return permDiv;
@@ -552,10 +550,9 @@
                         cb.addEventListener('change', function() {
                             const pageViewKeyForThisCb = this.dataset.permString;
                             allCheckboxes.forEach(funcCb => {
-                                if (funcCb.dataset.sectionKey === currentSectionKey &&
+                                if (funcCb.dataset.sectionKey === currentSectionKey && 
                                     funcCb.dataset.isFunctional === 'true' &&
                                     funcCb.dataset.pageViewKey === pageViewKeyForThisCb) {
-
                                     if (!this.checked) { // Page view is unchecked
                                         funcCb.checked = false;
                                         funcCb.disabled = true;
