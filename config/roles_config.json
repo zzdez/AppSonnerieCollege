@@ -124,11 +124,9 @@
         "user_management": {
           "edit_role_permissions": false
         },
-
         "page:view_config_weekly": true,
-
         "config_weekly": {
-          "edit_planning": false
+          "edit_planning": true
         }
       }
     },
@@ -137,9 +135,6 @@
       "permissions": {
         "page:view_control": true,
         "control": {
-          "view_status": true,
-          "view_calendar": true,
-          "view_day_details": true,
           "alert_end": false,
           "alert_stop": false,
           "alert_trigger_any": false,
@@ -170,15 +165,7 @@
           "edit_alert_sounds": false,
           "edit_settings": false
         },
-
-        "page:view_config_day_types": true,
-        "page:view_config_exceptions": true,
-        "page:view_config_general": true,
-        "page:view_config_sounds": true,
-        "page:view_config_users": false,
-        "page:view_config_weekly": true,
-        "page:view_control": true,
-
+        "page:view_config_sounds": false,
         "sound": {
           "delete_file": false,
           "disassociate": false,
@@ -186,7 +173,6 @@
           "preview": false,
           "scan_folder": false,
           "upload": false
-
         },
         "admin": {
           "has_all_permissions": false
