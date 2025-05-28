@@ -30,14 +30,14 @@
         <h2>Ajouter une Nouvelle Sonnerie</h2>
         <div class="form-group" style="max-width: 500px;">
             <label for="sound-file-input">Sélectionner un fichier MP3 à uploader :</label>
-            <input type="file" id="sound-file-input" name="soundfile" accept=".mp3" multiple>
+            <input type="file" id="sound-file-input" name="soundfile" accept=".mp3" multiple {% if not user_has_permission('sound:upload') %}disabled{% endif %}>
         </div>
-        <button id="upload-btn" onclick="uploadSound()">Uploader et Ajouter cette Sonnerie</button>
+        <button id="upload-btn" onclick="uploadSound()" {% if not user_has_permission('sound:upload') %}disabled{% endif %}>Uploader et Ajouter cette Sonnerie</button>
         <hr style="margin: 20px 0;">
 
         <h2>Sonneries Configurées</h2>
         <div class="scan-button-container">
-            <button id="scan-mp3-btn" onclick="scanMp3Directory()">Scanner le Dossier MP3 et Mettre à Jour la Liste</button>
+            <button id="scan-mp3-btn" onclick="scanMp3Directory()" {% if not user_has_permission('sound:scan_folder') %}disabled{% endif %}>Scanner le Dossier MP3 et Mettre à Jour la Liste</button>
         </div>
         <table id="sounds-table">
             <thead>
@@ -60,10 +60,11 @@
 <script>
     // Permissions (injectées par Jinja2)
     const canUploadSound = {{ user_has_permission('sound:upload') | tojson }};
-    const canScanDirectory = {{ user_has_permission('sound:scan_folder') | tojson }}; // Corrigé: scan_folder au lieu de scan_directory
+    const canScanDirectory = {{ user_has_permission('sound:scan_folder') | tojson }};
     const canEditDisplayName = {{ user_has_permission('sound:edit_display_name') | tojson }};
     const canDisassociateSound = {{ user_has_permission('sound:disassociate') | tojson }};
-    const canDeletePhysicalFile = {{ user_has_permission('sound:delete_file') | tojson }}; // Corrigé: delete_file au lieu de delete_physical_file
+    const canDeletePhysicalFile = {{ user_has_permission('sound:delete_file') | tojson }};
+    const canPreviewSound = {{ user_has_permission('sound:preview') | tojson }};
 
     // --------------------------------------------------
     // 1. Variables Globales
@@ -88,6 +89,10 @@
     }
 
     function previewSoundFile(fileName, buttonElement) {
+        if (!canPreviewSound) { // Client-side check
+            showSoundsFeedback("Vous n'avez pas la permission de pré-écouter les sonneries.", 'error');
+            return;
+        }
         if (!globalAudioPlayer) {
             globalAudioPlayer = document.getElementById('preview-audio-player');
             if(!globalAudioPlayer) { showSoundsFeedback("Erreur: Lecteur audio non trouvé.", 'error'); return; }
@@ -194,6 +199,7 @@
             listenButton.classList.add('listen-btn', 'btn-small');
             listenButton.title = 'Écouter la sonnerie';
             listenButton.onclick = (event) => previewSoundFile(fileName, event.currentTarget);
+            listenButton.disabled = !canPreviewSound; // Disable button if no permission
             cellListen.appendChild(listenButton);
         });
     }
@@ -281,7 +287,7 @@
     }
 
     function scanMp3Directory() {
-        if (!canScanDirectory) { // Utilisation de la variable JS corrigée
+        if (!canScanDirectory) {
             showSoundsFeedback("Vous n'avez pas la permission de scanner le dossier MP3.", 'error');
             return;
         }
@@ -313,7 +319,6 @@
 
         const displayNameInput = row.querySelector('.display-name-input');
         const newDisplayName = displayNameInput.value.trim();
-        // const displayNameSpan = row.querySelector('.display-name-text'); // On le mettra à jour
 
         if (!newDisplayName) {
             showSoundsFeedback("Le nom convivial ne peut pas être vide.", 'error');
@@ -338,9 +343,7 @@
         .then(({ ok, status, data }) => {
             if (ok) {
                 showSoundsFeedback(data.message || "Nom convivial mis à jour.", 'success');
-                // Mettre à jour le dataset de la ligne pour la prochaine édition
                 row.dataset.displayName = newDisplayName;
-                // Annuler le mode édition (ce qui mettra à jour le span via cancelEditDisplayName)
                 cancelEditDisplayName(row.querySelector('.save-cancel-controls .cancel-edit-btn'));
 
                 if (confirm("Nom de sonnerie mis à jour. Voulez-vous recharger la configuration serveur ?")) {
@@ -368,13 +371,12 @@ function disassociateSound(fileName, displayName) {
     }
     console.log(`Désassociation seule pour: ${fileName}`);
     showSoundsFeedback(`Désassociation de "${displayName}" en cours...`, 'info', 0);
-    // Appel à la NOUVELLE ROUTE pour désassocier seulement
     fetch(`/api/config/sounds/${encodeURIComponent(fileName)}/dissociate_only`, { method: 'DELETE' })
     .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
     .then(({ ok, status, data }) => {
         if (ok) {
             showSoundsFeedback(data.message || "Association supprimée. Le fichier est conservé.", 'success');
-            loadConfiguredSounds(); // Recharger la liste des sonneries
+            loadConfiguredSounds();
              if (confirm("Association de sonnerie supprimée. Voulez-vous recharger la configuration serveur ?")) {
                 fetch('/api/config/reload', { method: 'POST' })
                     .then(r => r.json()).then(d => showSoundsFeedback(d.message || "Rechargement demandé.", r.ok ? 'info' : 'error', 5000));
@@ -388,7 +390,7 @@ function disassociateSound(fileName, displayName) {
 }
 
     function confirmAndDeletePhysicalSound(fileName, displayName) {
-        if (!canDeletePhysicalFile) { // Utilisation de la variable JS corrigée
+        if (!canDeletePhysicalFile) {
             showSoundsFeedback("Vous n'avez pas la permission de supprimer ce fichier.", 'error');
             return;
         }
@@ -431,7 +433,6 @@ function disassociateSound(fileName, displayName) {
         let totalFiles = files.length;
         let anyUploadSucceeded = false;
 
-        // Désactiver le bouton d'upload pour éviter les clics multiples
         const uploadButton = document.getElementById('upload-btn');
         if (uploadButton) uploadButton.disabled = true;
 
@@ -455,7 +456,7 @@ function disassociateSound(fileName, displayName) {
             formData.append('soundfile', file);
 
             console.log(`Upload de: ${file.name} (${i + 1}/${totalFiles})`);
-            showSoundsFeedback(`Upload de "${file.name}" (${i + 1}/${totalFiles}) en cours...`, 'info', 0); // Message qui sera écrasé ou timeout
+            showSoundsFeedback(`Upload de "${file.name}" (${i + 1}/${totalFiles}) en cours...`, 'info', 0);
 
             try {
                 const response = await fetch('/api/config/sounds/upload', {
@@ -477,17 +478,14 @@ function disassociateSound(fileName, displayName) {
             }
         }
 
-        // Réactiver le bouton d'upload
         if (uploadButton) uploadButton.disabled = false;
-        fileInput.value = ''; // Réinitialiser le champ de fichier
+        fileInput.value = '';
 
         showSoundsFeedback(`Upload terminé. ${successfulUploads}/${totalFiles} fichier(s) uploadé(s) avec succès.`, 'info', 5000);
 
-        // Recharger la liste des sonneries pour refléter les changements
         loadConfiguredSounds();
 
         if (anyUploadSucceeded) {
-            // Proposer de recharger la configuration serveur une seule fois
             if (confirm("Au moins une sonnerie a été uploadée et ajoutée. Voulez-vous recharger la configuration serveur pour appliquer les changements ?")) {
                 fetch('/api/config/reload', { method: 'POST' })
                     .then(r => r.json())
@@ -504,6 +502,15 @@ function disassociateSound(fileName, displayName) {
         console.log("Initialisation page config sonneries...");
         globalAudioPlayer = document.getElementById('preview-audio-player');
         loadConfiguredSounds();
+
+        // Appliquer les permissions aux boutons statiques au chargement
+        const uploadBtn = document.getElementById('upload-btn');
+        if (uploadBtn && !canUploadSound) uploadBtn.disabled = true;
+        const soundFileInput = document.getElementById('sound-file-input');
+        if (soundFileInput && !canUploadSound) soundFileInput.disabled = true;
+
+        const scanMp3Btn = document.getElementById('scan-mp3-btn');
+        if (scanMp3Btn && !canScanDirectory) scanMp3Btn.disabled = true; // Utilisation de canScanDirectory corrigé
     }
 
     document.addEventListener('DOMContentLoaded', initPage);

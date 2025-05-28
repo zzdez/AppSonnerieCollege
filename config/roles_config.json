@@ -54,6 +54,7 @@
           "edit_display_name": true,
           "disassociate": true,
           "delete_physical_file": true
+          "preview": true
         },
         "user_management": {
           "view_users": true,
@@ -67,112 +68,124 @@
     "Collaborateur": {
       "description": "Peut modifier la plupart des configurations, mais ne gère pas les utilisateurs.",
       "permissions": {
-        "page:view_control": true,
-        "page:view_config_general": true,
-        "page:view_config_weekly": true,
-        "page:view_config_day_types": true,
-        "page:view_config_exceptions": true,
-        "page:view_config_sounds": true,
-        "page:view_config_users": false,
         "control": {
-          "view_status": true,
-          "view_calendar": true,
-          "view_day_details": true,
-          "activate_planning": true,
-          "deactivate_planning": true,
-          "trigger_ppms_alert": true,
-          "trigger_attentat_alert": true,
-          "stop_alert": true,
-          "end_alert": true,
-          "reload_config": true
-        },
-        "config_general": {
-          "view": true,
-          "edit_holiday_settings": true,
-          "edit_alert_sounds": true,
-          "edit_audio_device": true
-        },
-        "config_weekly": {
-          "view": true,
-          "edit_planning": true
+          "alert_end": false,
+          "alert_stop": false,
+          "alert_trigger_any": false,
+          "alert_trigger_attentat": false,
+          "alert_trigger_ppms": false,
+          "config_reload": false,
+          "scheduler_activate": false,
+          "scheduler_deactivate": false
         },
         "day_type": {
-          "view_list": true,
-          "view_details": true,
           "create": true,
-          "rename": true,
           "delete": true,
-          "edit_periods": true
+          "edit_periods": true,
+          "rename": true
         },
         "exception": {
-          "view": true,
           "create": true,
-          "edit": true,
-          "delete": true
+          "delete": true,
+          "edit": true
         },
+        "config_general": {
+          "edit_alert_sounds": true,
+          "edit_settings": false
+        },
+        "page:view_config_day_types": true,
+        "page:view_config_exceptions": true,
+        "page:view_config_general": true,
+        "page:view_config_sounds": true,
+        "page:view_config_users": false,
+        "page:view_config_weekly": true,
+        "page:view_control": true,
         "sound": {
-          "view": true,
-          "upload": true,
-          "scan_directory": true,
-          "edit_display_name": true,
+          "delete_file": false,
           "disassociate": true,
-          "delete_physical_file": false
+          "edit_display_name": true,
+          "scan_folder": false,
+          "upload": true
+          "preview": true
+        },
+        "admin": {
+          "has_all_permissions": false
+        },
+        "user": {
+          "create": false,
+          "delete": false,
+          "edit_details": false,
+          "edit_password": false,
+          "edit_role": false,
+          "view_list": false
+        },
+        "user_management": {
+          "edit_role_permissions": false
+        },
+        "config_weekly": {
+          "edit_planning": true
         }
       }
     },
     "Lecteur": {
       "description": "Accès en lecture seule à la plupart des informations.",
       "permissions": {
-        "page:view_control": true,
-        "page:view_config_general": true,
-        "page:view_config_weekly": true,
-        "page:view_config_day_types": true,
-        "page:view_config_exceptions": true,
-        "page:view_config_sounds": true,
-        "page:view_config_users": false,
         "control": {
-          "view_status": true,
-          "view_calendar": true,
-          "view_day_details": true,
-          "activate_planning": false,
-          "deactivate_planning": false,
-          "trigger_ppms_alert": false,
-          "trigger_attentat_alert": false,
-          "stop_alert": false,
-          "end_alert": false,
-          "reload_config": false
-        },
-        "config_general": {
-          "view": true,
-          "edit_holiday_settings": false,
-          "edit_alert_sounds": false,
-          "edit_audio_device": false
-        },
-        "config_weekly": {
-          "view": true,
-          "edit_planning": false
+          "alert_end": false,
+          "alert_stop": false,
+          "alert_trigger_any": false,
+          "alert_trigger_attentat": false,
+          "alert_trigger_ppms": false,
+          "config_reload": true,
+          "scheduler_activate": false,
+          "scheduler_deactivate": false
         },
         "day_type": {
-          "view_list": true,
-          "view_details": true,
           "create": false,
-          "rename": false,
           "delete": false,
-          "edit_periods": false
+          "edit_periods": false,
+          "rename": false
         },
         "exception": {
-          "view": true,
           "create": false,
-          "edit": false,
-          "delete": false
+          "delete": false,
+          "edit": false
         },
+        "config_general": {
+          "edit_alert_sounds": false,
+          "edit_settings": false
+        },
+        "page:view_config_day_types": true,
+        "page:view_config_exceptions": true,
+        "page:view_config_general": true,
+        "page:view_config_sounds": true,
+        "page:view_config_users": true,
+        "page:view_config_weekly": true,
+        "page:view_control": true,
         "sound": {
-          "view": true,
-          "upload": false,
-          "scan_directory": false,
-          "edit_display_name": false,
+          "delete_file": false,
           "disassociate": false,
-          "delete_physical_file": false
+          "edit_display_name": false,
+          "scan_folder": false,
+          "upload": false
+          "preview": true
+        },
+        "admin": {
+          "has_all_permissions": false
+        },
+        "user": {
+          "create": false,
+          "delete": false,
+          "edit_details": false,
+          "edit_password": false,
+          "edit_role": false,
+          "view_list": false
+        },
+        "user_management": {
+          "edit_role_permissions": false
+        },
+        "config_weekly": {
+          "edit_planning": false
         }
       }
     }

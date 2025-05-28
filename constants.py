@@ -157,6 +157,7 @@ AVAILABLE_PERMISSIONS = [
     "sound:edit_display_name",
     "sound:disassociate",
     "sound:delete_file",
+    "sound:preview",
 
     # Permissions pour la Gestion des Utilisateurs (config_users.html)
     # Note: page:view_config_users contrôle l'accès à la page elle-même.
@@ -214,6 +215,7 @@ FRIENDLY_PERMISSION_NAMES = {
     "sound:edit_display_name": "Modifier le nom d'affichage des sonneries",
     "sound:disassociate": "Désassocier une sonnerie (garder le fichier)",
     "sound:delete_file": "Supprimer les fichiers son du disque et leur association",
+    "sound:preview": "Pré-écouter les sonneries",
 
     "user:view_list": "Voir la liste des utilisateurs",
     "user:create": "Créer de nouveaux utilisateurs",
@@ -294,6 +296,7 @@ PERMISSIONS_MODEL = {
             "sound:edit_display_name": FRIENDLY_PERMISSION_NAMES.get("sound:edit_display_name"),
             "sound:disassociate": FRIENDLY_PERMISSION_NAMES.get("sound:disassociate"),
             "sound:delete_file": FRIENDLY_PERMISSION_NAMES.get("sound:delete_file"),
+            "sound:preview": FRIENDLY_PERMISSION_NAMES.get("sound:preview")
         }
     },
     "user_management": { # Gestion des Utilisateurs et Rôles (onglet "Config Utilisateurs")

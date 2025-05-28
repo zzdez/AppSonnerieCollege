@@ -4,8 +4,8 @@
   "api_holidays_url": "https://date.nager.at/api/v3/PublicHolidays",
   "country_code_holidays": "FR",
   "vacances_ics_base_url_manuel": null,
-  "sonnerie_ppms": null,
+  "sonnerie_ppms": "pacman_sms.mp3",
   "sonnerie_attentat": "tes-137215.mp3",
-  "sonnerie_fin_alerte": null,
+  "sonnerie_fin_alerte": "ringtone-283510.mp3",
   "nom_peripherique_audio_sonneries": "Haut-parleurs (USB Audio Device)"
 }

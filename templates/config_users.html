@@ -27,7 +27,7 @@
 
     <div class="config-section">
         <h2>Liste des Utilisateurs</h2>
-        <button id="show-add-user-form-btn" style="margin-bottom: 10px;">Ajouter un Utilisateur</button>
+        <button id="show-add-user-form-btn" style="margin-bottom: 10px;" {% if not user_has_permission('user:create') %}disabled{% endif %}>Ajouter un Utilisateur</button>
         <table id="users-table" class="config-table">
             <thead>
                 <tr>
@@ -38,7 +38,6 @@
                 </tr>
             </thead>
             <tbody id="users-table-body">
-                <!-- Les lignes d'utilisateurs seront injectées ici par JavaScript -->
                 <tr><td colspan="4">Chargement des utilisateurs...</td></tr>
             </tbody>
         </table>
@@ -46,7 +45,7 @@
     </div>
 
     <!-- Nouvelle Section pour la Configuration des Rôles -->
-    <div class="config-section">
+    <div class="config-section" {% if not user_has_permission('user_management:edit_role_permissions') %}style="display:none;"{% endif %}>
         <h2>Configuration des Rôles</h2>
         <div class="form-group">
             <label for="role-selector">Choisir un rôle à configurer:</label>
@@ -55,7 +54,6 @@
             </select>
         </div>
         <div id="role-permissions-tree" class="permissions-checkbox-container" style="margin-top: 10px; margin-bottom: 10px; border: 1px solid #ccc; padding: 10px;">
-            <!-- L'arborescence des permissions sera injectée ici par JavaScript -->
             <p>Sélectionnez un rôle pour voir et modifier ses permissions.</p>
         </div>
         <button id="save-role-permissions-btn">Sauvegarder les Permissions du Rôle</button>
@@ -85,12 +83,8 @@
             <div class="form-group">
                 <label for="add-role">Rôle:</label>
                 <select id="add-role" name="role">
-                    <option value="lecteur">Lecteur</option>
-                    <option value="collaborateur">Collaborateur</option>
-                    <option value="administrateur">Administrateur</option>
                 </select>
             </div>
-            <!-- Le fieldset des permissions spécifiques a été supprimé -->
             <button type="submit">Enregistrer le Nouvel Utilisateur</button>
             <button type="button" id="cancel-add-user-btn">Annuler</button>
         </form>
@@ -120,60 +114,42 @@
             <div class="form-group">
                 <label for="edit-role">Rôle:</label>
                 <select id="edit-role" name="role">
-                    <option value="lecteur">Lecteur</option>
-                    <option value="collaborateur">Collaborateur</option>
-                    <option value="administrateur">Administrateur</option>
                 </select>
             </div>
-            <!-- Le fieldset des permissions spécifiques a été supprimé -->
             <button type="submit">Sauvegarder les Modifications</button>
             <button type="button" id="cancel-edit-user-btn">Annuler</button>
         </form>
     </div>
 
     <script>
-        // Inject Flask data into JavaScript global variables
-        // var globalAvailablePermissions = {{ available_permissions | tojson }}; // Remplacé par permissionsModelData
-        // var globalDefaultRolePermissions = {{ default_role_permissions | tojson }}; // Remplacé par rolesConfigData
-        // var globalFriendlyPermissionNames = {{ friendly_permission_names | tojson }}; // Remplacé par permissionsModelData
-
-        // Données pour la nouvelle section de configuration des rôles
+        // Données globales pour la configuration des rôles et le modèle de permissions
         let rolesConfigData = {};
         let permissionsModelData = {};
-
     </script>
     <script>
         const MIN_PASSWORD_LENGTH = 8;
-        // const VALID_ROLES = ["lecteur", "collaborateur", "administrateur"]; // Sera populé depuis rolesConfigData
 
         document.addEventListener('DOMContentLoaded', function() {
-            // --- Elements DOM ---
+            // --- Elements DOM --- 
             const usersTableBody = document.getElementById('users-table-body');
             const feedbackDiv = document.getElementById('users-feedback');
             const rolesConfigFeedbackDiv = document.getElementById('roles-config-feedback');
-
 
             const showAddUserFormBtn = document.getElementById('show-add-user-form-btn');
             const addUserFormContainer = document.getElementById('add-user-form-container');
             const addUserForm = document.getElementById('add-user-form');
             const cancelAddUserBtn = document.getElementById('cancel-add-user-btn');
-            const addRoleSelect = document.getElementById('add-role'); // Pour les formulaires utilisateurs
+            const addRoleSelect = document.getElementById('add-role');
 
             const editUserFormContainer = document.getElementById('edit-user-form-container');
             const editUserForm = document.getElementById('edit-user-form');
             const cancelEditUserBtn = document.getElementById('cancel-edit-user-btn');
             const editOriginalUsernameField = document.getElementById('edit-original-username');
-            const editRoleSelect = document.getElementById('edit-role'); // Pour les formulaires utilisateurs
+            const editRoleSelect = document.getElementById('edit-role');
 
-            // Éléments pour la configuration des rôles
             const roleSelector = document.getElementById('role-selector');
             const rolePermissionsTreeDiv = document.getElementById('role-permissions-tree');
             const saveRolePermissionsBtn = document.getElementById('save-role-permissions-btn');
-
-
-            // Initial render of permission checkboxes (empty if globals not set yet)
-            // renderPermissionsCheckboxes('add-permissions-container', false); // Supprimé
-            // renderPermissionsCheckboxes('edit-permissions-container', true); // Supprimé
 
             // --- Utility: Feedback ---
             function showFeedback(element, message, type = 'info', duration = 4000) {
@@ -198,404 +174,8 @@
             // --- Utility: Reset Forms ---
             function resetAndHideForms() {
                 addUserForm.reset();
-                // renderPermissionsCheckboxes('add-permissions-container', false); // Supprimé
                 addUserFormContainer.style.display = 'none';
-
                 editUserForm.reset();
-                // renderPermissionsCheckboxes('edit-permissions-container', true); // Supprimé
-                editUserFormContainer.style.display = 'none';
-                editOriginalUsernameField.value = '';
-            }
-
-            // --- Load Users ---
-            async function loadUsers() {
-                resetAndHideForms();
-                usersTableBody.innerHTML = '<tr><td colspan="4">Chargement des utilisateurs...</td></tr>';
-                try {
-                    const response = await fetch('/api/users');
-                    if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({}));
-                        throw new Error(errorData.error || `Erreur HTTP ${response.status}`);
-                    }
-                    const users = await response.json();
-                    populateUsersTable(users);
-                } catch (error) {
-                    console.error("Erreur chargement utilisateurs:", error);
-                    usersTableBody.innerHTML = `<tr><td colspan="4" style="color:red;">Erreur: ${error.message}</td></tr>`;
-                    showUsersFeedback(`Erreur chargement: ${error.message}`, 'error');
-                }
-            }
-
-            function populateUsersTable(users) {
-                usersTableBody.innerHTML = '';
-                if (!users || users.length === 0) {
-                    usersTableBody.innerHTML = '<tr><td colspan="4">Aucun utilisateur configuré.</td></tr>';
-                    return;
-                }
-                users.forEach(user => {
-                    const row = usersTableBody.insertRow();
-                    row.dataset.username = user.username;
-                    row.insertCell().textContent = user.username;
-                    row.insertCell().textContent = user.full_name;
-                    row.insertCell().textContent = user.role; // Le rôle est toujours affiché
-                    const actionsCell = row.insertCell();
-                    const editBtn = document.createElement('button');
-                    editBtn.textContent = 'Modifier';
-                    editBtn.classList.add('btn-small');
-                    // Les permissions de l'utilisateur ne sont plus passées ici, car elles dépendent du rôle
-                    editBtn.onclick = () => showEditForm(user.username, user.full_name, user.role);
-                    actionsCell.appendChild(editBtn);
-                    const deleteBtn = document.createElement('button');
-                    deleteBtn.textContent = 'Supprimer';
-                    deleteBtn.classList.add('btn-small', 'btn-danger');
-                    deleteBtn.onclick = () => deleteUser(user.username);
-                    actionsCell.appendChild(deleteBtn);
-                });
-            }
-
-            // --- Add User Form Logic ---
-            showAddUserFormBtn.addEventListener('click', () => {
-                resetAndHideForms();
-                // handleRoleChange(addRoleSelect.value, 'add'); // Supprimé
-                addUserFormContainer.style.display = 'block';
-                document.getElementById('add-username').focus();
-            });
-            // addRoleSelect.addEventListener('change', (event) => handleRoleChange(event.target.value, 'add')); // Supprimé
-            cancelAddUserBtn.addEventListener('click', resetAndHideForms);
-
-            addUserForm.addEventListener('submit', async function(event) {
-                event.preventDefault();
-                const username = document.getElementById('add-username').value.trim();
-                const fullName = document.getElementById('add-full-name').value.trim();
-                const password = document.getElementById('add-password').value;
-                const confirmPassword = document.getElementById('add-confirm-password').value;
-                const role = addRoleSelect.value;
-                // const selectedPermissions = getSelectedPermissions('add-permissions-container'); // Supprimé
-
-                if (!username || !fullName || !password || !confirmPassword || !role) {
-                    showUsersFeedback("Tous les champs sont requis.", 'error'); return;
-                }
-                if (password !== confirmPassword) {
-                    showUsersFeedback("Les mots de passe ne correspondent pas.", 'error'); return;
-                }
-                if (password.length < MIN_PASSWORD_LENGTH) {
-                    showUsersFeedback(`Le mot de passe doit contenir au moins ${MIN_PASSWORD_LENGTH} caractères.`, 'error'); return;
-                }
-
-                try {
-                    const response = await fetch('/api/users', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        // 'permissions' n'est plus envoyé ici
-                        body: JSON.stringify({ username, full_name: fullName, password, role })
-                    });
-                    const data = await response.json();
-                    if (!response.ok) throw new Error(data.error || `Erreur HTTP ${response.status}`);
-                    showUsersFeedback(data.message || "Utilisateur ajouté avec succès!", 'success');
-                    loadUsers();
-                } catch (error) {
-                    console.error("Erreur ajout utilisateur:", error);
-                    showUsersFeedback(`Erreur ajout: ${error.message}`, 'error');
-                }
-            });
-
-            // --- Edit User Form Logic ---
-            function showEditForm(username, fullName, role) { // userPermissions retiré des paramètres
-                resetAndHideForms();
-                editOriginalUsernameField.value = username;
-                document.getElementById('edit-username').value = username;
-                document.getElementById('edit-full-name').value = fullName;
-                editRoleSelect.value = role;
-
-                // La logique de cochage des permissions individuelles est supprimée
-                // handleRoleChange(role, 'edit', userPermissions, true); // Supprimé
-
-                editUserFormContainer.style.display = 'block';
-                document.getElementById('edit-full-name').focus();
-            }
-            // editRoleSelect.addEventListener('change', (event) => { // Supprimé
-            //      handleRoleChange(event.target.value, 'edit', null, false);
-            // });
-            cancelEditUserBtn.addEventListener('click', resetAndHideForms);
-
-            editUserForm.addEventListener('submit', async function(event) {
-                event.preventDefault();
-                const originalUsername = editOriginalUsernameField.value;
-                const fullName = document.getElementById('edit-full-name').value.trim();
-                const password = document.getElementById('edit-password').value;
-                const confirmPassword = document.getElementById('edit-confirm-password').value;
-                const role = editRoleSelect.value;
-                // const selectedPermissions = getSelectedPermissions('edit-permissions-container'); // Supprimé
-
-                if (!fullName || !role) {
-                    showUsersFeedback("Le nom complet et le rôle sont requis.", 'error'); return;
-                }
-                // 'permissions' n'est plus dans le payload
-                let payload = { full_name: fullName, role: role };
-                if (password) {
-                    if (password !== confirmPassword) {
-                        showUsersFeedback("Les nouveaux mots de passe ne correspondent pas.", 'error'); return;
-                    }
-                    if (password.length < MIN_PASSWORD_LENGTH) {
-                        showUsersFeedback(`Le nouveau mot de passe doit contenir au moins ${MIN_PASSWORD_LENGTH} caractères.`, 'error'); return;
-                    }
-                    payload.password = password;
-                }
-
-                try {
-                    const response = await fetch(`/api/users/${encodeURIComponent(originalUsername)}`, {
-                        method: 'PUT',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(payload)
-                    });
-                    const data = await response.json();
-                    if (!response.ok) throw new Error(data.error || `Erreur HTTP ${response.status}`);
-                    showUsersFeedback(data.message || "Utilisateur modifié avec succès!", 'success');
-                    loadUsers(); // Recharge aussi les utilisateurs, ce qui met à jour leurs rôles si changés
-                } catch (error) {
-                    console.error("Erreur modification utilisateur:", error);
-                    showUsersFeedback(`Erreur modification: ${error.message}`, 'error');
-                }
-            });
-
-            // --- Delete User Logic ---
-            async function deleteUser(username) {
-                if (!confirm(`Êtes-vous sûr de vouloir supprimer l'utilisateur "${username}" ? Cette action est irréversible.`)) return;
-                try {
-                    const response = await fetch(`/api/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
-                    const data = await response.json();
-                    if (!response.ok) throw new Error(data.error || `Erreur HTTP ${response.status}`);
-                    showUsersFeedback(data.message || `Utilisateur "${username}" supprimé avec succès.`, 'success');
-                    loadUsers();
-                } catch (error) {
-                    console.error("Erreur suppression utilisateur:", error);
-                    showUsersFeedback(`Erreur suppression: ${error.message}`, 'error');
-                }
-            }
-
-            // --- Functions for Permission Checkboxes ---
-            // function renderPermissionsCheckboxes(containerId, isEditForm) { // Supprimé
-            // }
-
-            // function handleRoleChange(selectedRole, formType, userSpecificPermissions = null, isInitialEditLoad = false) { // Supprimé
-            // }
-
-            // function getSelectedPermissions(containerId) { // Supprimé
-            // }
-
-
-            // --- Nouvelle Logique pour la Configuration des Rôles ---
-            async function initializeRolesConfigUI() {
-                try {
-                    const response = await fetch('/api/roles_config');
-                    if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({}));
-                        throw new Error(errorData.error || `Erreur HTTP ${response.status} lors du chargement de la config des rôles.`);
-                    }
-                    const data = await response.json();
-                    rolesConfigData = data.roles_config;
-                    permissionsModelData = data.permissions_model;
-
-                    // Peupler le sélecteur de rôles
-                    roleSelector.innerHTML = ''; // Vider les options existantes
-                    if (rolesConfigData && rolesConfigData.roles) {
-                        Object.keys(rolesConfigData.roles).forEach(roleName => {
-                            const option = document.createElement('option');
-                            option.value = roleName;
-                            option.textContent = roleName;
-                            roleSelector.appendChild(option);
-
-                            // Mettre à jour également les sélecteurs de rôle dans les formulaires d'ajout/édition d'utilisateur
-                            // pour qu'ils soient cohérents avec les rôles configurés.
-                            // On ne le fait qu'une fois au chargement.
-                            if (addRoleSelect.options.length < Object.keys(rolesConfigData.roles).length) {
-                                const addOption = document.createElement('option');
-                                addOption.value = roleName.toLowerCase(); // Les formulaires utilisent des clés en minuscules
-                                addOption.textContent = roleName;
-                                addRoleSelect.appendChild(addOption);
-
-                                const editOption = document.createElement('option');
-                                editOption.value = roleName.toLowerCase();
-                                editOption.textContent = roleName;
-                                editRoleSelect.appendChild(editOption);
-                            }
-                        });
-                    }
-
-
-                    if (roleSelector.options.length > 0) {
-                        roleSelector.selectedIndex = 0; // Sélectionner le premier par défaut
-                        displayRolePermissions(roleSelector.value);
-                    } else {
-                        rolePermissionsTreeDiv.innerHTML = '<p>Aucun rôle disponible pour configuration.</p>';
-                        saveRolePermissionsBtn.disabled = true;
-                    }
-
-                } catch (error) {
-                    console.error("Erreur initialisation UI config rôles:", error);
-                    rolePermissionsTreeDiv.innerHTML = `<p style="color:red;">Erreur chargement configuration des rôles: ${error.message}</p>`;
-                    saveRolePermissionsBtn.disabled = true;
-                }
-
-                roleSelector.addEventListener('change', () => displayRolePermissions(roleSelector.value));
-                saveRolePermissionsBtn.addEventListener('click', saveRolePermissions);
-            }
-
-            function displayRolePermissions(selectedRoleName) {
-                rolePermissionsTreeDiv.innerHTML = ''; // Vider l'arbre
-                const roleData = rolesConfigData.roles[selectedRoleName];
-                const currentRolePermissions = roleData ? roleData.permissions : {};
-
-                const isAdministrateur = selectedRoleName === 'Administrateur';
-                saveRolePermissionsBtn.disabled = isAdministrateur;
-
-                if (!permissionsModelData || Object.keys(permissionsModelData).length === 0) {
-                    rolePermissionsTreeDiv.innerHTML = '<p>Modèle de permissions non chargé.</p>';
-                    return;
-                }
-
-                for (const sectionKey in permissionsModelData) {
-                    const section = permissionsModelData[sectionKey];
-                    const sectionDiv = document.createElement('div');
-                    sectionDiv.classList.add('permission-section');
-
-                    const sectionTitle = document.createElement('h4');
-                    sectionTitle.textContent = section.label || sectionKey;
-                    sectionDiv.appendChild(sectionTitle);
-
-                    for (const permKey in section.permissions) {
-                        const permLabelText = section.permissions[permKey];
-                        const permDiv = document.createElement('div');
-                        permDiv.classList.add('permission-item');
-
-                        const checkbox = document.createElement('input');
-                        checkbox.type = 'checkbox';
-                        checkbox.id = `role-perm-${permKey.replace(/:/g, '-')}`;
-                        checkbox.value = permKey; // ex: "page:view_control" ou "sound:upload"
-
-                        // Vérifier la permission
-                        if (permKey.includes(':')) { // Permission granulaire ou de page
-                            const [mainKey, subKey] = permKey.split(':', 2);
-                            if (mainKey === "page") { // page:view_control
-                                checkbox.checked = currentRolePermissions[permKey] === true;
-                            } else { // sound:upload
-                                checkbox.checked = (currentRolePermissions[mainKey] && currentRolePermissions[mainKey][subKey] === true);
-                            }
-                        } else { // Permission de premier niveau (ex: admin:has_all_permissions)
-                             checkbox.checked = currentRolePermissions[permKey] === true;
-                        }
-
-                        if (isAdministrateur) {
-                            checkbox.checked = true; // L'admin a tout coché
-                            checkbox.disabled = true;
-                        }
-
-                        const label = document.createElement('label');
-                        label.htmlFor = checkbox.id;
-                        label.textContent = permLabelText || permKey;
-
-                        permDiv.appendChild(checkbox);
-                        permDiv.appendChild(label);
-                        sectionDiv.appendChild(permDiv);
-                    }
-                    rolePermissionsTreeDiv.appendChild(sectionDiv);
-                }
-            }
-
-            async function saveRolePermissions() {
-                const selectedRoleName = roleSelector.value;
-                if (!selectedRoleName || selectedRoleName === 'Administrateur') {
-                    showRolesConfigFeedback("Sélectionnez un rôle modifiable (Lecteur ou Collaborateur).", 'warn');
-                    return;
-                }
-
-                const newPermissions = {};
-                const checkboxes = rolePermissionsTreeDiv.querySelectorAll('input[type="checkbox"]');
-
-                checkboxes.forEach(cb => {
-                    const permKey = cb.value;
-                    if (cb.checked) {
-                        if (permKey.includes(':')) {
-                            const [mainKey, subKey] = permKey.split(':', 2);
-                            if (mainKey === "page") { // page:view_control
-                                newPermissions[permKey] = true;
-                            } else { // sound:upload
-                                if (!newPermissions[mainKey]) {
-                                    newPermissions[mainKey] = {};
-                                }
-                                newPermissions[mainKey][subKey] = true;
-                            }
-                        } else { // admin:has_all_permissions (ne devrait pas être modifiable ici)
-                            newPermissions[permKey] = true;
-                        }
-                    } else { // Si non coché, s'assurer que la valeur est false ou absente
-                         if (permKey.includes(':')) {
-                            const [mainKey, subKey] = permKey.split(':', 2);
-                            if (mainKey === "page") {
-                                newPermissions[permKey] = false; // Explicitement false
-                            } else {
-                                if (!newPermissions[mainKey]) {
-                                    newPermissions[mainKey] = {};
-                                }
-                                newPermissions[mainKey][subKey] = false; // Explicitement false
-                            }
-                        } else {
-                            newPermissions[permKey] = false; // Explicitement false
-                        }
-                    }
-                });
-                // console.log("Permissions à sauvegarder pour", selectedRoleName, ":", JSON.stringify(newPermissions, null, 2));
-
-                try {
-                    const response = await fetch(`/api/roles_config/${encodeURIComponent(selectedRoleName)}`, {
-                        method: 'PUT',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(newPermissions)
-                    });
-                    const data = await response.json();
-                    if (!response.ok) {
-                        throw new Error(data.error || `Erreur HTTP ${response.status}`);
-                    }
-                    showRolesConfigFeedback(data.message || "Permissions du rôle sauvegardées avec succès!", 'success');
-                    // Mettre à jour rolesConfigData localement avec la réponse du serveur
-                    if (data.updated_permissions && rolesConfigData.roles[selectedRoleName]) {
-                         rolesConfigData.roles[selectedRoleName].permissions = data.updated_permissions;
-                         // Rafraîchir l'affichage pour refléter les données du serveur (au cas où)
-                         displayRolePermissions(selectedRoleName);
-                    }
-                } catch (error) {
-                    console.error("Erreur sauvegarde permissions rôle:", error);
-                    showRolesConfigFeedback(`Erreur sauvegarde: ${error.message}`, 'error');
-                }
-            }
-
-
-            // --- Initial Load ---
-            loadUsers(); // Fetches users and populates table
-            initializeRolesConfigUI(); // Fetches roles config and populates UI for roles
-        });
-    </script>
-
-</body>
-</html>
-                feedbackDiv.textContent = message;
-                feedbackDiv.className = 'feedback-message';
-                feedbackDiv.classList.add(type, 'show');
-                feedbackDiv.style.display = 'block';
-                setTimeout(() => {
-                    feedbackDiv.classList.remove('show');
-                    setTimeout(() => { if (!feedbackDiv.classList.contains('show')) feedbackDiv.style.display = 'none'; }, 500);
-                }, duration);
-            }
-
-            // --- Utility: Reset Forms ---
-            function resetAndHideForms() {
-                addUserForm.reset();
-                renderPermissionsCheckboxes('add-permissions-container', false); // Clear and re-render
-                addUserFormContainer.style.display = 'none';
-
-                editUserForm.reset();
-                renderPermissionsCheckboxes('edit-permissions-container', true); // Clear and re-render
                 editUserFormContainer.style.display = 'none';
                 editOriginalUsernameField.value = '';
             }
@@ -635,8 +215,13 @@
                     const editBtn = document.createElement('button');
                     editBtn.textContent = 'Modifier';
                     editBtn.classList.add('btn-small');
-                    editBtn.onclick = () => showEditForm(user.username, user.full_name, user.role, user.permissions || []);
+                    editBtn.onclick = () => showEditForm(user.username, user.full_name, user.role);
                     actionsCell.appendChild(editBtn);
+                    // Désactiver le bouton si l'utilisateur n'a pas la permission user:delete
+                    // Note: user_has_permission n'est pas directement dispo en JS pur sans injection spécifique
+                    // La protection principale est côté serveur. Ici, c'est pour l'UI.
+                    // Pour une version simple, on peut le laisser actif et le serveur refusera.
+                    // Ou injecter la permission user:delete pour current_user.
                     const deleteBtn = document.createElement('button');
                     deleteBtn.textContent = 'Supprimer';
                     deleteBtn.classList.add('btn-small', 'btn-danger');
@@ -647,12 +232,10 @@
 
             // --- Add User Form Logic ---
             showAddUserFormBtn.addEventListener('click', () => {
-                resetAndHideForms(); // This will also call renderPermissionsCheckboxes for add form
+                resetAndHideForms();
                 addUserFormContainer.style.display = 'block';
-                handleRoleChange(addRoleSelect.value, 'add');
                 document.getElementById('add-username').focus();
             });
-            addRoleSelect.addEventListener('change', (event) => handleRoleChange(event.target.value, 'add'));
             cancelAddUserBtn.addEventListener('click', resetAndHideForms);
 
             addUserForm.addEventListener('submit', async function(event) {
@@ -662,7 +245,6 @@
                 const password = document.getElementById('add-password').value;
                 const confirmPassword = document.getElementById('add-confirm-password').value;
                 const role = addRoleSelect.value;
-                const selectedPermissions = getSelectedPermissions('add-permissions-container');
 
                 if (!username || !fullName || !password || !confirmPassword || !role) {
                     showUsersFeedback("Tous les champs sont requis.", 'error'); return;
@@ -678,12 +260,12 @@
                     const response = await fetch('/api/users', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ username, full_name: fullName, password, role, permissions: selectedPermissions })
+                        body: JSON.stringify({ username, full_name: fullName, password, role })
                     });
                     const data = await response.json();
                     if (!response.ok) throw new Error(data.error || `Erreur HTTP ${response.status}`);
                     showUsersFeedback(data.message || "Utilisateur ajouté avec succès!", 'success');
-                    loadUsers();
+                    loadUsers(); // Recharge la liste des utilisateurs
                 } catch (error) {
                     console.error("Erreur ajout utilisateur:", error);
                     showUsersFeedback(`Erreur ajout: ${error.message}`, 'error');
@@ -691,26 +273,15 @@
             });
 
             // --- Edit User Form Logic ---
-            function showEditForm(username, fullName, role, userPermissions) {
-                resetAndHideForms(); // This will also call renderPermissionsCheckboxes for edit form
+            function showEditForm(username, fullName, role) {
+                resetAndHideForms();
                 editOriginalUsernameField.value = username;
                 document.getElementById('edit-username').value = username;
                 document.getElementById('edit-full-name').value = fullName;
-                editRoleSelect.value = role;
-
-                const permissionsContainer = document.getElementById('edit-permissions-container');
-                (userPermissions || []).forEach(permission => {
-                    const checkbox = permissionsContainer.querySelector(`input[value="${permission}"]`);
-                    if (checkbox) checkbox.checked = true;
-                });
-
-                handleRoleChange(role, 'edit', userPermissions, true);
+                editRoleSelect.value = role.toLowerCase(); // Assurer la correspondance avec les valeurs des options
                 editUserFormContainer.style.display = 'block';
                 document.getElementById('edit-full-name').focus();
             }
-            editRoleSelect.addEventListener('change', (event) => {
-                 handleRoleChange(event.target.value, 'edit', null, false);
-            });
             cancelEditUserBtn.addEventListener('click', resetAndHideForms);
 
             editUserForm.addEventListener('submit', async function(event) {
@@ -720,12 +291,11 @@
                 const password = document.getElementById('edit-password').value;
                 const confirmPassword = document.getElementById('edit-confirm-password').value;
                 const role = editRoleSelect.value;
-                const selectedPermissions = getSelectedPermissions('edit-permissions-container');
 
                 if (!fullName || !role) {
                     showUsersFeedback("Le nom complet et le rôle sont requis.", 'error'); return;
                 }
-                let payload = { full_name: fullName, role: role, permissions: selectedPermissions };
+                let payload = { full_name: fullName, role: role };
                 if (password) {
                     if (password !== confirmPassword) {
                         showUsersFeedback("Les nouveaux mots de passe ne correspondent pas.", 'error'); return;
@@ -767,77 +337,182 @@
                 }
             }
 
-            // --- Functions for Permission Checkboxes ---
-            function renderPermissionsCheckboxes(containerId, isEditForm) {
-                const container = document.getElementById(containerId);
-                if (!container) { console.error("Permission container not found:", containerId); return; }
-                container.innerHTML = '';
+            // --- Nouvelle Logique pour la Configuration des Rôles ---
+            async function initializeRolesConfigUI() {
+                try {
+                    const response = await fetch('/api/roles_config');
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.error || `Erreur HTTP ${response.status} lors du chargement de la config des rôles.`);
+                    }
+                    const data = await response.json();
+                    rolesConfigData = data.roles_config;
+                    permissionsModelData = data.permissions_model;
 
-                const actualPermissions = globalAvailablePermissions || [];
-                if (actualPermissions.length === 0) {
-                     // This can happen if Flask context doesn't inject or JS runs too early.
-                     // console.warn("globalAvailablePermissions is empty. Check Jinja2 injection or script order.");
+                    // Peupler les sélecteurs de rôle (celui pour la config des rôles et ceux des formulaires utilisateur)
+                    roleSelector.innerHTML = '';
+                    addRoleSelect.innerHTML = ''; // Vider avant de peupler
+                    editRoleSelect.innerHTML = '';// Vider avant de peupler
+
+                    if (rolesConfigData && rolesConfigData.roles) {
+                        Object.keys(rolesConfigData.roles).forEach(roleName => {
+                            const option = document.createElement('option');
+                            option.value = roleName;
+                            option.textContent = roleName;
+                            roleSelector.appendChild(option.cloneNode(true));
+                            
+                            // Pour les formulaires add/edit, la valeur est en minuscule
+                            const formOption = document.createElement('option');
+                            formOption.value = roleName.toLowerCase(); 
+                            formOption.textContent = roleName;
+                            addRoleSelect.appendChild(formOption.cloneNode(true));
+                            editRoleSelect.appendChild(formOption.cloneNode(true));
+                        });
+                    }
+
+                    if (roleSelector.options.length > 0) {
+                        roleSelector.selectedIndex = 0;
+                        displayRolePermissions(roleSelector.value);
+                    } else {
+                        rolePermissionsTreeDiv.innerHTML = '<p>Aucun rôle disponible pour configuration.</p>';
+                        saveRolePermissionsBtn.disabled = true;
+                    }
+
+                } catch (error) {
+                    console.error("Erreur initialisation UI config rôles:", error);
+                    rolePermissionsTreeDiv.innerHTML = `<p style="color:red;">Erreur chargement configuration des rôles: ${error.message}</p>`;
+                    saveRolePermissionsBtn.disabled = true;
                 }
-                const fragment = document.createDocumentFragment();
-                actualPermissions.forEach(permission => {
-                    if (permission === "admin:has_all_permissions") return;
-                    const checkboxDiv = document.createElement('div');
-                    checkboxDiv.classList.add('permission-item');
-                    const checkbox = document.createElement('input');
-                    checkbox.type = 'checkbox';
-                    const uniqueId = `${isEditForm ? 'edit' : 'add'}-perm-${permission.replace(/[:.]/g, '-')}`;
-                    checkbox.id = uniqueId;
-                    checkbox.name = 'permissions';
-                    checkbox.value = permission;
-                    const label = document.createElement('label');
-                    label.htmlFor = uniqueId;
-                    label.textContent = (globalFriendlyPermissionNames && globalFriendlyPermissionNames[permission]) ? globalFriendlyPermissionNames[permission] : permission;
-                    checkboxDiv.appendChild(checkbox);
-                    checkboxDiv.appendChild(label);
-                    fragment.appendChild(checkboxDiv);
-                });
-                container.appendChild(fragment);
+
+                roleSelector.addEventListener('change', () => displayRolePermissions(roleSelector.value));
+                saveRolePermissionsBtn.addEventListener('click', saveRolePermissions);
             }
 
-            function handleRoleChange(selectedRole, formType, userSpecificPermissions = null, isInitialEditLoad = false) {
-                const containerId = formType === 'add' ? 'add-permissions-container' : 'edit-permissions-container';
-                const permissionsContainer = document.getElementById(containerId);
-                if (!permissionsContainer) return;
+            function displayRolePermissions(selectedRoleName) {
+                rolePermissionsTreeDiv.innerHTML = '';
+                const roleData = rolesConfigData.roles[selectedRoleName];
+                const currentRolePermissions = roleData ? roleData.permissions : {};
+                const isAdministrateur = selectedRoleName === 'Administrateur';
+                saveRolePermissionsBtn.disabled = isAdministrateur;
 
-                const checkboxes = permissionsContainer.querySelectorAll('input[type="checkbox"]');
-                const defaultPermissionsForRole = (globalDefaultRolePermissions || {})[selectedRole] || [];
+                if (!permissionsModelData || Object.keys(permissionsModelData).length === 0) {
+                    rolePermissionsTreeDiv.innerHTML = '<p>Modèle de permissions non chargé.</p>';
+                    return;
+                }
 
-                checkboxes.forEach(checkbox => {
-                    if (selectedRole === 'administrateur') {
-                        checkbox.checked = true;
-                        checkbox.disabled = true;
-                    } else {
-                        checkbox.disabled = false;
-                        if (formType === 'add' || (formType === 'edit' && !isInitialEditLoad)) {
-                            // For add form, or when role is manually changed in edit form
-                            checkbox.checked = defaultPermissionsForRole.includes(checkbox.value);
-                        } else if (formType === 'edit' && isInitialEditLoad) {
-                            // Initial load of edit form: permissions already set by showEditForm based on userSpecificPermissions.
-                            // This call to handleRoleChange is primarily to disable checkboxes if the loaded role is admin.
-                            // If not admin, they remain enabled and reflect userSpecificPermissions.
-                            // No change to checkbox.checked state needed here as it's pre-set.
+                // Helper pour vérifier une permission dans la structure potentiellement imbriquée
+                function checkPerm(permissionsObject, permKeyString) {
+                    if (permKeyString.includes(':')) {
+                        const [mainKey, subKey] = permKeyString.split(':', 2);
+                        if (mainKey === "page") { 
+                            return permissionsObject[permKeyString] === true;
+                        } else { 
+                            return (permissionsObject[mainKey] && permissionsObject[mainKey][subKey] === true);
                         }
+                    } else {
+                        return permissionsObject[permKeyString] === true;
+                    }
+                }
+
+                for (const sectionKey in permissionsModelData) {
+                    const section = permissionsModelData[sectionKey];
+                    if (!section.permissions) continue; // Sauter si la section n'a pas de sous-permissions
+
+                    const sectionDiv = document.createElement('div');
+                    sectionDiv.classList.add('permission-section');
+                    const sectionTitle = document.createElement('h4');
+                    sectionTitle.textContent = section.label || sectionKey;
+                    sectionDiv.appendChild(sectionTitle);
+
+                    for (const permKey in section.permissions) {
+                        const permLabelText = section.permissions[permKey];
+                        const permDiv = document.createElement('div');
+                        permDiv.classList.add('permission-item');
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.id = `role-perm-${sectionKey}-${permKey.replace(/:/g, '-')}`;
+                        checkbox.dataset.permString = permKey; // Stocker la chaîne de permission originale
+                        checkbox.dataset.sectionKey = sectionKey; // Stocker la section principale pour reconstruction
+                        
+                        checkbox.checked = checkPerm(currentRolePermissions, permKey);
+
+                        if (isAdministrateur) {
+                            checkbox.checked = true;
+                            checkbox.disabled = true;
+                        }
+
+                        const label = document.createElement('label');
+                        label.htmlFor = checkbox.id;
+                        label.textContent = permLabelText || permKey;
+                        permDiv.appendChild(checkbox);
+                        permDiv.appendChild(label);
+                        sectionDiv.appendChild(permDiv);
+                    }
+                    rolePermissionsTreeDiv.appendChild(sectionDiv);
+                }
+            }
+
+            async function saveRolePermissions() {
+                const selectedRoleName = roleSelector.value;
+                if (selectedRoleName === 'Administrateur') {
+                    showRolesConfigFeedback("La modification du rôle Administrateur n'est pas permise via cette interface.", 'warn');
+                    return;
+                }
+                if (!selectedRoleName) {
+                    showRolesConfigFeedback("Veuillez sélectionner un rôle à modifier.", 'warn');
+                    return;
+                }
+
+                const newPermissionsPayload = {};
+                const checkboxes = rolePermissionsTreeDiv.querySelectorAll('input[type="checkbox"]');
+                
+                checkboxes.forEach(cb => {
+                    const permKeyString = cb.dataset.permString;
+                    const isChecked = cb.checked;
+
+                    if (permKeyString.includes(':')) {
+                        const [mainKey, subKey] = permKeyString.split(':', 2);
+                        if (mainKey === "page") {
+                            newPermissionsPayload[permKeyString] = isChecked;
+                        } else {
+                            if (!newPermissionsPayload[mainKey]) {
+                                newPermissionsPayload[mainKey] = {};
+                            }
+                            newPermissionsPayload[mainKey][subKey] = isChecked;
+                        }
+                    } else {
+                        newPermissionsPayload[permKeyString] = isChecked;
                     }
                 });
-            }
 
-            function getSelectedPermissions(containerId) {
-                const container = document.getElementById(containerId);
-                if (!container) return [];
-                const selected = [];
-                container.querySelectorAll('input[type="checkbox"]:checked:not(:disabled)').forEach(checkbox => {
-                    selected.push(checkbox.value);
-                });
-                return selected;
+                // console.log("Permissions à sauvegarder pour", selectedRoleName, ":", JSON.stringify(newPermissionsPayload, null, 2));
+
+                try {
+                    const response = await fetch(`/api/roles_config/${encodeURIComponent(selectedRoleName)}`, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(newPermissionsPayload)
+                    });
+                    const data = await response.json();
+                    if (!response.ok) {
+                        throw new Error(data.error || `Erreur HTTP ${response.status}`);
+                    }
+                    showRolesConfigFeedback(data.message || "Permissions du rôle sauvegardées avec succès!", 'success');
+                    
+                    // Mettre à jour rolesConfigData localement et rafraîchir l'affichage
+                    if (data.updated_permissions && rolesConfigData.roles[selectedRoleName]) {
+                         rolesConfigData.roles[selectedRoleName].permissions = data.updated_permissions;
+                         displayRolePermissions(selectedRoleName); 
+                    }
+                } catch (error) {
+                    console.error("Erreur sauvegarde permissions rôle:", error);
+                    showRolesConfigFeedback(`Erreur sauvegarde: ${error.message}`, 'error');
+                }
             }
 
             // --- Initial Load ---
-            loadUsers(); // Fetches users and populates table
+            loadUsers();
+            initializeRolesConfigUI();
         });
     </script>
 

@@ -53,7 +53,7 @@
             <label for="sonnerie_ppms">Sonnerie PPMS :</label>
             <div class="sound-control-group">
                 <select id="sonnerie_ppms" name="sonnerie_ppms" onchange="onSelectChange('sonnerie_ppms')" {% if not user_has_permission('config_general:edit_alert_sounds') %}disabled{% endif %}></select>
-                <button type="button" onclick="previewSound('sonnerie_ppms')" title="Écouter la sonnerie sélectionnée">🔊 Écouter</button>
+                <button type="button" onclick="previewSound('sonnerie_ppms')" title="Écouter la sonnerie sélectionnée" {% if not user_has_permission('sound:preview') %}disabled{% endif %}>🔊 Écouter</button>
             </div>
         </div>
 
@@ -61,7 +61,7 @@
             <label for="sonnerie_attentat">Sonnerie Attentat :</label>
             <div class="sound-control-group">
                 <select id="sonnerie_attentat" name="sonnerie_attentat" onchange="onSelectChange('sonnerie_attentat')" {% if not user_has_permission('config_general:edit_alert_sounds') %}disabled{% endif %}></select>
-                <button type="button" onclick="previewSound('sonnerie_attentat')" title="Écouter la sonnerie sélectionnée">🔊 Écouter</button>
+                <button type="button" onclick="previewSound('sonnerie_attentat')" title="Écouter la sonnerie sélectionnée" {% if not user_has_permission('sound:preview') %}disabled{% endif %}>🔊 Écouter</button>
             </div>
         </div>
 
@@ -69,7 +69,7 @@
             <label for="sonnerie_fin_alerte">Sonnerie Fin d'Alerte :</label>
             <div class="sound-control-group">
                 <select id="sonnerie_fin_alerte" name="sonnerie_fin_alerte" onchange="onSelectChange('sonnerie_fin_alerte')" {% if not user_has_permission('config_general:edit_alert_sounds') %}disabled{% endif %}></select>
-                <button type="button" onclick="previewSound('sonnerie_fin_alerte')" title="Écouter la sonnerie sélectionnée">🔊 Écouter</button>
+                <button type="button" onclick="previewSound('sonnerie_fin_alerte')" title="Écouter la sonnerie sélectionnée" {% if not user_has_permission('sound:preview') %}disabled{% endif %}>🔊 Écouter</button>
             </div>
         </div>
     </div>
@@ -104,6 +104,7 @@
     // --------------------------------------------------
     // 1. Variables Globales pour la page
     // --------------------------------------------------
+    const canPreviewSound = {{ user_has_permission('sound:preview') | tojson }};
     let departementsData = {{ constants.DEPARTEMENTS_ZONES | tojson }};
     let listeDepartementsSorted = {{ constants.LISTE_DEPARTEMENTS | tojson }};
 
@@ -176,10 +177,10 @@ function populateDropdown(selectId, options, selectedValue, addEmptyOptionValue 
         }
     } else if (selectId === 'audio_device_select' && (selectedValue === null || selectedValue === undefined || selectedValue === "")) {
         select.value = "";
-        console.log(`[populateDropdown] ${selectId} - Set to default (value=\""). select.value is now: '${select.value}'`);
+        console.log(`[populateDropdown] ${selectId} - Set to default (value=\"\"). select.value is now: '${select.value}'`);
     } else if (addEmptyOptionValue !== null && selectId !== 'audio_device_select') {
          select.value = "";
-         console.log(`[populateDropdown] ${selectId} - Set to empty option (value=\""). select.value is now: '${select.value}'`);
+         console.log(`[populateDropdown] ${selectId} - Set to empty option (value=\"\"). select.value is now: '${select.value}'`);
     }
 
     console.log(`[populateDropdown] Final select.value for ${selectId}: '${select.value}'`);
@@ -197,7 +198,7 @@ function populateDropdown(selectId, options, selectedValue, addEmptyOptionValue 
     // NOUVELLE FONCTION DÉDIÉE POUR ARRÊTER LE SON EN COURS
     function stopCurrentSound() {
         if (globalCurrentAudioInstance) {
-            console.log(`INFO: Appel stopCurrentSound pour '${globalCurrentPlayingFile}'`);
+            // console.log(`INFO: Appel stopCurrentSound pour '${globalCurrentPlayingFile}'`); // Moins verbeux
             globalCurrentAudioInstance.pause();
             globalCurrentAudioInstance.currentTime = 0;
             // Détacher les gestionnaires pour éviter les appels tardifs
@@ -243,7 +244,11 @@ function populateDropdown(selectId, options, selectedValue, addEmptyOptionValue 
 
     // Fonction pour la pré-écoute (appelée par les boutons "Écouter")
     function previewSound(selectId) {
-        console.log(`--- previewSound pour ${selectId} ---`);
+        if (!canPreviewSound) { // Client-side check
+            showConfigFeedback("Vous n'avez pas la permission de pré-écouter les sonneries.", 'error');
+            return;
+        }
+        // console.log(`--- previewSound pour ${selectId} ---`); // Moins verbeux
         const selectElement = document.getElementById(selectId);
         const button = selectElement ? selectElement.nextElementSibling : null;
 
