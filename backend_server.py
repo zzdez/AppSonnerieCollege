@@ -20,6 +20,7 @@ from flask_login import (LoginManager, UserMixin, login_user, logout_user,
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 from functools import wraps
+import copy # Added import
 
 # --- Import des modules locaux ---
 # Utilisation d'un bloc try/except pour une erreur de démarrage plus claire
@@ -232,6 +233,27 @@ if not MP3_PATH or not os.path.isdir(MP3_PATH):
 # Définitions Globales et Initialisation des Managers
 # ==============================================================================
 
+def _merge_permissions(base_perms, override_perms):
+    """
+    Merges override_perms into base_perms.
+    Override_perms takes precedence.
+    This is a deep merge for nested dictionaries.
+    """
+    if not isinstance(override_perms, dict) or not override_perms:
+        # If override_perms is None, empty, or not a dict, return a deep copy of base_perms
+        return copy.deepcopy(base_perms)
+
+    merged = copy.deepcopy(base_perms)
+
+    for key, override_value in override_perms.items():
+        if isinstance(override_value, dict) and isinstance(merged.get(key), dict):
+            # If both current value in merged and override_value are dicts, recurse
+            merged[key] = _merge_permissions(merged[key], override_value)
+        else:
+            # Otherwise, override_value takes precedence (it could be a boolean or a new sub-dict)
+            merged[key] = copy.deepcopy(override_value) # deepcopy override_value as well for safety
+    return merged
+
 # --- Classe Utilisateur pour Flask-Login ---
 class User(UserMixin):
     """Représente un utilisateur connecté."""
@@ -249,14 +271,25 @@ def load_user(user_id):
         user_role = user_info.get("role", "lecteur")
         user_nom_complet = user_info.get("nom_complet", "")
         # Récupérer les permissions pour ce rôle depuis roles_config_data
-        role_permissions_dict = roles_config_data.get("roles", {}).get(user_role, {}).get("permissions", {})
-        logger.debug(f"Permissions pour utilisateur '{user_id}' (rôle '{user_role}'): {role_permissions_dict}")
-        return User(user_id, role=user_role, nom_complet=user_nom_complet, permissions=role_permissions_dict.copy())
+        role_permissions_base = roles_config_data.get("roles", {}).get(user_role, {}).get("permissions", {})
+        custom_permissions_override = user_info.get("custom_permissions") # This could be None or {}
+
+        if custom_permissions_override is not None and isinstance(custom_permissions_override, dict) and custom_permissions_override: # Check if it's a non-empty dict
+            logger.debug(f"User '{user_id}' has custom permissions. Merging with role '{user_role}' permissions. Custom: {custom_permissions_override}")
+            effective_permissions = _merge_permissions(role_permissions_base, custom_permissions_override)
+        else:
+            logger.debug(f"User '{user_id}' using role '{user_role}' permissions directly (no valid/non-empty custom overrides found).")
+            effective_permissions = copy.deepcopy(role_permissions_base) # Make a copy
+
+        logger.debug(f"Effective permissions for user '{user_id}' (role '{user_role}'): {effective_permissions}")
+        return User(user_id, role=user_role, nom_complet=user_nom_complet, permissions=effective_permissions)
     elif isinstance(user_info, str): # Fallback pour ancien format (juste le hash, users.json ne devrait plus en avoir)
          logger.warning(f"Utilisateur '{user_id}' avec ancien format de données (hash seul). Rôle 'lecteur' par défaut.")
          # Pour le fallback, on assigne les permissions du rôle "lecteur" depuis roles_config_data
+         # Pas de gestion de custom_permissions pour l'ancien format, on utilise directement les permissions du rôle 'lecteur'.
          fallback_role_permissions = roles_config_data.get("roles", {}).get("lecteur", {}).get("permissions", {})
-         return User(user_id, role="lecteur", nom_complet="Utilisateur (format obsolète)", permissions=fallback_role_permissions.copy())
+         logger.debug(f"Effective permissions for legacy user '{user_id}' (role 'lecteur'): {fallback_role_permissions}")
+         return User(user_id, role="lecteur", nom_complet="Utilisateur (format obsolète)", permissions=copy.deepcopy(fallback_role_permissions))
     logger.warning(f"Tentative chargement utilisateur inexistant ou format invalide: {user_id}")
     return None # Indique à Flask-Login que l'utilisateur n'est plus valide
 
@@ -2336,11 +2369,16 @@ def get_users():
     logger.info(f"User '{current_user.id}' (admin) requête GET /api/users.")
     users_list = []
     for username, data in users_data.items():
+        custom_permissions = data.get("custom_permissions")
+        # A user has custom permissions if the field exists, is a dict, and is not empty.
+        has_custom_permissions_flag = bool(custom_permissions and isinstance(custom_permissions, dict) and len(custom_permissions) > 0)
+
         users_list.append({
             "username": username,
             "full_name": data.get("nom_complet", ""),
-            "role": data.get("role", "lecteur"), # Default role if missing, though unlikely
-            "permissions": data.get("permissions", [])
+            "role": data.get("role", "lecteur"),
+            "custom_permissions": custom_permissions,
+            "has_custom_permissions": has_custom_permissions_flag
         })
     return jsonify(users_list), 200
 
@@ -2470,6 +2508,25 @@ def update_user(username_param):
         logger.debug(f"User '{username_param}': mot de passe mis à jour.")
         # On ne met pas 'password' dans updated_fields
 
+    if 'custom_permissions' in data:
+        if not user_has_permission(current_user, "user:edit_custom_permissions"):
+            logger.warning(f"User '{current_user.id}' lacks 'user:edit_custom_permissions' to modify custom_permissions for '{username_param}'.")
+            return jsonify({"error": "Accès refusé: Permission 'user:edit_custom_permissions' requise."}), 403
+
+        new_custom_permissions = data['custom_permissions']
+        if new_custom_permissions is not None and not isinstance(new_custom_permissions, dict):
+            return jsonify({"error": "Le champ 'custom_permissions' doit être un dictionnaire ou null."}), 400
+
+        if new_custom_permissions is None or (isinstance(new_custom_permissions, dict) and not new_custom_permissions):
+            if 'custom_permissions' in user_to_update:
+                del user_to_update['custom_permissions']
+            logger.info(f"Custom permissions cleared for user '{username_param}' by '{current_user.id}'.")
+            updated_fields['custom_permissions_cleared'] = True # Indicate a change was made
+        else:
+            user_to_update['custom_permissions'] = new_custom_permissions
+            logger.info(f"Custom permissions updated for user '{username_param}' by '{current_user.id}'.")
+            updated_fields['custom_permissions_updated'] = True # Indicate a change was made
+
     if not updated_fields and not ('password' in data and data['password']):
          return jsonify({"message": "Aucune donnée à mettre à jour fournie."}), 200
 
@@ -2529,6 +2586,28 @@ def delete_user(username_param):
 
     logger.info(f"Utilisateur '{username_param}' supprimé avec succès par '{current_user.id}'.")
     return jsonify({"message": f"Utilisateur '{username_param}' supprimé avec succès."}), 200 # Ou 204 No Content
+
+@app.route('/api/users/<string:username_param>/custom_permissions', methods=['DELETE'])
+@login_required
+@require_permission("user:edit_custom_permissions") # Use the new permission
+def delete_user_custom_permissions(username_param):
+    logger.info(f"User '{current_user.id}' attempting to delete custom permissions for user '{username_param}'.")
+
+    if username_param not in users_data:
+        return jsonify({"error": f"L'utilisateur '{username_param}' n'existe pas."}), 404
+
+    user_to_update = users_data[username_param]
+    if 'custom_permissions' in user_to_update:
+        del user_to_update['custom_permissions']
+        if save_users_data():
+            logger.info(f"Custom permissions for user '{username_param}' deleted successfully by '{current_user.id}'.")
+            return jsonify({"message": "Permissions personnalisées supprimées avec succès. L'utilisateur utilisera les permissions de son rôle."}), 200
+        else:
+            logger.error(f"Failed to save users.json after attempting to delete custom_permissions for {username_param}")
+            return jsonify({"error": "Erreur serveur lors de la sauvegarde des données utilisateur."}), 500
+    else:
+        logger.info(f"No custom permissions to delete for user '{username_param}'.")
+        return jsonify({"message": "Aucune permission personnalisée à supprimer pour cet utilisateur."}), 200
 
 # ==============================================================================
 # Routes API pour la Gestion des Rôles et Permissions

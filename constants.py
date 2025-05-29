@@ -167,6 +167,7 @@ AVAILABLE_PERMISSIONS = [
     "user:edit_password",
     "user:edit_role", # Changer le rôle de base d'un utilisateur
     "user:edit_permissions", # Modifier la liste fine des permissions d'un utilisateur
+    "user:edit_custom_permissions", # Modifier les permissions personnalisées d'un utilisateur
     "user:delete",
 
     # Permission spéciale pour les administrateurs
@@ -227,6 +228,7 @@ FRIENDLY_PERMISSION_NAMES = {
     "user:edit_password": "Modifier le mot de passe d'un utilisateur",
     "user:edit_role": "Modifier le rôle d'un utilisateur",
     "user:edit_permissions": "Modifier les permissions spécifiques d'un utilisateur", # Cette permission sera probablement retirée ou renommée
+    "user:edit_custom_permissions": "Modifier les permissions personnalisées d'un utilisateur (outrepassant le rôle)",
     "user:delete": "Supprimer des utilisateurs",
 
     "user_management:edit_role_permissions": "Modifier les permissions associées à chaque rôle"
@@ -329,6 +331,8 @@ PERMISSIONS_MODEL = {
             "user:edit_details": FRIENDLY_PERMISSION_NAMES.get("user:edit_details"),
             "user:edit_password": FRIENDLY_PERMISSION_NAMES.get("user:edit_password"),
             "user:edit_role": FRIENDLY_PERMISSION_NAMES.get("user:edit_role"),
+            "user:edit_permissions": FRIENDLY_PERMISSION_NAMES.get("user:edit_permissions"), # Keeping the old one for now as per instruction
+            "user:edit_custom_permissions": FRIENDLY_PERMISSION_NAMES.get("user:edit_custom_permissions"),
             "user:delete": FRIENDLY_PERMISSION_NAMES.get("user:delete"),
             "user_management:edit_role_permissions": FRIENDLY_PERMISSION_NAMES.get("user_management:edit_role_permissions"),
         }
