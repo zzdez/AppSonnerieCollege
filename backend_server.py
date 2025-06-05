@@ -432,18 +432,45 @@ def load_roles_config(filename=ROLES_CONFIG_FILE):
             roles_config_data = default_roles_config
             # On pourrait considérer cela comme une erreur et retourner False si la structure est critique
             # Pour l'instant, on initialise par défaut et on continue (True)
+
+        # Update VALID_ROLES based on the loaded roles_config_data
+        global VALID_ROLES
+        if isinstance(roles_config_data, dict) and isinstance(roles_config_data.get("roles"), dict) and roles_config_data.get("roles"):
+            VALID_ROLES = list(roles_config_data["roles"].keys())
+            logger.info(f"VALID_ROLES dynamically updated from roles_config.json: {VALID_ROLES}")
+        else:
+            # Fallback if roles_config_data is not as expected or "roles" is empty
+            VALID_ROLES = ["Administrateur", "Collaborateur", "Lecteur"] # Hardcoded fallback
+            logger.warning(f"Failed to dynamically update VALID_ROLES from roles_config.json. Using hardcoded fallback: {VALID_ROLES}")
         return True
     except FileNotFoundError:
         logger.info(f"Fichier de configuration des rôles '{filename}' non trouvé. Initialisation avec une structure par défaut vide.")
         roles_config_data = default_roles_config
+
+        # Update VALID_ROLES based on the loaded roles_config_data (even if default)
+        global VALID_ROLES # Ensure it's seen as global for this assignment too
+        if isinstance(roles_config_data, dict) and isinstance(roles_config_data.get("roles"), dict) and roles_config_data.get("roles"): # This will be false if roles is empty
+            VALID_ROLES = list(roles_config_data["roles"].keys())
+            logger.info(f"VALID_ROLES dynamically updated from default roles_config.json (FileNotFound): {VALID_ROLES}")
+        else:
+            VALID_ROLES = ["Administrateur", "Collaborateur", "Lecteur"] # Hardcoded fallback
+            logger.warning(f"Failed to dynamically update VALID_ROLES from default roles_config.json (FileNotFound). Using hardcoded fallback: {VALID_ROLES}")
         return True # Pas une erreur fatale, on utilise la structure par défaut
     except json.JSONDecodeError:
         logger.error(f"Erreur de décodage JSON dans '{filename}'. Le fichier est peut-être corrompu. Initialisation avec une structure par défaut.")
         roles_config_data = default_roles_config
+        # Update VALID_ROLES with fallback on JSONDecodeError
+        global VALID_ROLES
+        VALID_ROLES = ["Administrateur", "Collaborateur", "Lecteur"] # Hardcoded fallback
+        logger.warning(f"Failed to parse roles_config.json (JSONDecodeError). Using hardcoded fallback for VALID_ROLES: {VALID_ROLES}")
         return False # Erreur de parsing est plus sérieuse
     except Exception as e:
         logger.error(f"Erreur inattendue lors du chargement de '{filename}': {e}", exc_info=True)
         roles_config_data = default_roles_config # Sécurité
+        # Update VALID_ROLES with fallback on other exceptions
+        global VALID_ROLES
+        VALID_ROLES = ["Administrateur", "Collaborateur", "Lecteur"] # Hardcoded fallback
+        logger.warning(f"Unexpected error loading roles_config.json. Using hardcoded fallback for VALID_ROLES: {VALID_ROLES}")
         return False # Autre erreur majeure
 
 def save_roles_config(filename=ROLES_CONFIG_FILE):
@@ -2359,7 +2386,7 @@ def upload_sound_file():
 # ==============================================================================
 
 MIN_PASSWORD_LENGTH = 8
-VALID_ROLES = list(DEFAULT_ROLE_PERMISSIONS.keys()) # ["administrateur", "collaborateur", "lecteur"]
+VALID_ROLES = [] # Will be populated after roles_config.json is loaded
 
 @app.route('/api/users', methods=['GET'])
 @login_required
