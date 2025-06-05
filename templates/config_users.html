@@ -326,9 +326,25 @@
                 document.getElementById('edit-full-name').focus();
             }
 
-            // --- Add User Form Logic --- (Listeners at the end)
-            // --- Edit User Form Logic --- (Listeners at the end)
-            // --- Delete User Logic --- (Called from button)
+            async function deleteUser(username) {
+                if (!confirm(`Êtes-vous sûr de vouloir supprimer l'utilisateur "${username}" ? Cette action est irréversible.`)) {
+                    return;
+                }
+                try {
+                    const response = await fetch(`/api/users/${encodeURIComponent(username)}`, {
+                        method: 'DELETE'
+                    });
+                    const data = await response.json(); // Try to parse JSON, even for errors
+                    if (!response.ok) {
+                        throw new Error(data.error || `Erreur HTTP ${response.status}`);
+                    }
+                    showUsersFeedback(data.message || `Utilisateur "${username}" supprimé avec succès.`, 'success');
+                    loadUsers(); // Recharger la liste
+                } catch (error) {
+                    console.error("Erreur suppression utilisateur:", error);
+                    showUsersFeedback(`Erreur suppression: ${error.message}`, 'error');
+                }
+            }
 
             // --- Helper: createStyledPermissionCheckbox (for custom permissions modal) ---
             function createStyledPermissionCheckbox(permKey, permLabel, sectionKey, isPageView, pageViewKeyString, baseRolePerms, userCustomPerms) {
@@ -773,13 +789,106 @@
 
 
             // --- Event Listeners pour les formulaires Add/Edit User (inchangés) ---
-            showAddUserFormBtn.addEventListener('click', () => { /* ... */ });
+            showAddUserFormBtn.addEventListener('click', () => {
+                resetAndHideForms();
+                addUserFormContainer.style.display = 'block';
+                document.getElementById('add-username').focus();
+            });
             cancelAddUserBtn.addEventListener('click', resetAndHideForms);
-            addUserForm.addEventListener('submit', async function(event) { /* ... */ });
-            cancelEditUserBtn.addEventListener('click', resetAndHideForms);
-            editUserForm.addEventListener('submit', async function(event) { /* ... */ });
-            // Copier ici les définitions complètes de ces fonctions listeners depuis la version précédente du fichier.
 
+            addUserForm.addEventListener('submit', async function(event) {
+                event.preventDefault();
+                const username = document.getElementById('add-username').value.trim();
+                const fullName = document.getElementById('add-full-name').value.trim();
+                const password = document.getElementById('add-password').value;
+                const confirmPassword = document.getElementById('add-confirm-password').value;
+                const role = addRoleSelect.value;
+
+                if (!username || !fullName || !password || !role) {
+                    showUsersFeedback("Tous les champs (sauf confirmation mot de passe si vide) sont requis.", 'error');
+                    return;
+                }
+                if (password !== confirmPassword) {
+                    showUsersFeedback("Les mots de passe ne correspondent pas.", 'error');
+                    return;
+                }
+                if (password.length < MIN_PASSWORD_LENGTH) {
+                    showUsersFeedback(`Le mot de passe doit contenir au moins ${MIN_PASSWORD_LENGTH} caractères.`, 'error');
+                    return;
+                }
+
+                const userData = { username, full_name: fullName, password, role };
+
+                try {
+                    const response = await fetch('/api/users', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(userData)
+                    });
+                    const data = await response.json();
+                    if (!response.ok) {
+                        throw new Error(data.error || `Erreur HTTP ${response.status}`);
+                    }
+                    showUsersFeedback(data.message || "Utilisateur ajouté avec succès!", 'success');
+                    addUserForm.reset();
+                    addUserFormContainer.style.display = 'none';
+                    loadUsers(); // Recharger la liste des utilisateurs
+                } catch (error) {
+                    console.error("Erreur ajout utilisateur:", error);
+                    showUsersFeedback(`Erreur ajout: ${error.message}`, 'error');
+                }
+            });
+
+            cancelEditUserBtn.addEventListener('click', resetAndHideForms);
+            editUserForm.addEventListener('submit', async function(event) {
+                event.preventDefault();
+                const originalUsername = editOriginalUsernameField.value;
+                const fullName = document.getElementById('edit-full-name').value.trim();
+                const password = document.getElementById('edit-password').value;
+                const confirmPassword = document.getElementById('edit-confirm-password').value;
+                const role = editRoleSelect.value;
+
+                if (!originalUsername || !fullName || !role) {
+                    showUsersFeedback("Nom complet et rôle sont requis pour la modification.", 'error');
+                    return;
+                }
+
+                if (password && password !== confirmPassword) {
+                    showUsersFeedback("Les nouveaux mots de passe ne correspondent pas.", 'error');
+                    return;
+                }
+                if (password && password.length < MIN_PASSWORD_LENGTH) {
+                    showUsersFeedback(`Le nouveau mot de passe doit contenir au moins ${MIN_PASSWORD_LENGTH} caractères.`, 'error');
+                    return;
+                }
+
+                const updatePayload = {
+                    full_name: fullName,
+                    role: role
+                };
+                if (password) { // Inclure le mot de passe seulement s'il est fourni
+                    updatePayload.password = password;
+                }
+
+                try {
+                    const response = await fetch(`/api/users/${encodeURIComponent(originalUsername)}`, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(updatePayload)
+                    });
+                    const data = await response.json();
+                    if (!response.ok) {
+                        throw new Error(data.error || `Erreur HTTP ${response.status}`);
+                    }
+                    showUsersFeedback(data.message || "Utilisateur modifié avec succès!", 'success');
+                    editUserForm.reset();
+                    editUserFormContainer.style.display = 'none';
+                    loadUsers(); // Recharger la liste
+                } catch (error) {
+                    console.error("Erreur modification utilisateur:", error);
+                    showUsersFeedback(`Erreur modification: ${error.message}`, 'error');
+                }
+            });
 
             // --- Initial Load Calls ---
             // DOM elements are now defined, so these calls should be safe.

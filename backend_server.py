@@ -2418,8 +2418,8 @@ def create_user():
     users_data[username] = {
         "hash": hashed_password,
         "nom_complet": full_name,
-        "role": role,
-        "permissions": data.get("permissions", []) # Ajout du champ permissions
+        "role": role
+        # "permissions": data.get("permissions", []) # Ajout du champ permissions
     }
 
     if not save_users_data():
@@ -2433,8 +2433,8 @@ def create_user():
         "user": {
             "username": username,
             "full_name": full_name,
-            "role": role,
-            "permissions": users_data[username].get("permissions", [])
+            "role": role
+            # "permissions": users_data[username].get("permissions", [])
         }
     }), 201
 
@@ -2482,22 +2482,6 @@ def update_user(username_param):
     elif 'role' in data and data['role'] == user_to_update.get('role'): # Role provided but not changed
         pass # No specific permission needed if role isn't actually changing
 
-    if 'permissions' in data:
-        new_permissions = data['permissions']
-        if not isinstance(new_permissions, list):
-            return jsonify({"error": "Le champ 'permissions' doit être une liste."}), 400
-        # TODO: Valider que toutes les permissions dans la liste sont valides (contre AVAILABLE_PERMISSIONS)
-        # Pour l'instant, on accepte la liste telle quelle.
-        # Check if permissions actually changed before requiring the permission
-        if data['permissions'] != user_to_update.get('permissions', []):
-            if not user_has_permission(current_user, "user:edit_permissions"):
-                return permission_access_denied("user:edit_permissions")
-            user_to_update['permissions'] = new_permissions
-            updated_fields['permissions'] = new_permissions # Log that permissions were part of the payload
-            logger.debug(f"User '{username_param}': permissions mises à jour.")
-        else:
-            pass # Permissions provided but identical to current
-
     if 'password' in data and data['password']: # Si le mot de passe est fourni et non vide
         if not user_has_permission(current_user, "user:edit_password"):
             return permission_access_denied("user:edit_password")
@@ -2543,8 +2527,8 @@ def update_user(username_param):
         "user": {
             "username": username_param,
             "full_name": user_to_update.get('nom_complet'),
-            "role": user_to_update.get('role'),
-            "permissions": user_to_update.get('permissions', [])
+            "role": user_to_update.get('role')
+            # "permissions": user_to_update.get('permissions', []) # This line is removed
         }
     }), 200
 
