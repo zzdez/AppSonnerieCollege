@@ -414,6 +414,7 @@ def load_users(filename=USERS_FILE):
 
 def load_roles_config(filename=ROLES_CONFIG_FILE):
     """Charge la configuration des rôles (roles_config.json)."""
+    global VALID_ROLES # Moved to the top of the function
     global roles_config_data
     path = os.path.join(CONFIG_PATH, filename)
     logger.info(f"Chargement du fichier de configuration des rôles: {path}")
@@ -434,7 +435,7 @@ def load_roles_config(filename=ROLES_CONFIG_FILE):
             # Pour l'instant, on initialise par défaut et on continue (True)
 
         # Update VALID_ROLES based on the loaded roles_config_data
-        global VALID_ROLES
+        # global VALID_ROLES # This declaration is now at the function top
         if isinstance(roles_config_data, dict) and isinstance(roles_config_data.get("roles"), dict) and roles_config_data.get("roles"):
             VALID_ROLES = list(roles_config_data["roles"].keys())
             logger.info(f"VALID_ROLES dynamically updated from roles_config.json: {VALID_ROLES}")
@@ -448,7 +449,7 @@ def load_roles_config(filename=ROLES_CONFIG_FILE):
         roles_config_data = default_roles_config
 
         # Update VALID_ROLES based on the loaded roles_config_data (even if default)
-        global VALID_ROLES # Ensure it's seen as global for this assignment too
+        # global VALID_ROLES # This declaration is now at the function top
         if isinstance(roles_config_data, dict) and isinstance(roles_config_data.get("roles"), dict) and roles_config_data.get("roles"): # This will be false if roles is empty
             VALID_ROLES = list(roles_config_data["roles"].keys())
             logger.info(f"VALID_ROLES dynamically updated from default roles_config.json (FileNotFound): {VALID_ROLES}")
@@ -460,7 +461,7 @@ def load_roles_config(filename=ROLES_CONFIG_FILE):
         logger.error(f"Erreur de décodage JSON dans '{filename}'. Le fichier est peut-être corrompu. Initialisation avec une structure par défaut.")
         roles_config_data = default_roles_config
         # Update VALID_ROLES with fallback on JSONDecodeError
-        global VALID_ROLES
+        # global VALID_ROLES # This declaration is now at the function top
         VALID_ROLES = ["Administrateur", "Collaborateur", "Lecteur"] # Hardcoded fallback
         logger.warning(f"Failed to parse roles_config.json (JSONDecodeError). Using hardcoded fallback for VALID_ROLES: {VALID_ROLES}")
         return False # Erreur de parsing est plus sérieuse
@@ -468,7 +469,7 @@ def load_roles_config(filename=ROLES_CONFIG_FILE):
         logger.error(f"Erreur inattendue lors du chargement de '{filename}': {e}", exc_info=True)
         roles_config_data = default_roles_config # Sécurité
         # Update VALID_ROLES with fallback on other exceptions
-        global VALID_ROLES
+        # global VALID_ROLES # This declaration is now at the function top
         VALID_ROLES = ["Administrateur", "Collaborateur", "Lecteur"] # Hardcoded fallback
         logger.warning(f"Unexpected error loading roles_config.json. Using hardcoded fallback for VALID_ROLES: {VALID_ROLES}")
         return False # Autre erreur majeure
