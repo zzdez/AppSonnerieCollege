@@ -39,3 +39,5 @@ Thumbs.db
 # Si votre LOCAL_STAGING_DIR est en dehors du projet Git, pas besoin de l'ajouter ici.
 # S'il était DANS X:\Seedbox-importer (ce qui n'est pas recommandé pour des données), vous l'ajouteriez :
 # seedbox_staging/
+config/users.json
+config/users.json
