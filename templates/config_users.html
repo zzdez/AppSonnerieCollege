@@ -890,6 +890,21 @@
                 }
             });
 
+            // Event listener for role selector change
+            if (roleSelector) {
+                roleSelector.addEventListener('change', function() {
+                    if (rolesConfigData && rolesConfigData.roles && permissionsModelData) {
+                        displayRolePermissions(this.value);
+                    } else {
+                        console.warn("Role config data or permissions model not fully loaded yet for role selector change.");
+                        // Optionally, display a message in rolePermissionsTreeDiv
+                        if (rolePermissionsTreeDiv) {
+                            rolePermissionsTreeDiv.innerHTML = '<p>Chargement des données de configuration des rôles en cours ou incomplet...</p>';
+                        }
+                    }
+                });
+            }
+
             // --- Initial Load Calls ---
             // DOM elements are now defined, so these calls should be safe.
             loadUsers();
