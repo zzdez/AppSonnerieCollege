@@ -15,30 +15,30 @@
         <!-- Sidebar -->
         <div class="bg-light border-end" id="sidebar-wrapper">
             <div class="sidebar-heading border-bottom bg-light">
-                <a href="{{ url_for('main_control') }}" class="text-decoration-none text-dark">
+                <a href="{{ url_for('index') }}" class="text-decoration-none text-dark">
                     <i class="bi bi-bell-fill me-2"></i>Sonneries Collège
                 </a>
             </div>
             <div class="list-group list-group-flush">
-                <a href="{{ url_for('main_control') }}" class="list-group-item list-group-item-action list-group-item-light p-3">
+                <a href="{{ url_for('index') }}" class="list-group-item list-group-item-action list-group-item-light p-3">
                     <i class="bi bi-house-door-fill me-2"></i>Contrôle Principal
                 </a>
-                <a href="{{ url_for('config_general') }}" class="list-group-item list-group-item-action list-group-item-light p-3">
+                <a href="{{ url_for('config_general_page') }}" class="list-group-item list-group-item-action list-group-item-light p-3">
                     <i class="bi bi-gear-fill me-2"></i>Configuration Générale
                 </a>
-                <a href="{{ url_for('config_weekly') }}" class="list-group-item list-group-item-action list-group-item-light p-3">
+                <a href="{{ url_for('config_weekly_page') }}" class="list-group-item list-group-item-action list-group-item-light p-3">
                     <i class="bi bi-calendar-week-fill me-2"></i>Planning Hebdomadaire
                 </a>
-                <a href="{{ url_for('config_day_types') }}" class="list-group-item list-group-item-action list-group-item-light p-3">
+                <a href="{{ url_for('config_day_types_page') }}" class="list-group-item list-group-item-action list-group-item-light p-3">
                     <i class="bi bi-list-ol me-2"></i>Journées Types
                 </a>
-                <a href="{{ url_for('config_exceptions') }}" class="list-group-item list-group-item-action list-group-item-light p-3">
+                <a href="{{ url_for('config_exceptions_page') }}" class="list-group-item list-group-item-action list-group-item-light p-3">
                     <i class="bi bi-calendar-x-fill me-2"></i>Exceptions
                 </a>
-                <a href="{{ url_for('config_sounds') }}" class="list-group-item list-group-item-action list-group-item-light p-3">
+                <a href="{{ url_for('config_sounds_page') }}" class="list-group-item list-group-item-action list-group-item-light p-3">
                     <i class="bi bi-music-note-beamed me-2"></i>Sonneries
                 </a>
-                <a href="{{ url_for('config_users') }}" class="list-group-item list-group-item-action list-group-item-light p-3">
+                <a href="{{ url_for('config_users_page') }}" class="list-group-item list-group-item-action list-group-item-light p-3">
                     <i class="bi bi-people-fill me-2"></i>Utilisateurs
                 </a>
                 <a href="{{ url_for('logout') }}" class="list-group-item list-group-item-action list-group-item-light p-3 mt-auto">
