@@ -155,6 +155,8 @@ h2 { color: #333; } /* Gardé pour certains titres spécifiques si besoin */
 }
 
 #sidebar-wrapper {
+    display: flex; /* AJOUTER ou S'ASSURER QUE C'EST PRÃ‰SENT */
+    flex-direction: column; /* AJOUTER ou S'ASSURER QUE C'EST PRÃ‰SENT */
     min-height: 100vh;
     width: 280px; /* Largeur du sidebar */
     transition: margin-left 0.25s ease-out; /* Pour une future animation si on cache/affiche */
@@ -168,7 +170,8 @@ h2 { color: #333; } /* Gardé pour certains titres spécifiques si besoin */
 #sidebar-wrapper .list-group {
     display: flex;
     flex-direction: column;
-    min-height: calc(100% - 56px); /* 56px est la hauteur approximative du sidebar-heading */
+    flex-grow: 1; /* AJOUTER ou S'ASSURER QUE C'EST PRÃ‰SENT ET ACTIF */
+    /* min-height: calc(100% - 56px); Commenter ou supprimer cette ligne si prÃ©sente */
 }
 
 #page-content-wrapper {
