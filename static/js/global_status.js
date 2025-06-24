@@ -4,14 +4,17 @@
 function updateGlobalStatusUI(data) {
     console.log("Mise à jour UI statut GLOBAL:", data);
 
-    const schedulerStatusSpan = document.getElementById('global-scheduler-status');
-    if (schedulerStatusSpan) {
+    // Logique pour le switch scheduler-toggle-switch
+    const schedulerToggle = document.getElementById('scheduler-toggle-switch');
+    if (schedulerToggle) {
         if (typeof data.scheduler_running === 'boolean') {
-            schedulerStatusSpan.textContent = data.scheduler_running ? 'Actif' : 'Inactif';
-            schedulerStatusSpan.className = data.scheduler_running ? 'status-ok' : 'status-inactive';
-        } else { // Gérer le cas où scheduler_running n'est pas un booléen (par ex. 'Erreur API')
-            schedulerStatusSpan.textContent = String(data.scheduler_running); // Afficher la valeur telle quelle
-            schedulerStatusSpan.className = 'status-error';
+            schedulerToggle.checked = data.scheduler_running;
+            schedulerToggle.disabled = false;
+        } else {
+            // En cas d'erreur ou de statut non booléen, on le décoche et le désactive
+            schedulerToggle.checked = false;
+            schedulerToggle.disabled = true;
+            console.warn("Statut du scheduler non booléen, switch désactivé:", data.scheduler_running);
         }
     }
 
@@ -110,6 +113,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    const schedulerToggle = document.getElementById('scheduler-toggle-switch');
+    if (schedulerToggle) {
+        schedulerToggle.addEventListener('change', handleSchedulerToggleChange);
+    }
+
     // Vérifier si l'utilisateur est sur la page de login pour ne pas lancer les appels fetch
     // Cela suppose que la page de login a un body avec une classe 'login-page' ou un ID spécifique.
     // Pour l'instant, on lance toujours, mais c'est une piste d'amélioration si des erreurs console apparaissent sur /login
@@ -120,3 +128,40 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log("Sur la page de login, initialisation du statut global différée.");
     }
 });
+
+// Fonction pour gérer le changement d'état du switch du scheduler
+function handleSchedulerToggleChange() {
+    const schedulerToggle = document.getElementById('scheduler-toggle-switch');
+    if (!schedulerToggle) return;
+
+    const activate = schedulerToggle.checked; // Vrai si on veut activer, faux si désactiver
+    const apiUrl = activate ? '/api/planning/activate' : '/api/planning/deactivate';
+    const actionText = activate ? 'Activation' : 'Désactivation';
+
+    console.log(`${actionText} du planning demandée...`);
+    // Optionnel: Désactiver le switch pendant l'appel pour éviter les clics multiples
+    // schedulerToggle.disabled = true; // Note: fetchGlobalStatus le réactivera via updateGlobalStatusUI
+
+    fetch(apiUrl, { method: 'POST' })
+        .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
+        .then(({ ok, status, data }) => {
+            const message = data.message || (ok ? `${actionText} réussie.` : `Erreur ${status}`);
+            if (ok) {
+                console.log(message);
+                // On pourrait avoir une fonction de feedback globale simple ici (ex: showGlobalFeedback('success', message))
+            } else {
+                console.error(`Erreur ${actionText}: ${data.error || data.message || message}`);
+                // En cas d'erreur, l'état du switch pourrait ne pas correspondre au backend.
+                // fetchGlobalStatus() ci-dessous resynchronisera pour corriger l'affichage du switch.
+            }
+        })
+        .catch(error => {
+            console.error(`Erreur réseau/serveur (${actionText}): ${error.message}`);
+            // Afficher une erreur à l'utilisateur si possible
+        })
+        .finally(() => {
+            // Toujours rafraîchir le statut pour refléter l'état réel du backend
+            fetchGlobalStatus();
+            // Le switch sera réactivé (ou désactivé correctement en cas d'erreur persistante) par updateGlobalStatusUI appelé par fetchGlobalStatus
+        });
+}
