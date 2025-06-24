@@ -1,42 +1,12 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <title>Contrôle Sonneries Collège</title>
-	<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
-    <!-- LIEN DECONNEXION ET NAVIGATION -->
-    <div style="text-align: right; margin-bottom: 10px; font-size: 0.9em;">
-       {% if current_user and current_user.is_authenticated %}
-         Connecté: <strong>{{ current_user.id }}</strong> |
-         {% if user_has_permission('page:view_control') %}<a href="{{ url_for('index') }}">Contrôle Principal</a> |{% endif %}
-         {% if user_has_permission('page:view_config_general') %}<a href="{{ url_for('config_general_page') }}">Config Générale</a> |{% endif %}
-         {% if user_has_permission('page:view_config_weekly') %}<a href="{{ url_for('config_weekly_page') }}">Config Hebdo</a> |{% endif %}
-         {% if user_has_permission('page:view_config_day_types') %}<a href="{{ url_for('config_day_types_page') }}">Journées Types</a> |{% endif %}
-         {% if user_has_permission('page:view_config_exceptions') %}<a href="{{ url_for('config_exceptions_page') }}">Exceptions</a> |{% endif %}
-         {% if user_has_permission('page:view_config_sounds') %}<a href="{{ url_for('config_sounds_page') }}">Sonneries</a> |{% endif %}
-         {% if user_has_permission('page:view_config_users') %}<a href="{{ url_for('config_users_page') }}">Gestion Utilisateurs</a> |{% endif %}
-         <a href="{{ url_for('logout') }}">Déconnexion</a>
-       {% else %}
-         (Non Connecté) <a href="{{ url_for('login') }}">Se connecter</a>
-       {% endif %}
-     </div>
-    <!-- FIN LIEN DECONNEXION ET NAVIGATION -->
-        <!-- DEBUT SECTION MESSAGES FLASH -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <div id="flash-messages" style="margin-top: 10px; margin-bottom: 10px;">
-        {% for category, message in messages %}
-          <div class="feedback-message {{ category }} show" style="display: block;">{{ message }}</div>
-        {% endfor %}
-        </div>
-      {% endif %}
-    {% endwith %}
-    <!-- FIN SECTION MESSAGES FLASH -->
-    <h1>Interface de Contrôle des Sonneries</h1>
+{% extends "base.html" %}
+
+{% block title %}Contrôle Principal - {{ super() }}{% endblock %}
+
+{% block page_title %}Tableau de Bord & Contrôle{% endblock %}
+
+{% block content %}
     <!-- Section Contrôle -->
-	<div id="control-section" style="display: none;">
+	<div id="control-section"> {# Retiré style="display: none;" car géré par JS ou visible par défaut #}
 		<h2>Contrôles</h2>
 		<button onclick="sendCommand('activate')" {% if not user_has_permission('control:scheduler_activate') %}disabled{% endif %}>Activer Planning</button>
 		<button onclick="sendCommand('deactivate')" {% if not user_has_permission('control:scheduler_deactivate') %}disabled{% endif %}>Désactiver Planning</button>
@@ -59,7 +29,8 @@
         <p>Prochaine Sonnerie: <span id="next-ring" class="status-unknown">Chargement...</span></p>
         <p>Dernière Erreur: <span id="last-error" class="status-unknown">Chargement...</span></p>
         <p>Alerte Active: <span id="alert-active" class="status-unknown">Chargement...</span></p>
-        <p>Authentifié: <span id="auth-status" class="status-error">Non</span></p>
+        {# Le statut d'authentification n'est plus géré ici directement, car la page est protégée #}
+        {# <p>Authentifié: <span id="auth-status" class="status-error">Non</span></p> #}
         {% else %}
         <p><em>Vous n'avez pas la permission de voir le statut détaillé du système.</em></p>
         {% endif %}
@@ -78,24 +49,24 @@
         <div id="calendar-container">
             <p>Chargement du calendrier...</p>
         </div>
-        <!-- La div #schedule-details n'est plus utilisée pour l'affichage -->
-        <!-- <div id="schedule-details"></div> -->
         {% else %}
         <p><em>Vous n'avez pas la permission de voir le calendrier.</em></p>
         {% endif %}
     </div>
 
     <!-- Fenêtre Modale (initialement cachée) -->
-<div id="modal-overlay" class="modal-overlay" onclick="if (event.target === this) { closeModal(); }">
-    <div id="modal-box" class="modal-box">
-        <button id="modal-close-btn" class="modal-close-btn" onclick="closeModal()">×</button>
-        <div id="modal-content">
-            <p>Chargement des détails...</p>
+    <div id="modal-overlay" class="modal-overlay" onclick="if (event.target === this) { closeModal(); }">
+        <div id="modal-box" class="modal-box">
+            <button id="modal-close-btn" class="modal-close-btn" onclick="closeModal()">×</button>
+            <div id="modal-content">
+                <p>Chargement des détails...</p>
+            </div>
         </div>
     </div>
-</div>
+{% endblock %}
 
-
+{% block scripts %}
+    {{ super() }} {# Important si base.html a des scripts dans son bloc scripts #}
     <script>
         // --- Variables Globales ---
         let currentStatus = null;
@@ -104,12 +75,12 @@
 
         // --- Fonctions Utilitaires ---
 
-        function getDefaultAcademicYear() { /* ... (code existant) ... */
+        function getDefaultAcademicYear() {
             const now = new Date(); const currentYear = now.getFullYear(); const currentMonth = now.getMonth();
-            const startYear = (currentMonth < 8) ? currentYear - 1 : currentYear; // Année scolaire commence en Septembre (mois 8) ? ou Aout (7) ? Ajuster si besoin.
+            const startYear = (currentMonth < 8) ? currentYear - 1 : currentYear;
             return `${startYear}-${startYear + 1}`;
         }
-        function populateAcademicYearSelector() { /* ... (code existant) ... */
+        function populateAcademicYearSelector() {
             const selectElement = document.getElementById('academic-year-select'); if (!selectElement) return; selectElement.innerHTML = '';
             const currentStartYear = parseInt(selectedAcademicYear.split('-')[0]); const yearsToShow = 3;
             for (let i = -yearsToShow; i <= yearsToShow; i++) {
@@ -117,26 +88,20 @@
                 const option = document.createElement('option'); option.value = yearString; option.textContent = yearString; selectElement.appendChild(option);
             } selectElement.value = selectedAcademicYear;
         }
-        function changeAcademicYear() { /* ... (code existant) ... */
+        function changeAcademicYear() {
              const selectElement = document.getElementById('academic-year-select'); if (selectElement) { selectedAcademicYear = selectElement.value; console.log(`Changement année scolaire: ${selectedAcademicYear}`); showCalendar(); }
          }
-        function closeModal() { /* ... (code existant) ... */
+        function closeModal() {
             const modalOverlay = document.getElementById('modal-overlay'); if (modalOverlay) { modalOverlay.classList.remove('visible'); setTimeout(() => { const mc = document.getElementById('modal-content'); if (mc) mc.innerHTML = '<p>Chargement...</p>'; }, 300); }
         }
 
         // --- Fonctions Principales ( API, Calendrier) ---
-
-
-    // ... (getDefaultAcademicYear, populateAcademicYearSelector, etc.)
-
-		// --- Fonctions Principales ---
-
-        function loadConfigSettings() { /* ... (code existant) ... */
+        function loadConfigSettings() {
              console.log("Chargement settings via /api/config/settings...");
              fetch('/api/config/settings')
                 .then(response => {
                     console.log("Réponse /api/config/settings, statut:", response.status);
-                    if (!response.ok) { if (response.status === 401) showLogin(); throw new Error(`Erreur HTTP settings: ${response.status}`); }
+                    if (!response.ok) { throw new Error(`Erreur HTTP settings: ${response.status}`); } // showLogin() est géré par Flask-Login
                     return response.json();
                 })
                 .then(data => {
@@ -148,563 +113,285 @@
         }
 
 		function updateStatusUI(data) {
-					 console.log("Mise à jour UI status:", data); currentStatus = data;
-					 const schedulerStatusSpan = document.getElementById('scheduler-status'); schedulerStatusSpan.textContent = data.scheduler_running ? 'Actif' : 'Inactif'; schedulerStatusSpan.className = data.scheduler_running ? 'status-ok' : 'status-inactive';
-					 const nextRingSpan = document.getElementById('next-ring');
-					 if (data.next_ring_time) { try { const d = new Date(data.next_ring_time); if (!isNaN(d.getTime())) { nextRingSpan.textContent = `${d.toLocaleString('fr-FR')} (${data.next_ring_label||'?'})`; nextRingSpan.className = ''; } else { throw new Error(); } } catch (e) { nextRingSpan.textContent = 'Erreur date'; nextRingSpan.className = 'status-error'; console.error("Err date next_ring:", data.next_ring_time);} }
-					 else { nextRingSpan.textContent = data.scheduler_running ? 'Aucune' : 'N/A'; nextRingSpan.className = data.scheduler_running ? 'status-inactive' : 'status-unknown'; }
-					 const lastErrorSpan = document.getElementById('last-error'); lastErrorSpan.textContent = data.last_error || 'Aucune'; lastErrorSpan.className = data.last_error && data.last_error !== 'Aucune' ? 'status-error' : 'status-ok';
-					 const alertActiveSpan = document.getElementById('alert-active'); alertActiveSpan.textContent = data.alert_active ? 'Oui' : 'Non'; alertActiveSpan.className = data.alert_active ? 'status-error' : 'status-ok';
-
-					 // --- LIGNES CORRIGÉES ---
-					 const authStatusSpan = document.getElementById('auth-status');
-					 if (authStatusSpan) { // Vérifier que l'élément existe
-						 // Si cette fonction est appelée après un login réussi, on est authentifié.
-						 // Si elle est appelée par initialLoad sans session valide, le texte sera (Non Connecté)
-						 // On peut affiner en se basant sur un flag global si besoin, mais essayons 'Oui'
-						 authStatusSpan.textContent = 'Oui'; // Ou récupérer via {{ current_user.is_authenticated }} si on complexifie
-						 authStatusSpan.className = 'status-ok';
-					 }
-					 // --- FIN CORRECTION ---
-				 }
+            console.log("Mise à jour UI status:", data); currentStatus = data;
+            const schedulerStatusSpan = document.getElementById('scheduler-status');
+            if (schedulerStatusSpan) {
+                schedulerStatusSpan.textContent = data.scheduler_running ? 'Actif' : 'Inactif';
+                schedulerStatusSpan.className = data.scheduler_running ? 'status-ok' : 'status-inactive';
+            }
+            const nextRingSpan = document.getElementById('next-ring');
+            if (nextRingSpan) {
+                if (data.next_ring_time) {
+                    try {
+                        const d = new Date(data.next_ring_time);
+                        if (!isNaN(d.getTime())) {
+                            nextRingSpan.textContent = `${d.toLocaleString('fr-FR')} (${data.next_ring_label||'?'})`;
+                            nextRingSpan.className = '';
+                        } else { throw new Error('Invalid date'); }
+                    } catch (e) {
+                        nextRingSpan.textContent = 'Erreur date';
+                        nextRingSpan.className = 'status-error';
+                        console.error("Err date next_ring:", data.next_ring_time);
+                    }
+                } else {
+                    nextRingSpan.textContent = data.scheduler_running ? 'Aucune' : 'N/A';
+                    nextRingSpan.className = data.scheduler_running ? 'status-inactive' : 'status-unknown';
+                }
+            }
+            const lastErrorSpan = document.getElementById('last-error');
+            if (lastErrorSpan) {
+                lastErrorSpan.textContent = data.last_error || 'Aucune';
+                lastErrorSpan.className = data.last_error && data.last_error !== 'Aucune' ? 'status-error' : 'status-ok';
+            }
+            const alertActiveSpan = document.getElementById('alert-active');
+            if (alertActiveSpan) {
+                alertActiveSpan.textContent = data.alert_active ? 'Oui' : 'Non';
+                alertActiveSpan.className = data.alert_active ? 'status-error' : 'status-ok';
+            }
+        }
 
 		function updateStatus() {
 			console.log("Appel updateStatus (fetch)...");
-			// Faire directement le fetch (l'API /api/status est publique)
-			fetch('/api/status') // Plus besoin de headers ici
+			fetch('/api/status')
 				.then(response => {
 					console.log("Réponse /api/status (update), statut:", response.status);
 					if (!response.ok) {
-						// Gérer les erreurs (404, 500...)
 						if (response.status === 404) { throw new Error("API Status introuvable"); }
 						throw new Error(`Erreur HTTP status: ${response.status}`);
 					}
 					return response.json();
 				})
 				.then(data => {
-					updateStatusUI(data); // Mettre à jour l'UI
+					updateStatusUI(data);
 				})
 				.catch(error => {
 					console.error("Erreur lors de la récupération/maj du statut:", error);
-					 updateStatusUI({ // Afficher Erreur dans l'UI
+					 updateStatusUI({
 						 scheduler_running: 'Erreur', next_ring_time: null, next_ring_label: 'Erreur',
 						 last_error: error.message, alert_active: 'Erreur'
 					 });
-					 // Si l'erreur était 401 sur une API protégée, on pourrait rediriger vers login ici
-					 // Mais comme /api/status est publique, on n'attend pas de 401.
 				});
 		}
 
-        // Fonction pour afficher un message de feedback temporaire (doit être définie avant)
-        function showFeedback(message, type = 'info', duration = 4000) { // type peut être 'success', 'error', 'info'
+        function showFeedback(message, type = 'info', duration = 4000) {
             const feedbackDiv = document.getElementById('control-message');
             if (!feedbackDiv) {
                 console.error("Élément #control-message introuvable pour le feedback.");
                 return;
             }
-
             feedbackDiv.textContent = message;
             feedbackDiv.classList.remove('success', 'error', 'info', 'show');
             feedbackDiv.classList.add(type);
-
             feedbackDiv.style.display = 'block';
-            void feedbackDiv.offsetWidth; // Force reflow
+            void feedbackDiv.offsetWidth;
             feedbackDiv.classList.add('show');
-
             setTimeout(() => {
                 feedbackDiv.classList.remove('show');
                 setTimeout(() => {
                     if (!feedbackDiv.classList.contains('show')) {
                        feedbackDiv.style.display = 'none';
                     }
-                }, 500); // Durée transition CSS
+                }, 500);
             }, duration);
         }
 
-        // --- Fonction sendCommand modifiée ---
         function sendCommand(action) {
-             let apiUrl = ''; // Initialisation
+             let apiUrl = '';
              let method = 'POST';
-             let actionText = action; // Pour les messages
-
+             let actionText = action;
              switch(action) {
-                case 'activate':
-                    apiUrl = '/api/planning/activate';
-                    actionText = 'Activation Planning';
-                    break;
-                case 'deactivate':
-                    apiUrl = '/api/planning/deactivate';
-                    actionText = 'Désactivation Planning';
-                    break;
-                case 'reload':
-                    apiUrl = '/api/config/reload';
-                    actionText = 'Rechargement Config';
-                    break;
-                default:
-                    console.error("Action inconnue pour sendCommand:", action);
-                    // Utiliser showFeedback pour l'erreur aussi
-                    showFeedback(`Erreur: Action inconnue '${action}'`, 'error');
-                    return;
+                case 'activate': apiUrl = '/api/planning/activate'; actionText = 'Activation Planning'; break;
+                case 'deactivate': apiUrl = '/api/planning/deactivate'; actionText = 'Désactivation Planning'; break;
+                case 'reload': apiUrl = '/api/config/reload'; actionText = 'Rechargement Config'; break;
+                default: console.error("Action inconnue pour sendCommand:", action); showFeedback(`Erreur: Action inconnue '${action}'`, 'error'); return;
              }
-
-             if (!apiUrl) { // Sécurité, ne devrait pas arriver
-                 console.error(`Bug: apiUrl non défini pour action reconnue '${action}'`);
-                 return;
-             }
-
+             if (!apiUrl) { console.error(`Bug: apiUrl non défini pour action reconnue '${action}'`); return; }
              console.log(`Envoi cmd: ${action} -> ${apiUrl}`);
-             // Optionnel: Afficher un message 'info' pendant l'envoi
-             // showFeedback(`Envoi ${actionText}...`, 'info', 1000); // Message très court
-
              fetch(apiUrl, { method: method })
-                 .then(response => {
-                      // Essayer de lire le JSON dans tous les cas pour récupérer le message/erreur
-                      return response.json().then(data => ({ ok: response.ok, status: response.status, data }));
-                 })
+                 .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
                  .then(({ ok, status, data }) => {
                       console.log(`Cmd ${action} ${ok ? 'OK' : 'Erreur '+status}:`, data);
                       const message = data.message || (ok ? `${actionText} réussie.` : `Erreur ${status}`);
                       if (ok) {
-                          showFeedback(message, 'success'); // Affiche le message de succès
-                          updateStatus(); // Mettre à jour le statut
-                          // Si c'est un reload, recharger aussi le calendrier
-                          if (action === 'reload') {
-                              const yearSelector = document.getElementById('year-selector');
-                              if (yearSelector) generateCalendar(parseInt(yearSelector.value));
-                          }
+                          showFeedback(message, 'success');
+                          updateStatus();
+                          if (action === 'reload') { showCalendar(); } // Recharger calendrier si config rechargée
                       } else {
                            const errorDetail = data.error || data.message || message;
-                          showFeedback(`Erreur ${actionText}: ${errorDetail}`, 'error'); // Affiche l'erreur
+                          showFeedback(`Erreur ${actionText}: ${errorDetail}`, 'error');
                       }
                   })
                  .catch(error => {
                      console.error(`Erreur cmd ${action}:`, error);
-                     // Afficher l'erreur réseau/serveur générique
                      showFeedback(`Erreur réseau/serveur (${actionText}): ${error.message}`, 'error');
                  });
         }
 
-        // --- Fonction triggerAlert modifiée ---
         function triggerAlert(alertType) {
             console.log(`>>> Appel de triggerAlert avec type: ${alertType}`);
-            // Supposition: configSettings est une variable globale ou accessible
-            if (!configSettings || !configSettings.alert_files) {
-                 showFeedback("Erreur interne: Configuration des alertes non chargée.", 'error');
-                 return;
-            }
+            if (!configSettings || !configSettings.alert_files) { showFeedback("Erreur interne: Configuration des alertes non chargée.", 'error'); return; }
             console.log("   -> Contenu configSettings:", JSON.stringify(configSettings.alert_files));
-
             let alertFileName = null;
             if (alertType === 'PPMS') { alertFileName = configSettings.alert_files.ppms; }
             else if (alertType === 'Attentat') { alertFileName = configSettings.alert_files.attentat; }
-
             console.log(`   -> Fichier récupéré: ${alertFileName}`);
-            if (!alertFileName) {
-                showFeedback(`Sonnerie alerte '${alertType}' non configurée !`, 'error');
-                console.log("   -> Sortie: nom fichier absent.");
-                return;
-            }
-
+            if (!alertFileName) { showFeedback(`Sonnerie alerte '${alertType}' non configurée !`, 'error'); console.log("   -> Sortie: nom fichier absent."); return; }
             const apiUrlTrigger = `/api/alert/trigger/${encodeURIComponent(alertFileName)}`;
             console.log(`   -> Appel fetch vers: ${apiUrlTrigger}`);
-            // showFeedback(`Déclenchement ${alertType}...`, 'info', 1500); // Optionnel
-
             fetch(apiUrlTrigger, { method: 'POST' })
-                .then(response => {
-                    return response.json().then(data => ({ ok: response.ok, status: response.status, data }));
-                })
+                .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
                 .then(({ ok, status, data }) => {
                     console.log(`Cmd triggerAlert ${alertType} ${ok ? 'OK' : 'Erreur '+status}:`, data);
                     const message = data.message || (ok ? `Alerte ${alertType} déclenchée.` : `Erreur ${status}`);
-                    if (ok) {
-                        showFeedback(message, 'success');
-                        updateStatus(); // MAJ Status après succès
-                    } else {
-                         const errorDetail = data.error || data.message || message;
-                        showFeedback(`Erreur déclenchement ${alertType}: ${errorDetail}`, 'error');
-                    }
+                    if (ok) { showFeedback(message, 'success'); updateStatus(); }
+                    else { const errorDetail = data.error || data.message || message; showFeedback(`Erreur déclenchement ${alertType}: ${errorDetail}`, 'error'); }
                 })
-                .catch(error => {
-                    console.error(`Erreur cmd triggerAlert ${alertType}:`, error);
-                    showFeedback(`Erreur réseau/serveur (Déclenchement ${alertType}): ${error.message}`, 'error');
-                });
+                .catch(error => { console.error(`Erreur cmd triggerAlert ${alertType}:`, error); showFeedback(`Erreur réseau/serveur (Déclenchement ${alertType}): ${error.message}`, 'error'); });
             console.log(`   -> Fetch lancé pour triggerAlert ${alertType}.`);
         }
 
-        // --- Fonction stopAlert modifiée (Arrêt Urgence) ---
         function stopAlert() {
             console.log("Appel de stopAlert (Arrêt Urgence)");
             const apiUrl = '/api/alert/stop';
             console.log(`Envoi cmd: stop_alert -> ${apiUrl}`);
-            // showFeedback(`Envoi Arrêt Urgence...`, 'info', 1000); // Optionnel
-
             fetch(apiUrl, { method: 'POST' })
-                 .then(response => {
-                    return response.json().then(data => ({ ok: response.ok, status: response.status, data }));
-                 })
+                 .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
                  .then(({ ok, status, data }) => {
                     console.log(`Cmd stop_alert ${ok ? 'OK' : 'Erreur '+status}:`, data);
                     const message = data.message || (ok ? `Arrêt Urgence effectué.` : `Erreur ${status}`);
-                    if (ok) {
-                         showFeedback(message, 'success');
-                         updateStatus();
-                    } else {
-                         const errorDetail = data.error || data.message || message;
-                         showFeedback(`Erreur Arrêt Urgence: ${errorDetail}`, 'error');
-                    }
+                    if (ok) { showFeedback(message, 'success'); updateStatus(); }
+                    else { const errorDetail = data.error || data.message || message; showFeedback(`Erreur Arrêt Urgence: ${errorDetail}`, 'error'); }
                  })
-                 .catch(error => {
-                     console.error(`Erreur cmd stop_alert:`, error);
-                     showFeedback(`Erreur réseau/serveur (Arrêt Urgence): ${error.message}`, 'error');
-                 });
+                 .catch(error => { console.error(`Erreur cmd stop_alert:`, error); showFeedback(`Erreur réseau/serveur (Arrêt Urgence): ${error.message}`, 'error'); });
         }
 
-        // --- Fonction endAlert modifiée (Fin d'Alerte normale) ---
 		function endAlert() {
 			console.log("Appel de endAlert");
 			const apiUrl = '/api/alert/end';
 			console.log(`Envoi commande: end_alert -> ${apiUrl}`);
-			// showFeedback(`Envoi commande Fin d'Alerte...`, 'info', 1000); // Optionnel
-
 			fetch(apiUrl, { method: 'POST' })
-				.then(response => {
-					console.log(`endAlert - Réponse reçue, status: ${response.status}`);
-                    return response.json().then(data => ({ ok: response.ok, status: response.status, data }));
-				})
+				.then(response => { console.log(`endAlert - Réponse reçue, status: ${response.status}`); return response.json().then(data => ({ ok: response.ok, status: response.status, data })); })
 				.then(({ ok, status, data }) => {
 					console.log(`Cmd end_alert ${ok ? 'OK' : 'Erreur '+status}:`, data);
 					const message = data.message || (ok ? `Fin d'Alerte effectuée.` : `Erreur ${status}`);
-                    if (ok) {
-                         showFeedback(message, 'success');
-                         updateStatus();
-                    } else {
-                         const errorDetail = data.error || data.message || message;
-                         showFeedback(`Erreur Fin d'Alerte: ${errorDetail}`, 'error');
-                    }
+                    if (ok) { showFeedback(message, 'success'); updateStatus(); }
+                    else { const errorDetail = data.error || data.message || message; showFeedback(`Erreur Fin d'Alerte: ${errorDetail}`, 'error'); }
 				})
-				.catch(error => {
-					console.error(`Erreur cmd end_alert:`, error);
-					showFeedback(`Erreur réseau/serveur (Fin Alerte): ${error.message}`, 'error');
-				});
+				.catch(error => { console.error(`Erreur cmd end_alert:`, error); showFeedback(`Erreur réseau/serveur (Fin Alerte): ${error.message}`, 'error'); });
 		}
 
-        // La fonction reloadConfig appelle sendCommand('reload'), donc elle utilisera
-        // automatiquement le nouveau système de feedback.
 		function reloadConfig() { sendCommand('reload'); }
 
-        // La fonction showCalendar n'a pas besoin de feedback de ce type
-		function showCalendar() { /* ... (code existant inchangé) ... */
+		function showCalendar() {
              console.log(`Début showCalendar pour année scolaire: ${selectedAcademicYear}`); const titleElement = document.getElementById('calendar-title-year'); if (titleElement) titleElement.textContent = `Scolaire ${selectedAcademicYear}`;
              const calendarContainer = document.getElementById('calendar-container'); if (calendarContainer) calendarContainer.innerHTML = '<p>Chargement calendrier...</p>';
              const apiUrl = `/api/calendar_view?year=${selectedAcademicYear}`; console.log(`Appel API calendrier: ${apiUrl}`);
              fetch(apiUrl)
-                 .then(response => { console.log(`Réponse ${apiUrl}, statut: ${response.status}`); if (!response.ok) { if (response.status === 401) { showLogin(); throw new Error("Non authentifié.");} return response.json().then(err => {throw new Error(`Erreur HTTP ${response.status}: ${err.error||response.statusText}`)}).catch(() => {throw new Error(`Erreur HTTP ${response.status}`)}); } return response.json(); })
+                 .then(response => { console.log(`Réponse ${apiUrl}, statut: ${response.status}`); if (!response.ok) { return response.json().then(err => {throw new Error(`Erreur HTTP ${response.status}: ${err.error||response.statusText}`)}).catch(() => {throw new Error(`Erreur HTTP ${response.status}`)}); } return response.json(); })
                  .then(data => { console.log("[Calendar] Données API:", data); if (data.error) { throw new Error(`Erreur API calendrier: ${data.error}`); } console.log("Appel generateCalendar:", data); generateCalendar(data, selectedAcademicYear); console.log("generateCalendar exécuté."); })
                  .catch(error => { console.error("Erreur showCalendar:", error); if (calendarContainer) calendarContainer.innerHTML = `<p>Erreur chargement: ${error.message}</p>`; });
              console.log("Fin showCalendar (fetch lancé)");
          }
 
-// --- Fonction generateCalendar - VERSION CORRIGÉE COMPLÈTE ---
         function generateCalendar(apiData, academicYear) {
             console.log(`Entrée generateCalendar pour année: ${academicYear}`);
             const calendarContainer = document.getElementById('calendar-container');
-            if (!calendarContainer) {
-                console.error("Conteneur #calendar-container introuvable !");
-                return;
-            }
-            calendarContainer.innerHTML = ''; // Vider l'ancien calendrier
-
+            if (!calendarContainer) { console.error("Conteneur #calendar-container introuvable !"); return; }
+            calendarContainer.innerHTML = '';
             const today = new Date();
-            const currentDay = today.getDate();
-            const currentMonth = today.getMonth() + 1; // Mois 1-12
-            const currentYearToday = today.getFullYear();
+            const currentDay = today.getDate(); const currentMonth = today.getMonth() + 1; const currentYearToday = today.getFullYear();
             const todayStr = `${currentYearToday}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
             console.log(`Date actuelle: ${todayStr}`);
-
-            // Vérifier les données reçues
-            if (!apiData || typeof apiData !== 'object' || !apiData.days || typeof apiData.days !== 'object') {
-                console.error("Données calendrier invalides ou format incorrect:", apiData);
-                calendarContainer.innerHTML = "<p>Erreur: Données calendrier invalides.</p>";
-                return;
-            }
+            if (!apiData || typeof apiData !== 'object' || !apiData.days || typeof apiData.days !== 'object') { console.error("Données calendrier invalides:", apiData); calendarContainer.innerHTML = "<p>Erreur: Données calendrier invalides.</p>"; return; }
             const daysData = apiData.days;
-
-            // Déterminer les années de départ et de fin
             const [startYear, endYear] = academicYear.split('-').map(Number);
             console.log(`Affichage de Sept ${startYear} à Août ${endYear}`);
-
-            // Boucle sur les 12 mois de l'année scolaire (Sept à Août)
             for (let m = 0; m < 12; m++) {
                 let month, year;
-                if (m < 4) { // Sept (9), Oct (10), Nov (11), Dec (12)
-                    month = m + 9;
-                    year = startYear;
-                } else { // Jan (1) à Août (8)
-                    month = m - 3;
-                    year = endYear;
-                }
-
-                const monthDiv = document.createElement('div');
-                monthDiv.classList.add('calendar-month');
-                const monthDate = new Date(year, month - 1, 1); // Mois 0-11 pour Date object
+                if (m < 4) { month = m + 9; year = startYear; }
+                else { month = m - 3; year = endYear; }
+                const monthDiv = document.createElement('div'); monthDiv.classList.add('calendar-month');
+                const monthDate = new Date(year, month - 1, 1);
                 const monthName = monthDate.toLocaleString('fr-FR', { month: 'long' });
                 monthDiv.innerHTML = `<h3>${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}</h3>`;
-
                 const daysInMonth = new Date(year, month, 0).getDate();
-                const firstDayWeekday = (monthDate.getDay() + 6) % 7; // Lundi=0, Mardi=1, ..., Dimanche=6
-
-                const daysContainer = document.createElement('div');
-                daysContainer.classList.add('calendar-days');
-
-                // Ajouter les entêtes de jours de semaine
+                const firstDayWeekday = (monthDate.getDay() + 6) % 7;
+                const daysContainer = document.createElement('div'); daysContainer.classList.add('calendar-days');
                 const weekDays = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-                weekDays.forEach(wd => {
-                    const d = document.createElement('div');
-                    d.classList.add('calendar-weekday');
-                    d.textContent = wd;
-                    daysContainer.appendChild(d);
-                });
-
-                // Ajouter les cases vides pour les jours avant le début du mois
-                for (let i = 0; i < firstDayWeekday; i++) {
-                    const emptyCell = document.createElement('div');
-                    emptyCell.classList.add('calendar-day', 'empty');
-                    daysContainer.appendChild(emptyCell);
-                }
-
-                // Remplir les jours du mois
+                weekDays.forEach(wd => { const d = document.createElement('div'); d.classList.add('calendar-weekday'); d.textContent = wd; daysContainer.appendChild(d); });
+                for (let i = 0; i < firstDayWeekday; i++) { const emptyCell = document.createElement('div'); emptyCell.classList.add('calendar-day', 'empty'); daysContainer.appendChild(emptyCell); }
                 for (let day = 1; day <= daysInMonth; day++) {
-                    const dayCell = document.createElement('div');
-                    dayCell.classList.add('calendar-day');
-                    dayCell.textContent = day;
-
-                    const monthStr = String(month).padStart(2, '0');
-                    const dayStr = String(day).padStart(2, '0');
-                    const dateKey = `${year}-${monthStr}-${dayStr}`;
-                    const dayData = daysData[dateKey]; // Récupérer données du jour depuis l'API
-
-                    // Marquer aujourd'hui
-                    if (dateKey === todayStr) {
-                        dayCell.classList.add('today');
-                    }
-
+                    const dayCell = document.createElement('div'); dayCell.classList.add('calendar-day'); dayCell.textContent = day;
+                    const monthStrPad = String(month).padStart(2, '0'); const dayStrPad = String(day).padStart(2, '0');
+                    const dateKey = `${year}-${monthStrPad}-${dayStrPad}`;
+                    const dayData = daysData[dateKey];
+                    if (dateKey === todayStr) { dayCell.classList.add('today'); }
                     if (dayData) {
-                        let cssClass = '';
-                        let tooltipText = dayData.description || dayData.type || ''; // Tooltip par défaut
-                        const typeValue = dayData.type || 'ERREUR'; // Type original de l'API
-                        const typeLower = typeValue.toLowerCase().trim(); // Type en minuscules
-
-                        // --- Logique de Mapping Classe CSS (Ordre de Priorité Important) ---
-                        // Ordre: Exception > Férié > Vacances > Weekend > Classe
-
-                        // 1. Exceptions (plus haute priorité)
-                        if (typeLower.startsWith('exception (silence)')) { // Attrape 'Exception (Silence)' - Adaptez si API renvoie 'exception_silence'
-                             cssClass = 'exception-silence';
-                             tooltipText = dayData.description || "Journée Silence (Exception)";
-                        } else if (typeLower.startsWith('exception (utiliser_jt')) { // Attrape 'Exception (utiliser_jt)' - Adaptez si API renvoie 'exception_jt'
-                             cssClass = 'exception-jt';
-                             tooltipText = dayData.description || "Exception : Journée Type Spécifique";
-
-                        // 2. Férié (prioritaire sur vacances/weekend/classe)
-                        } else if (typeLower === 'férié') { // Compare avec la version minuscule accentuée (API renvoie 'Férié')
-                             cssClass = 'ferie';
-                             // Le tooltip utilisera la description (ex: Assomption) venant de dayData.description
-
-                        // 3. Vacances (prioritaire sur weekend/classe)
-                        } else if (typeLower === 'vacances') { // Compare avec minuscule (API renvoie 'Vacances')
-                             cssClass = 'vacances';
-                             // Le tooltip utilisera la description (ex: Vacances de Noël) venant de dayData.description
-
-                        // 4. Weekend (prioritaire sur classe)
-                        } else if (typeLower === 'weekend') { // Compare avec minuscule (API renvoie 'Weekend')
-                             cssClass = 'weekend';
-                             // Le tooltip utilisera la description (ex: Weekend) venant de dayData.description
-
-                        // 5. Classe (toutes variantes, vérifié en dernier)
-                        } else if (typeLower.startsWith('classe')) { // Attrape 'classe', 'classe (lmjv)', 'classe (mercredi)', etc.
-                             cssClass = 'classe';
-                             // Le tooltip utilisera la description (ex: Planning: LMJV) venant de dayData.description
-                             tooltipText = dayData.description || typeValue; // Utilise la description si dispo
-
-                        // 6. Autres types connus mais non stylés spécifiquement
-                        } else if (typeLower === 'autre' || typeLower === 'erreur') {
-                             console.warn(`Type jour 'Autre' ou 'Erreur' reçu: '${typeValue}' pour ${dateKey}`);
-                             // cssClass = 'autre'; // Si vous avez un style .autre
-                             tooltipText = dayData.description || typeValue;
-                        }
-                        // 7. Type Inconnu (ne devrait pas arriver si tous les DayType sont mappés)
-                        else {
-                             console.error(`!!! Type jour INCONNU / NON PRÉVU DANS LE JS: '${typeValue}' (lower: '${typeLower}') pour ${dateKey} !!!`);
-                             cssClass = 'erreur-donnees'; // Marquer comme erreur visuelle
-                             tooltipText = `Type Inconnu: ${typeValue}`;
-                        }
-                        // --- FIN Logique de Mapping ---
-
-                        // Log final pour vérifier la classe appliquée
+                        let cssClass = ''; let tooltipText = dayData.description || dayData.type || '';
+                        const typeValue = dayData.type || 'ERREUR'; const typeLower = typeValue.toLowerCase().trim();
+                        if (typeLower.startsWith('exception (silence)')) { cssClass = 'exception-silence'; tooltipText = dayData.description || "Journée Silence (Exception)"; }
+                        else if (typeLower.startsWith('exception (utiliser_jt')) { cssClass = 'exception-jt'; tooltipText = dayData.description || "Exception : Journée Type Spécifique"; }
+                        else if (typeLower === 'férié') { cssClass = 'ferie'; }
+                        else if (typeLower === 'vacances') { cssClass = 'vacances'; }
+                        else if (typeLower === 'weekend') { cssClass = 'weekend'; }
+                        else if (typeLower.startsWith('classe')) { cssClass = 'classe'; tooltipText = dayData.description || typeValue; }
+                        else if (typeLower === 'autre' || typeLower === 'erreur') { console.warn(`Type jour 'Autre' ou 'Erreur' reçu: '${typeValue}' pour ${dateKey}`); tooltipText = dayData.description || typeValue; }
+                        else { console.error(`!!! Type jour INCONNU: '${typeValue}' (lower: '${typeLower}') pour ${dateKey} !!!`); cssClass = 'erreur-donnees'; tooltipText = `Type Inconnu: ${typeValue}`; }
                         console.log(`[Cal Apply] ${dateKey}: Type='${typeValue}' -> CSS Class='${cssClass || 'aucune'}'`);
-
-                        // Appliquer la classe CSS déterminée
-                        if (cssClass) {
-                            dayCell.classList.add(cssClass);
-                        }
-
-                        // Définir le tooltip (infobulle)
-                        // Utilise la valeur de tooltipText déterminée dans le mapping
-                        if (tooltipText) {
-                            dayCell.title = tooltipText;
-                        }
-
-                        // Rendre la case cliquable pour voir les détails
-                        dayCell.style.cursor = 'pointer';
-                        dayCell.onclick = () => showDailySchedule(year, month, day); // Assurez-vous que cette fonction existe
-
-                    } else { // Si aucune donnée n'est retournée par l'API pour ce jour
-                         console.warn(`Aucune donnée API pour ${dateKey}`);
-                         dayCell.classList.add('erreur-donnees'); // Marquer comme erreur
-                         dayCell.title = "Données manquantes";
-                    } // Fin if(dayData)
-
+                        if (cssClass) { dayCell.classList.add(cssClass); }
+                        if (tooltipText) { dayCell.title = tooltipText; }
+                        dayCell.style.cursor = 'pointer'; dayCell.onclick = () => showDailySchedule(year, month, day);
+                    } else { console.warn(`Aucune donnée API pour ${dateKey}`); dayCell.classList.add('erreur-donnees'); dayCell.title = "Données manquantes"; }
                     daysContainer.appendChild(dayCell);
-                } // Fin boucle jours du mois
-
-                monthDiv.appendChild(daysContainer);
-                calendarContainer.appendChild(monthDiv);
-            } // Fin boucle mois (Sept->Août)
-
+                }
+                monthDiv.appendChild(daysContainer); calendarContainer.appendChild(monthDiv);
+            }
             console.log("Fin de generateCalendar");
-        } // --- Fin de la fonction generateCalendar ---
+        }
 
         function showDailySchedule(year, month, day) {
              console.log(`>>> Début showDailySchedule ${year}-${month}-${day}`);
              const monthStr = month.toString().padStart(2, '0'); const dayStr = day.toString().padStart(2, '0');
              const dateStr = `${year}-${monthStr}-${dayStr}`; console.log(`   Date: ${dateStr}`);
-
-             const modalOverlay = document.getElementById('modal-overlay');
-             const modalContent = document.getElementById('modal-content');
+             const modalOverlay = document.getElementById('modal-overlay'); const modalContent = document.getElementById('modal-content');
              if (!modalOverlay || !modalContent) { console.error("   Elts modale manquants !"); return; }
-			 modalContent.innerHTML = `<p>Chargement des horaires pour ${dayStr}/${monthStr}/${year}...</p>`;
-			 modalOverlay.classList.add('visible');
-
+			 modalContent.innerHTML = `<p>Chargement des horaires pour ${dayStr}/${monthStr}/${year}...</p>`; modalOverlay.classList.add('visible');
              const apiUrl = `/api/daily_schedule?date=${dateStr}`; console.log(`   Fetch: ${apiUrl}`);
-
              try {
-                 fetch(apiUrl) // Pas besoin de headers ici si API publique ou si on utilise cookie
+                 fetch(apiUrl)
                      .then(response => {
                          console.log(`   Réponse ${apiUrl}, statut: ${response.status}`);
-                         if (!response.ok) {
-                             if (response.status === 401) { closeModal(); /* Redirection gérée par Flask-Login ? */ throw new Error("Non authentifié."); }
-                             // Gérer autres erreurs
-                             return response.json().then(err => { throw new Error(`Erreur ${response.status}: ${err.error || err.message || response.statusText}`) }).catch(() => { throw new Error(`Erreur HTTP ${response.status}`) });
-                         }
+                         if (!response.ok) { return response.json().then(err => { throw new Error(`Erreur ${response.status}: ${err.error || err.message || response.statusText}`) }).catch(() => { throw new Error(`Erreur HTTP ${response.status}`) }); }
                          return response.json();
                      })
-                     // Partie .then(data => ...) DANS showDailySchedule
                      .then(data => {
                           console.log("   Détails reçus:", data);
-
-                          // --- Initialiser la chaîne HTML POUR le contenu de la modale ---
-                          // Le bouton fermer est déjà dans le HTML de la modale, on n'a plus besoin de l'ajouter ici.
-                          let htmlModalContent = `<h4>Détails du ${dayStr}/${monthStr}/${year}</h4>`; // Commencer par le titre
-
-                          // --- Affichage Type/Description Principal ---
+                          let htmlModalContent = `<h4>Détails du ${dayStr}/${monthStr}/${year}</h4>`;
                           let dayInfoText = data.message || data.day_type || "Information indisponible";
-                          // dayInfoText = dayInfoText.replace(/^Planning:\s*/, ''); // Supprimé/Commenté
-                          // Ajouter le type de jour avec sa classe CSS
                           htmlModalContent += `<span class="day-type-info">${dayInfoText}</span>`;
-                          // -------------------------------------------
-
-                          // --- Logique d'affichage conditionnelle ---
-                          if (data.error) {
-                              htmlModalContent += `<p style="color: red;">Erreur: ${data.error}</p>`;
-                          } else if (data.schedule && Array.isArray(data.schedule) && data.schedule.length > 0) {
-                              // --- GÉNÉRATION DU TABLEAU (remise en place) ---
+                          if (data.error) { htmlModalContent += `<p style="color: red;">Erreur: ${data.error}</p>`; }
+                          else if (data.schedule && Array.isArray(data.schedule) && data.schedule.length > 0) {
                               htmlModalContent += `<table><thead><tr><th>Heure</th><th>Événement</th><th>Sonnerie</th></tr></thead><tbody>`;
-                              data.schedule.forEach(item => {
-                                  const timeFormatted = item.time.substring(0, 5); // HH:MM
-                                  htmlModalContent += `<tr><td>${timeFormatted}</td><td>${item.event||'N/A'}</td><td><em>${item.sonnerie||'Silence'}</em></td></tr>`;
-                              });
+                              data.schedule.forEach(item => { const timeFormatted = item.time.substring(0, 5); htmlModalContent += `<tr><td>${timeFormatted}</td><td>${item.event||'N/A'}</td><td><em>${item.sonnerie||'Silence'}</em></td></tr>`; });
                               htmlModalContent += `</tbody></table>`;
-                              // --- FIN GÉNÉRATION TABLEAU ---
-                          } else {
-                               // Cas où il n'y a ni horaires, ni message, ni erreur
-                              htmlModalContent += `<p><em>Aucune sonnerie planifiée.</em></p>`;
-                          }
-
-                          // Mettre à jour le contenu de la div #modal-content
-                          modalContent.innerHTML = htmlModalContent;
-                          console.log("   Affichage détails OK (modale).");
+                          } else { htmlModalContent += `<p><em>Aucune sonnerie planifiée.</em></p>`; }
+                          modalContent.innerHTML = htmlModalContent; console.log("   Affichage détails OK (modale).");
                      })
-                     .catch(error => { // Gestion des erreurs fetch ou JSON
-                          console.error(`   Erreur dans showDailySchedule pour ${dateStr}:`, error);
-                          // Afficher l'erreur DANS la modale (sans bouton X car déjà présent)
-                          modalContent.innerHTML = `<p style="color: red;">Impossible de charger les détails.<br>${error.message}</p>`;
-                     });
-             } catch (fetchError) { // Gestion erreur JS avant fetch
-                   console.error(`   Erreur synchrone showDailySchedule:`, fetchError);
-                    // Afficher l'erreur DANS la modale (sans bouton X car déjà présent)
-                   modalContent.innerHTML = `<p style="color: red;">Erreur JS.<br>${fetchError.message}</p>`;
-             }
+                     .catch(error => { console.error(`   Erreur dans showDailySchedule pour ${dateStr}:`, error); modalContent.innerHTML = `<p style="color: red;">Impossible de charger les détails.<br>${error.message}</p>`; });
+             } catch (fetchError) { console.error(`   Erreur synchrone showDailySchedule:`, fetchError); modalContent.innerHTML = `<p style="color: red;">Erreur JS.<br>${fetchError.message}</p>`; }
              console.log(`<<< Fin appel synchrone showDailySchedule pour ${dateStr}`);
-        } // --- Fin de la fonction showDailySchedule ---
+        }
 
-		// Fonction pour afficher un message de feedback temporaire
-function showFeedback(message, type = 'info', duration = 4000) { // type peut être 'success', 'error', 'info'
-    // *** Utilise l'ID de votre paragraphe/div: control-message ***
-    const feedbackDiv = document.getElementById('control-message');
-    if (!feedbackDiv) {
-        console.error("Élément #control-message introuvable pour le feedback.");
-        return;
-    }
-
-    feedbackDiv.textContent = message;
-    // Appliquer la classe de type (enlève les anciennes d'abord)
-    feedbackDiv.classList.remove('success', 'error', 'info', 'show');
-    feedbackDiv.classList.add(type);
-
-    // Afficher avec fondu
-    feedbackDiv.style.display = 'block';
-    void feedbackDiv.offsetWidth; // Force reflow
-    feedbackDiv.classList.add('show');
-
-    // Masquer après la durée spécifiée
-    setTimeout(() => {
-        feedbackDiv.classList.remove('show');
-        setTimeout(() => {
-            if (!feedbackDiv.classList.contains('show')) {
-               feedbackDiv.style.display = 'none';
-            }
-        }, 500); // Durée transition CSS
-    }, duration);
-}
-
-        // --- Initialisation ---
-function initialLoad() {
-    console.log("Appel initialLoad() sur page control.html (utilisateur loggué via Flask-Login)...");
-    populateAcademicYearSelector(); // Remplir le sélecteur
-
-    // Appeler directement les fonctions de chargement des données.
-    // Le cookie de session est automatiquement envoyé par le navigateur.
-    // Les API appelées ici doivent être protégées par @login_required dans le backend
-    // (sauf /api/status si on le veut public pour une raison).
-    loadConfigSettings(); // Appelle /api/config/settings (protégé)
-    updateStatus();       // Appelle /api/status (on peut le reprotéger maintenant)
-    showCalendar();       // Appelle /api/calendar_view (protégé)
-    console.log("initialLoad: Appels de chargement de données lancés.");
-
-    // Assurer que la section contrôle est visible (au cas où le display:none serait resté)
-    const ctrlSect = document.getElementById('control-section');
-    if (ctrlSect) ctrlSect.style.display = 'block'; else console.error("#control-section non trouvé !");
-
-    // Mettre à jour le statut authentifié (on sait qu'on l'est ici)
-    const authStatusSpan = document.getElementById('auth-status');
-    if (authStatusSpan) {
-        authStatusSpan.textContent = 'Oui';
-        authStatusSpan.className = 'status-ok';
-    }
-}
-    document.addEventListener('DOMContentLoaded', initialLoad);
-
+        function initialLoad() {
+            console.log("Appel initialLoad() sur page control.html (utilisateur loggué via Flask-Login)...");
+            populateAcademicYearSelector();
+            loadConfigSettings();
+            updateStatus();
+            showCalendar();
+            console.log("initialLoad: Appels de chargement de données lancés.");
+            const ctrlSect = document.getElementById('control-section');
+            if (ctrlSect) ctrlSect.style.display = 'block'; else console.error("#control-section non trouvé !");
+        }
+        document.addEventListener('DOMContentLoaded', initialLoad);
     </script>
-
-</body>
-</html>
+{% endblock %}

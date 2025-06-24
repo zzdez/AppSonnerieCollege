@@ -148,6 +148,51 @@ h2 { color: #333; } /* Gard� pour certains titres sp�cifiques si besoin */
     margin-bottom: 20px;
 }
 
+/* Sidebar Styles */
+#wrapper {
+    display: flex;
+    min-height: 100vh; /* S'assure que le wrapper prend toute la hauteur */
+}
+
+#sidebar-wrapper {
+    min-height: 100vh;
+    width: 280px; /* Largeur du sidebar */
+    transition: margin-left 0.25s ease-out; /* Pour une future animation si on cache/affiche */
+    position: sticky; /* Pour le rendre "fixe" lors du scroll vertical de la zone de contenu */
+    top: 0;
+    height: 100vh; /* Pleine hauteur de la vue */
+    overflow-y: auto; /* Scroll si le contenu du menu est trop long */
+}
+
+/* Permet au dernier élément du menu (Déconnexion) de se coller en bas */
+#sidebar-wrapper .list-group {
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100% - 56px); /* 56px est la hauteur approximative du sidebar-heading */
+}
+
+#page-content-wrapper {
+    flex-grow: 1; /* Prend l'espace restant */
+    overflow-y: auto; /* Permet le scroll vertical du contenu principal uniquement */
+    width: calc(100% - 280px); /* S'assure que la largeur est correcte */
+    /* max-height: 100vh; retire cette ligne pour l'instant si elle cause des problèmes de double scrollbar */
+}
+
+.sidebar-heading {
+    padding: 0.875rem 1.25rem;
+    font-size: 1.2rem;
+}
+
+/* Style pour le lien actif dans le menu (optionnel, on l'affinera) */
+.list-group-item.active {
+    background-color: #0d6efd; /* Couleur primaire de Bootstrap */
+    border-color: #0d6efd;
+    color: white;
+}
+.list-group-item.active i {
+    color: white; /* Assure que l'icône est aussi blanche */
+}
+
 /* Groupe de formulaire (label + champ) */
 .form-group {
     margin-bottom: 18px;
