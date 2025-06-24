@@ -5,24 +5,51 @@
 {% block page_title %}Tableau de Bord & Contrôle{% endblock %}
 
 {% block content %}
-    <!-- Section Contrôle -->
-	<div id="control-section"> {# Retiré style="display: none;" car géré par JS ou visible par défaut #}
-		<h2>Contrôles</h2>
-		<button onclick="sendCommand('activate')" {% if not user_has_permission('control:scheduler_activate') %}disabled{% endif %}>Activer Planning</button>
-		<button onclick="sendCommand('deactivate')" {% if not user_has_permission('control:scheduler_deactivate') %}disabled{% endif %}>Désactiver Planning</button>
-		<button onclick="triggerAlert('PPMS')" {% if not user_has_permission('control:alert_trigger_ppms') %}disabled{% endif %}>Déclencher Alerte PPMS</button>
-		<button onclick="triggerAlert('Attentat')" {% if not user_has_permission('control:alert_trigger_attentat') %}disabled{% endif %}>Déclencher Alerte Attentat</button>
-		<button onclick="stopAlert()" style="background-color: #ffc107; color: black;" title="Arrêt immédiat sans son de fin" {% if not user_has_permission('control:alert_stop') %}disabled{% endif %}>Arrêt Urgence</button>
-		<button onclick="endAlert()" style="background-color: #198754;" title="Arrête l'alerte et joue le son de fin" {% if not user_has_permission('control:alert_end') %}disabled{% endif %}>Fin d'Alerte</button>
-		<button onclick="reloadConfig()" {% if not user_has_permission('control:config_reload') %}disabled{% endif %}>Recharger Configuration</button>
-	<!-- Zone pour afficher les messages de feedback des contrôles -->
-	<div id="control-message" class="feedback-message" style="display: none; margin-top: 15px;">
-		<!-- Message ajouté par JavaScript -->
-	</div>
-	</div>
+    <div class="row">
+        <div class="col-md-8 col-lg-7 mb-3"> {# Colonne pour les alertes #}
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i> Actions d'Alerte
+                </div>
+                <div class="card-body text-center"> {# text-center pour centrer les groupes de boutons #}
+                    <p class="card-text text-muted mb-3"><small>Double-cliquez sur un bouton pour déclencher ou arrêter l'alerte correspondante.</small></p>
+                    <div class="btn-group mb-2" role="group" aria-label="Alertes Principales">
+                        <button type="button" class="btn btn-lg btn-warning px-4" id="btn-alert-ppms" title="Double-clic pour gérer l'alerte PPMS">
+                            <i class="bi bi-shield-fill-exclamation me-2"></i>ALERTE PPMS
+                        </button>
+                        <button type="button" class="btn btn-lg btn-danger px-4" id="btn-alert-attentat" title="Double-clic pour gérer l'alerte Attentat">
+                            <i class="bi bi-cone-striped me-2"></i>ALERTE ATTENTAT
+                        </button>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-success" id="btn-end-alert" title="Terminer l'alerte en cours avec le son de fin" disabled>
+                            <i class="bi bi-check-circle-fill me-2"></i>Fin d'Alerte Programmée
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-    <!-- Section Calendrier -->
-    <div id="calendar-section">
+        <div class="col-md-4 col-lg-5 mb-3"> {# Colonne pour autres contrôles #}
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-gear-wide-connected me-1"></i> Autres Contrôles
+                </div>
+                <div class="card-body">
+                     <button type="button" class="btn btn-outline-secondary w-100" id="btn-reload-config" onclick="reloadConfig()" {% if not user_has_permission('control:config_reload') %}disabled{% endif %}>
+                        <i class="bi bi-arrow-repeat me-2"></i>Recharger la Configuration
+                    </button>
+                    {# D'autres contrôles pourraient venir ici plus tard #}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Zone pour afficher les messages de feedback des contrôles (doit être conservée) -->
+    <div id="control-message" class="feedback-message" style="display: none; margin-top: 15px;"></div>
+
+    <!-- Section Calendrier (reste inchangée pour l'instant) -->
+    <div id="calendar-section" class="mt-4">
         <h2>Calendrier <span id="calendar-title-year">Annuel</span></h2>
         {% if user_has_permission('control:view_calendar') %}
         <div id="calendar-selector"> <!-- Sélecteur année scolaire -->
@@ -153,59 +180,6 @@
                  });
         }
 
-        function triggerAlert(alertType) {
-            console.log(`>>> Appel de triggerAlert avec type: ${alertType}`);
-            if (!configSettings || !configSettings.alert_files) { showFeedback("Erreur interne: Configuration des alertes non chargée.", 'error'); return; }
-            console.log("   -> Contenu configSettings:", JSON.stringify(configSettings.alert_files));
-            let alertFileName = null;
-            if (alertType === 'PPMS') { alertFileName = configSettings.alert_files.ppms; }
-            else if (alertType === 'Attentat') { alertFileName = configSettings.alert_files.attentat; }
-            console.log(`   -> Fichier récupéré: ${alertFileName}`);
-            if (!alertFileName) { showFeedback(`Sonnerie alerte '${alertType}' non configurée !`, 'error'); console.log("   -> Sortie: nom fichier absent."); return; }
-            const apiUrlTrigger = `/api/alert/trigger/${encodeURIComponent(alertFileName)}`;
-            console.log(`   -> Appel fetch vers: ${apiUrlTrigger}`);
-            fetch(apiUrlTrigger, { method: 'POST' })
-                .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
-                .then(({ ok, status, data }) => {
-                    console.log(`Cmd triggerAlert ${alertType} ${ok ? 'OK' : 'Erreur '+status}:`, data);
-                    const message = data.message || (ok ? `Alerte ${alertType} déclenchée.` : `Erreur ${status}`);
-                    if (ok) { showFeedback(message, 'success'); if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); } }
-                    else { const errorDetail = data.error || data.message || message; showFeedback(`Erreur déclenchement ${alertType}: ${errorDetail}`, 'error'); }
-                })
-                .catch(error => { console.error(`Erreur cmd triggerAlert ${alertType}:`, error); showFeedback(`Erreur réseau/serveur (Déclenchement ${alertType}): ${error.message}`, 'error'); });
-            console.log(`   -> Fetch lancé pour triggerAlert ${alertType}.`);
-        }
-
-        function stopAlert() {
-            console.log("Appel de stopAlert (Arrêt Urgence)");
-            const apiUrl = '/api/alert/stop';
-            console.log(`Envoi cmd: stop_alert -> ${apiUrl}`);
-            fetch(apiUrl, { method: 'POST' })
-                 .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
-                 .then(({ ok, status, data }) => {
-                    console.log(`Cmd stop_alert ${ok ? 'OK' : 'Erreur '+status}:`, data);
-                    const message = data.message || (ok ? `Arrêt Urgence effectué.` : `Erreur ${status}`);
-                    if (ok) { showFeedback(message, 'success'); if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); } }
-                    else { const errorDetail = data.error || data.message || message; showFeedback(`Erreur Arrêt Urgence: ${errorDetail}`, 'error'); }
-                 })
-                 .catch(error => { console.error(`Erreur cmd stop_alert:`, error); showFeedback(`Erreur réseau/serveur (Arrêt Urgence): ${error.message}`, 'error'); });
-        }
-
-		function endAlert() {
-			console.log("Appel de endAlert");
-			const apiUrl = '/api/alert/end';
-			console.log(`Envoi commande: end_alert -> ${apiUrl}`);
-			fetch(apiUrl, { method: 'POST' })
-				.then(response => { console.log(`endAlert - Réponse reçue, status: ${response.status}`); return response.json().then(data => ({ ok: response.ok, status: response.status, data })); })
-				.then(({ ok, status, data }) => {
-					console.log(`Cmd end_alert ${ok ? 'OK' : 'Erreur '+status}:`, data);
-					const message = data.message || (ok ? `Fin d'Alerte effectuée.` : `Erreur ${status}`);
-                    if (ok) { showFeedback(message, 'success'); if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); } }
-                    else { const errorDetail = data.error || data.message || message; showFeedback(`Erreur Fin d'Alerte: ${errorDetail}`, 'error'); }
-				})
-				.catch(error => { console.error(`Erreur cmd end_alert:`, error); showFeedback(`Erreur réseau/serveur (Fin Alerte): ${error.message}`, 'error'); });
-		}
-
 		function reloadConfig() { sendCommand('reload'); }
 
 		function showCalendar() {
@@ -319,5 +293,374 @@
             if (ctrlSect) ctrlSect.style.display = 'block'; else console.error("#control-section non trouvé !");
         }
         document.addEventListener('DOMContentLoaded', initialLoad);
+
+        // --- NOUVELLE LOGIQUE POUR LES ALERTES ---
+        let ppmsAlertActive = false;
+        let attentatAlertActive = false;
+        // Ces variables seront synchronisées avec l'état réel du backend via currentStatus
+
+        // Timers pour gérer le double-clic
+        let ppmsClickTimer = null;
+        let attentatClickTimer = null;
+        const DBL_CLICK_DELAY = 300; // ms
+
+        const btnAlertPpms = document.getElementById('btn-alert-ppms');
+        const btnAlertAttentat = document.getElementById('btn-alert-attentat');
+        const btnEndAlert = document.getElementById('btn-end-alert');
+
+        // Fonction pour mettre à jour l'état visuel des boutons d'alerte
+        function updateAlertButtonsUI(statusData) {
+            if (!statusData || !configSettings || !configSettings.alert_files) {
+                console.warn("updateAlertButtonsUI: statusData ou configSettings non prêts.", statusData, configSettings);
+                // Optionnel: mettre les boutons dans un état neutre/désactivé par défaut
+                if(btnAlertPpms) btnAlertPpms.disabled = true;
+                if(btnAlertAttentat) btnAlertAttentat.disabled = true;
+                if(btnEndAlert) btnEndAlert.disabled = true;
+                return;
+            }
+
+            // Assurer que les noms de fichiers dans configSettings.alert_files existent
+            const ppmsFileName = configSettings.alert_files.ppms;
+            const attentatFileName = configSettings.alert_files.attentat;
+
+            ppmsAlertActive = (statusData.alert_active && statusData.alert_type === ppmsFileName);
+            attentatAlertActive = (statusData.alert_active && statusData.alert_type === attentatFileName);
+
+            // Style du bouton PPMS
+            if (btnAlertPpms) {
+                if (ppmsAlertActive) {
+                    btnAlertPpms.classList.remove('btn-warning');
+                    btnAlertPpms.classList.add('btn-danger', 'active');
+                    btnAlertPpms.innerHTML = '<i class="bi bi-shield-fill-exclamation me-2"></i>PPMS ACTIVE (Dbl-Clic Arrêt)';
+                } else {
+                    btnAlertPpms.classList.remove('btn-danger', 'active');
+                    btnAlertPpms.classList.add('btn-warning');
+                    btnAlertPpms.innerHTML = '<i class="bi bi-shield-fill-exclamation me-2"></i>ALERTE PPMS';
+                }
+            }
+
+            // Style du bouton Attentat
+            if (btnAlertAttentat) {
+                if (attentatAlertActive) {
+                    btnAlertAttentat.classList.remove('btn-danger');
+                    btnAlertAttentat.classList.add('btn-dark', 'active');
+                    btnAlertAttentat.innerHTML = '<i class="bi bi-cone-striped me-2"></i>ATTENTAT ACTIF (Dbl-Clic Arrêt)';
+                } else {
+                    btnAlertAttentat.classList.remove('btn-dark', 'active');
+                    btnAlertAttentat.classList.add('btn-danger');
+                    btnAlertAttentat.innerHTML = '<i class="bi bi-cone-striped me-2"></i>ALERTE ATTENTAT';
+                }
+            }
+
+            // État du bouton Fin d'Alerte
+            if (btnEndAlert) {
+                btnEndAlert.disabled = !statusData.alert_active;
+            }
+
+            // S'assurer que les boutons de déclenchement ne sont pas cliquables si une alerte d'un autre type est active
+            if (btnAlertPpms) btnAlertPpms.disabled = attentatAlertActive;
+            if (btnAlertAttentat) btnAlertAttentat.disabled = ppmsAlertActive;
+
+            // Réactiver les boutons si aucune alerte n'est active et qu'ils étaient désactivés par la condition précédente
+            if (!statusData.alert_active) {
+                if (btnAlertPpms && btnAlertPpms.disabled) btnAlertPpms.disabled = false;
+                if (btnAlertAttentat && btnAlertAttentat.disabled) btnAlertAttentat.disabled = false;
+            }
+        }
+
+        // Fonction locale à control.html pour mettre à jour l'état local et appeler la mise à jour UI des boutons
+        // Cette fonction sera appelée après la récupération du statut (par exemple dans initialLoad ou par un event listener si global_status.js le permet)
+        function localUpdateStatusUI(data) {
+            console.log("Mise à jour UI status (control.html - localUpdateStatusUI):", data);
+            currentStatus = data; // Stocker les données globalement pour cette page
+            updateAlertButtonsUI(currentStatus);
+            // Il n'est pas nécessaire d'appeler fetchGlobalStatus() ici car cette fonction est PENSÉE pour être appelée QUAND global_status.js a DÉJÀ mis à jour le statut.
+            // L'objectif est de réagir à la mise à jour de currentStatus.
+        }
+
+        // Modification de initialLoad pour s'assurer que tout est prêt
+        // La fonction initialLoad originale :
+        // function initialLoad() {
+        //     console.log("Appel initialLoad() sur page control.html (utilisateur loggué via Flask-Login)...");
+        //     populateAcademicYearSelector();
+        //     loadConfigSettings(); // Déjà présent
+        //     showCalendar();
+        //     console.log("initialLoad: Appels de chargement de données lancés.");
+        //     const ctrlSect = document.getElementById('control-section'); // Ancienne section
+        //     // if (ctrlSect) ctrlSect.style.display = 'block'; else console.error("#control-section non trouvé !");
+        // }
+        // Nous devons nous assurer que loadConfigSettings est appelé, puis que le statut est récupéré pour appeler updateAlertButtonsUI.
+        // global_status.js appelle fetchGlobalStatus() et met à jour son UI.
+        // Pour que control.html mette à jour SES boutons, il faut que `currentStatus` soit mis à jour et que `updateAlertButtonsUI` soit appelée.
+
+        // Solution: on surcharge fetchGlobalStatus pour que control.html puisse aussi utiliser les données.
+        // Ou bien, on écoute un événement personnalisé que global_status.js pourrait émettre.
+        // Option plus simple pour l'instant: `initialLoad` fait son propre fetch pour `currentStatus`
+        // et `global_status.js` gère le sidebar indépendamment.
+        // On va modifier initialLoad pour cela.
+
+        // --- Fonctions d'appel API pour les alertes ---
+        function callTriggerAlertAPI(alertType) {
+            if (!configSettings || !configSettings.alert_files) {
+                showFeedback("Erreur: Configuration des alertes non chargée.", 'error');
+                return;
+            }
+            let alertFileNameKey = alertType.toLowerCase(); // 'ppms' ou 'attentat'
+            let alertFileName = configSettings.alert_files[alertFileNameKey];
+
+            if (!alertFileName) {
+                showFeedback(`Sonnerie alerte '${alertType}' non configurée !`, 'error');
+                return;
+            }
+            const apiUrlTrigger = `/api/alert/trigger/${encodeURIComponent(alertFileName)}`;
+            console.log(`Déclenchement alerte ${alertType} via ${apiUrlTrigger}`);
+            fetch(apiUrlTrigger, { method: 'POST' })
+                .then(response => response.json().then(data => ({ ok: response.ok, data })))
+                .then(({ ok, data }) => {
+                    const message = data.message || (ok ? `Alerte ${alertType} déclenchée.` : `Erreur déclenchement.`);
+                    showFeedback(message, ok ? 'success' : 'error');
+                    // Rafraîchir le statut global (qui devrait appeler updateAlertButtonsUI via la chaîne de màj de statut)
+                    if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); } else { console.warn("fetchGlobalStatus non défini, màj UI manuelle nécessaire ou statut sera décalé");}
+                })
+                .catch(error => {
+                    showFeedback(`Erreur réseau (Déclenchement ${alertType}): ${error.message}`, 'error');
+                    if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); }
+                });
+        }
+
+        function callStopAlertAPI() { // Arrêt d'urgence
+            console.log("Arrêt urgence alerte via /api/alert/stop");
+            fetch('/api/alert/stop', { method: 'POST' })
+                .then(response => response.json().then(data => ({ ok: response.ok, data })))
+                .then(({ ok, data }) => {
+                    const message = data.message || (ok ? `Alerte arrêtée (urgence).` : `Erreur arrêt urgence.`);
+                    showFeedback(message, ok ? 'success' : 'error');
+                    if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); }
+                })
+                .catch(error => {
+                    showFeedback(`Erreur réseau (Arrêt Urgence): ${error.message}`, 'error');
+                    if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); }
+                });
+        }
+
+        function callEndAlertAPI() { // Fin d'alerte programmée (avec son de fin)
+            console.log("Fin d'alerte programmée via /api/alert/end");
+            fetch('/api/alert/end', { method: 'POST' })
+                .then(response => response.json().then(data => ({ ok: response.ok, data })))
+                .then(({ ok, data }) => {
+                    const message = data.message || (ok ? `Fin d'alerte programmée effectuée.` : `Erreur fin d'alerte.`);
+                    showFeedback(message, ok ? 'success' : 'error');
+                    if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); }
+                })
+                .catch(error => {
+                    showFeedback(`Erreur réseau (Fin Alerte): ${error.message}`, 'error');
+                    if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); }
+                });
+        }
+
+        // Attachement des Event Listeners (doit être après la définition des fonctions et la dispo des boutons)
+        if (btnAlertPpms) {
+            btnAlertPpms.addEventListener('click', function() {
+                if (ppmsClickTimer === null) {
+                    ppmsClickTimer = setTimeout(function() {
+                        ppmsClickTimer = null;
+                        console.log("Simple clic PPMS (ignoré)");
+                    }, DBL_CLICK_DELAY);
+                } else {
+                    clearTimeout(ppmsClickTimer);
+                    ppmsClickTimer = null;
+                    console.log("Double-clic PPMS détecté");
+                    if (ppmsAlertActive) {
+                        callStopAlertAPI();
+                    } else {
+                        callTriggerAlertAPI('PPMS');
+                    }
+                }
+            });
+        } else { console.error("Bouton #btn-alert-ppms non trouvé"); }
+
+        if (btnAlertAttentat) {
+            btnAlertAttentat.addEventListener('click', function() {
+                if (attentatClickTimer === null) {
+                    attentatClickTimer = setTimeout(function() {
+                        attentatClickTimer = null;
+                        console.log("Simple clic Attentat (ignoré)");
+                    }, DBL_CLICK_DELAY);
+                } else {
+                    clearTimeout(attentatClickTimer);
+                    attentatClickTimer = null;
+                    console.log("Double-clic Attentat détecté");
+                    if (attentatAlertActive) {
+                        callStopAlertAPI();
+                    } else {
+                        callTriggerAlertAPI('Attentat');
+                    }
+                }
+            });
+        } else { console.error("Bouton #btn-alert-attentat non trouvé"); }
+
+        if (btnEndAlert) {
+            btnEndAlert.addEventListener('click', function() {
+                console.log("Clic sur Fin d'Alerte Programmée");
+                callEndAlertAPI();
+            });
+        } else { console.error("Bouton #btn-end-alert non trouvé"); }
+
+        // S'assurer que la fonction initialLoad est adaptée
+        // La fonction initialLoad doit être redéfinie ou modifiée pour prendre en compte la nouvelle logique
+        // en s'assurant que loadConfigSettings est appelé et que le statut initial est récupéré
+        // pour appeler updateAlertButtonsUI.
+
+        // On va surcharger la fonction initialLoad existante si elle est déjà définie globalement,
+        // ou la redéfinir ici. Pour l'instant, on va la patcher.
+        // L'ancien initialLoad est appelé par DOMContentLoaded.
+        // Il faut que notre updateAlertButtonsUI soit appelée après que configSettings et currentStatus sont prêts.
+
+        // Solution: On modifie `global_status.js` pour qu'il appelle `localUpdateStatusUI` s'il existe.
+        // Dans `global_status.js`, dans `updateGlobalStatusUI(data)`:
+        // ... (code existant)
+        // if (typeof localUpdateStatusUI === 'function') { // Vérifie si la page actuelle a défini cette fonction
+        //     localUpdateStatusUI(data);
+        // }
+        // Et dans `fetchGlobalStatus()` après avoir reçu les données:
+        // .then(data => {
+        //     if (data) {
+        //         updateGlobalStatusUI(data); // Ceci mettra à jour le sidebar
+        //         // ET SI localUpdateStatusUI existe (via la modif ci-dessus dans updateGlobalStatusUI), mettra à jour control.html
+        //     }
+        // })
+        // Cela semble être la solution la plus propre pour que `control.html` réagisse aux mises à jour de statut de `global_status.js`.
+        // Pour l'instant, je vais supposer que `fetchGlobalStatus` dans `global_status.js` va, d'une manière ou d'une autre,
+        // provoquer l'appel de `localUpdateStatusUI(data)` avec les données fraîches.
+        // L'appel initial dans `initialLoad` de `control.html` reste important pour le premier chargement.
+
+        // Redéfinition/Amélioration de initialLoad pour control.html
+        const originalInitialLoad = typeof initialLoad === 'function' ? initialLoad : function() {
+            console.log("initialLoad par défaut (control.html) - fonctions de base.");
+            if (typeof populateAcademicYearSelector === 'function') populateAcademicYearSelector();
+            if (typeof showCalendar === 'function') showCalendar();
+        };
+
+        function extendedInitialLoad() {
+            console.log("Appel extendedInitialLoad() sur page control.html...");
+            originalInitialLoad(); // Exécute le contenu de l'initialLoad de base (calendrier, etc.)
+
+            // 1. Charger la configuration des alertes (essentiel pour updateAlertButtonsUI)
+            if (typeof loadConfigSettings === 'function') {
+                loadConfigSettings(); // Cette fonction est asynchrone.
+                                      // Il faudrait chaîner la récupération du statut APRES que loadConfigSettings a terminé.
+            } else {
+                console.error("loadConfigSettings n'est pas défini!");
+                // Sans config, les boutons d'alerte ne fonctionneront pas correctement.
+                // On peut appeler updateAlertButtonsUI avec des données vides pour désactiver les boutons.
+                updateAlertButtonsUI(null);
+            }
+
+            // Idéalement, loadConfigSettings devrait retourner une promesse.
+            // Supposons pour l'instant qu'elle peuple configSettings de manière synchrone ou que le délai est acceptable.
+            // Ou mieux:
+            // if (typeof loadConfigSettings === 'function') {
+            //     fetch('/api/config/settings') // Refait ici pour avoir la promesse
+            //         .then(response => response.json())
+            //         .then(settingsData => {
+            //             if (settingsData.alert_files) { configSettings.alert_files = settingsData.alert_files; }
+            //             // Maintenant que configSettings est là, on peut charger le statut
+            //             return fetch('/api/status');
+            //         })
+            //         .then(response => response.json())
+            //         .then(statusData => {
+            //             localUpdateStatusUI(statusData); // Met à jour currentStatus et les boutons
+            //         })
+            //         .catch(error => {
+            //             console.error("Erreur dans la séquence de chargement initial (config/status):", error);
+            //             updateAlertButtonsUI(null); // Met les boutons dans un état d'erreur/désactivé
+            //         });
+            // }
+
+            // L'appel à fetchGlobalStatus() est déjà dans global_status.js et devrait mettre à jour le sidebar.
+            // Si global_status.js est modifié comme suggéré pour appeler localUpdateStatusUI,
+            // alors les boutons de control.html seront aussi mis à jour par cet appel périodique.
+
+            // Pour le tout premier affichage, il faut s'assurer que localUpdateStatusUI est appelée.
+            // `global_status.js` fait un `fetchGlobalStatus()` au `DOMContentLoaded`.
+            // Si `localUpdateStatusUI` est définie AVANT cet appel, elle sera prise en compte.
+            // On doit donc s'assurer que ce script s'exécute et définit localUpdateStatusUI tôt.
+            // Le `DOMContentLoaded` de `global_status.js` devrait appeler `fetchGlobalStatus` qui ensuite
+            // appellera `updateGlobalStatusUI` qui (si modifiée) appellera `localUpdateStatusUI`.
+
+            // Pour s'assurer que `updateAlertButtonsUI` est appelée au moins une fois avec les config chargées:
+            // Cela suppose que loadConfigSettings est synchrone ou rapide.
+            // Une meilleure approche est de chaîner les promesses comme dans le bloc commenté ci-dessus.
+            // Pour l'instant, on va compter sur l'appel initial de fetchGlobalStatus() dans global_status.js
+            // et la modification proposée pour qu'il appelle localUpdateStatusUI.
+            // On s'assure juste que localUpdateStatusUI est définie.
+            console.log("extendedInitialLoad: localUpdateStatusUI est définie. En attente de l'appel par global_status.js ou un fetch local.");
+        }
+
+        // Remplacer l'ancien listener DOMContentLoaded par le nouveau si initialLoad est redéfini
+        // Ou s'assurer que l'original initialLoad appelle ce qu'il faut.
+        // Si `initialLoad` est déjà utilisé par `DOMContentLoaded` :
+        // Il faut s'assurer que l'appel à `loadConfigSettings` et la logique pour `localUpdateStatusUI`
+        // sont bien intégrés.
+        // Pour l'instant, le `DOMContentLoaded` existant appelle `initialLoad`.
+        // On va patcher `initialLoad` à la fin du script.
+
+        // Patch de la fonction initialLoad existante pour y ajouter nos besoins spécifiques à control.html
+        // Cela est risqué si l'ordre d'exécution des scripts n'est pas garanti.
+        // Une meilleure approche serait de mettre toute la logique de control.html dans son propre DOMContentLoaded
+        // ou d'utiliser un système d'événements plus robuste.
+
+        // Pour l'instant, on va juste s'assurer que `localUpdateStatusUI` est définie.
+        // Et on va compter sur le `fetchGlobalStatus` de `global_status.js` pour l'appeler.
+        // On doit aussi s'assurer que `configSettings` est chargé. `loadConfigSettings()` est déjà dans l'ancien `initialLoad`.
+
+        // Redéfinissons `initialLoad` pour `control.html` pour mieux contrôler le flux
+        function initialLoad() { // Cette fonction sera appelée par DOMContentLoaded
+            console.log("Appel initialLoad() sur page control.html (NOUVELLE VERSION)...");
+            if (typeof populateAcademicYearSelector === 'function') populateAcademicYearSelector();
+
+            // 1. Charger la configuration (nécessaire pour les noms de fichiers d'alerte)
+            // loadConfigSettings(); // Est asynchrone, donc on ne peut pas compter sur configSettings immédiatement après
+
+            // Chaînage pour s'assurer que configSettings est chargé AVANT de tenter de mettre à jour l'UI des boutons
+            fetch('/api/config/settings')
+                .then(response => {
+                    if (!response.ok) throw new Error(`Erreur HTTP config: ${response.status}`);
+                    return response.json();
+                })
+                .then(settingsData => {
+                    console.log("Settings reçus dans initialLoad (control.html):", settingsData);
+                    if (settingsData.alert_files) {
+                        configSettings.alert_files = settingsData.alert_files;
+                        console.log("Noms fichiers alerte stockés (control.html):", configSettings.alert_files);
+                    } else {
+                        console.warn("Aucun fichier alerte dans settings API (control.html).");
+                        configSettings.alert_files = { ppms: null, attentat: null };
+                    }
+                    // Maintenant que configSettings est (potentiellement) chargé, on peut essayer de récupérer le statut
+                    // et mettre à jour les boutons.
+                    // Le fetchGlobalStatus de global_status.js s'occupera des mises à jour périodiques
+                    // et de la première mise à jour du sidebar. S'il appelle localUpdateStatusUI, c'est encore mieux.
+                    // Mais faisons un appel ici pour être sûr pour le premier affichage des boutons de control.html
+                    return fetch('/api/status');
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error(`Erreur HTTP status: ${response.status}`);
+                    return response.json();
+                })
+                .then(statusData => {
+                    console.log("Statut initial reçu dans initialLoad (control.html):", statusData);
+                    localUpdateStatusUI(statusData); // Met à jour currentStatus et les boutons d'alerte
+                })
+                .catch(error => {
+                    console.error("Erreur dans la séquence de chargement initial (config/status) pour control.html:", error);
+                    localUpdateStatusUI({ alert_active: false, alert_type: null }); // Tente de mettre les boutons dans un état par défaut/erreur
+                });
+
+            if (typeof showCalendar === 'function') showCalendar();
+            console.log("initialLoad (control.html): Appels de chargement de données lancés.");
+        }
+        // Le DOMContentLoaded existant appellera cette nouvelle version de initialLoad.
+
     </script>
 {% endblock %}
