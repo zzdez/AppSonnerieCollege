@@ -54,10 +54,14 @@
                         <i class="bi bi-arrow-clockwise"></i>
                     </button>
                 </h6>
-                <p class="mb-1"><small>Scheduler: <span id="global-scheduler-status" class="status-unknown">N/A</span></small></p>
-                <p class="mb-1"><small>Proch. Sonnerie: <span id="global-next-ring" class="status-unknown">N/A</span></small></p>
-                <p class="mb-1"><small>Alerte Active: <span id="global-alert-active" class="status-unknown">N/A</span></small></p>
-                <p class="mb-0"><small>Dern. Erreur: <span id="global-last-error" class="status-unknown">N/A</span></small></p>
+                <p class="mb-1">Scheduler: <span id="global-scheduler-status" class="status-unknown">N/A</span></p>
+                <div class="mb-1"> <!-- Utiliser un div pour mieux contrôler le layout de "Proch. Sonnerie" -->
+                    Proch. Sonnerie:
+                    <div><span id="global-next-ring-time" class="status-unknown">N/A</span></div>
+                    <div><small><span id="global-next-ring-label" class="status-unknown"></span></small></div> <!-- Label/MP3 en plus petit et en dessous -->
+                </div>
+                <p class="mb-1">Alerte Active: <span id="global-alert-active" class="status-unknown">N/A</span></p>
+                <p class="mb-0">Dern. Erreur: <span id="global-last-error" class="status-unknown">N/A</span></p>
             </div>
         </div>
         <!-- /#sidebar-wrapper -->

@@ -1,15 +1,15 @@
 /* Styles pour le widget de statut dans le sidebar */
 .sidebar-status-widget {
-    font-size: 0.8rem; /* Police plus petite */
-    background-color: #f8f9fa; /* Ou une autre couleur discrète */
+    font-size: 0.9rem; /* Ou 1rem. À ajuster pour correspondre au menu. */
+    /* background-color: #f8f9fa; /* Conserver ou ajuster si besoin */
+    line-height: 1.4; /* Ajuster pour un bon espacement vertical */
 }
 .sidebar-status-widget h6 {
-    font-size: 0.9rem;
+    font-size: 1rem; /* Un peu plus grand que le texte du statut */
     font-weight: bold;
 }
-.sidebar-status-widget p {
-    margin-bottom: 0.25rem !important; /* Espacement réduit entre les lignes de statut */
-    line-height: 1.2;
+.sidebar-status-widget p, .sidebar-status-widget div[class^="mb-"] { /* Cible les <p> et les <div> pour Proch. Sonnerie */
+    margin-bottom: 0.35rem !important; /* Espacement ajusté */
 }
 .sidebar-status-widget .status-unknown { color: #6c757d; } /* Gris pour inconnu/N/A */
 .sidebar-status-widget .status-ok { color: #198754; }      /* Vert pour OK */

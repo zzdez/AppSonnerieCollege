@@ -15,30 +15,40 @@ function updateGlobalStatusUI(data) {
         }
     }
 
-    const nextRingSpan = document.getElementById('global-next-ring');
-    if (nextRingSpan) {
-        if (data.next_ring_time && data.scheduler_running === true) { // Afficher que si le scheduler est explicitement actif
+    // const nextRingSpan = document.getElementById('global-next-ring'); // ANCIENNE LIGNE
+    const nextRingTimeSpan = document.getElementById('global-next-ring-time');
+    const nextRingLabelSpan = document.getElementById('global-next-ring-label');
+
+    if (nextRingTimeSpan && nextRingLabelSpan) {
+        if (data.next_ring_time && data.scheduler_running === true) {
             try {
                 const d = new Date(data.next_ring_time);
                 if (!isNaN(d.getTime())) {
-                    nextRingSpan.textContent = `${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} (${data.next_ring_label || '?'})`;
-                    nextRingSpan.className = '';
+                    nextRingTimeSpan.textContent = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                    nextRingTimeSpan.className = '';
+                    nextRingLabelSpan.textContent = `(${data.next_ring_label || '?'})`;
+                    nextRingLabelSpan.className = ''; // ou une classe spécifique si besoin de style
                 } else { throw new Error('Invalid date'); }
             } catch (e) {
-                nextRingSpan.textContent = 'Erreur date';
-                nextRingSpan.className = 'status-error';
+                nextRingTimeSpan.textContent = 'Erreur date';
+                nextRingTimeSpan.className = 'status-error';
+                nextRingLabelSpan.textContent = '';
                 console.error("Err date next_ring (global):", data.next_ring_time);
             }
         } else if (data.scheduler_running === false) {
-            nextRingSpan.textContent = 'N/A (Scheduler Inactif)';
-            nextRingSpan.className = 'status-inactive';
+            nextRingTimeSpan.textContent = 'N/A';
+            nextRingTimeSpan.className = 'status-inactive';
+            nextRingLabelSpan.textContent = '(Scheduler Inactif)';
+            nextRingLabelSpan.className = 'status-inactive';
         } else if (typeof data.scheduler_running !== 'boolean') { // Erreur API
-            nextRingSpan.textContent = 'N/A';
-            nextRingSpan.className = 'status-error';
-        }
-         else { // Cas scheduler_running est true mais pas de next_ring_time
-            nextRingSpan.textContent = 'Aucune';
-            nextRingSpan.className = '';
+            nextRingTimeSpan.textContent = 'N/A';
+            nextRingTimeSpan.className = 'status-error';
+            nextRingLabelSpan.textContent = '(Erreur)';
+            nextRingLabelSpan.className = 'status-error';
+        } else { // Cas scheduler_running est true mais pas de next_ring_time
+            nextRingTimeSpan.textContent = 'Aucune';
+            nextRingTimeSpan.className = '';
+            nextRingLabelSpan.textContent = '';
         }
     }
 
