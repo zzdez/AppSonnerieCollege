@@ -97,66 +97,7 @@
                 .catch(error => { console.error("Erreur chargement settings:", error); configSettings.alert_files = { ppms: null, attentat: null }; });
         }
 
-		function updateStatusUI(data) {
-            console.log("Mise à jour UI status:", data); currentStatus = data;
-            const schedulerStatusSpan = document.getElementById('scheduler-status');
-            if (schedulerStatusSpan) {
-                schedulerStatusSpan.textContent = data.scheduler_running ? 'Actif' : 'Inactif';
-                schedulerStatusSpan.className = data.scheduler_running ? 'status-ok' : 'status-inactive';
-            }
-            const nextRingSpan = document.getElementById('next-ring');
-            if (nextRingSpan) {
-                if (data.next_ring_time) {
-                    try {
-                        const d = new Date(data.next_ring_time);
-                        if (!isNaN(d.getTime())) {
-                            nextRingSpan.textContent = `${d.toLocaleString('fr-FR')} (${data.next_ring_label||'?'})`;
-                            nextRingSpan.className = '';
-                        } else { throw new Error('Invalid date'); }
-                    } catch (e) {
-                        nextRingSpan.textContent = 'Erreur date';
-                        nextRingSpan.className = 'status-error';
-                        console.error("Err date next_ring:", data.next_ring_time);
-                    }
-                } else {
-                    nextRingSpan.textContent = data.scheduler_running ? 'Aucune' : 'N/A';
-                    nextRingSpan.className = data.scheduler_running ? 'status-inactive' : 'status-unknown';
-                }
-            }
-            const lastErrorSpan = document.getElementById('last-error');
-            if (lastErrorSpan) {
-                lastErrorSpan.textContent = data.last_error || 'Aucune';
-                lastErrorSpan.className = data.last_error && data.last_error !== 'Aucune' ? 'status-error' : 'status-ok';
-            }
-            const alertActiveSpan = document.getElementById('alert-active');
-            if (alertActiveSpan) {
-                alertActiveSpan.textContent = data.alert_active ? 'Oui' : 'Non';
-                alertActiveSpan.className = data.alert_active ? 'status-error' : 'status-ok';
-            }
-        }
-
-		function updateStatus() {
-			console.log("Appel updateStatus (fetch)...");
-			fetch('/api/status')
-				.then(response => {
-					console.log("Réponse /api/status (update), statut:", response.status);
-					if (!response.ok) {
-						if (response.status === 404) { throw new Error("API Status introuvable"); }
-						throw new Error(`Erreur HTTP status: ${response.status}`);
-					}
-					return response.json();
-				})
-				.then(data => {
-					updateStatusUI(data);
-				})
-				.catch(error => {
-					console.error("Erreur lors de la récupération/maj du statut:", error);
-					 updateStatusUI({
-						 scheduler_running: 'Erreur', next_ring_time: null, next_ring_label: 'Erreur',
-						 last_error: error.message, alert_active: 'Erreur'
-					 });
-				});
-		}
+        // Les fonctions updateStatusUI() et updateStatus() sont maintenant dans global_status.js
 
         function showFeedback(message, type = 'info', duration = 4000) {
             const feedbackDiv = document.getElementById('control-message');
@@ -199,7 +140,7 @@
                       const message = data.message || (ok ? `${actionText} réussie.` : `Erreur ${status}`);
                       if (ok) {
                           showFeedback(message, 'success');
-                          updateStatus();
+                          if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); }
                           if (action === 'reload') { showCalendar(); } // Recharger calendrier si config rechargée
                       } else {
                            const errorDetail = data.error || data.message || message;
@@ -228,7 +169,7 @@
                 .then(({ ok, status, data }) => {
                     console.log(`Cmd triggerAlert ${alertType} ${ok ? 'OK' : 'Erreur '+status}:`, data);
                     const message = data.message || (ok ? `Alerte ${alertType} déclenchée.` : `Erreur ${status}`);
-                    if (ok) { showFeedback(message, 'success'); updateStatus(); }
+                    if (ok) { showFeedback(message, 'success'); if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); } }
                     else { const errorDetail = data.error || data.message || message; showFeedback(`Erreur déclenchement ${alertType}: ${errorDetail}`, 'error'); }
                 })
                 .catch(error => { console.error(`Erreur cmd triggerAlert ${alertType}:`, error); showFeedback(`Erreur réseau/serveur (Déclenchement ${alertType}): ${error.message}`, 'error'); });
@@ -244,7 +185,7 @@
                  .then(({ ok, status, data }) => {
                     console.log(`Cmd stop_alert ${ok ? 'OK' : 'Erreur '+status}:`, data);
                     const message = data.message || (ok ? `Arrêt Urgence effectué.` : `Erreur ${status}`);
-                    if (ok) { showFeedback(message, 'success'); updateStatus(); }
+                    if (ok) { showFeedback(message, 'success'); if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); } }
                     else { const errorDetail = data.error || data.message || message; showFeedback(`Erreur Arrêt Urgence: ${errorDetail}`, 'error'); }
                  })
                  .catch(error => { console.error(`Erreur cmd stop_alert:`, error); showFeedback(`Erreur réseau/serveur (Arrêt Urgence): ${error.message}`, 'error'); });
@@ -259,7 +200,7 @@
 				.then(({ ok, status, data }) => {
 					console.log(`Cmd end_alert ${ok ? 'OK' : 'Erreur '+status}:`, data);
 					const message = data.message || (ok ? `Fin d'Alerte effectuée.` : `Erreur ${status}`);
-                    if (ok) { showFeedback(message, 'success'); updateStatus(); }
+                    if (ok) { showFeedback(message, 'success'); if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); } }
                     else { const errorDetail = data.error || data.message || message; showFeedback(`Erreur Fin d'Alerte: ${errorDetail}`, 'error'); }
 				})
 				.catch(error => { console.error(`Erreur cmd end_alert:`, error); showFeedback(`Erreur réseau/serveur (Fin Alerte): ${error.message}`, 'error'); });
@@ -371,7 +312,7 @@
             console.log("Appel initialLoad() sur page control.html (utilisateur loggué via Flask-Login)...");
             populateAcademicYearSelector();
             loadConfigSettings();
-            updateStatus();
+            // updateStatus(); // Appel initial au statut global géré par global_status.js
             showCalendar();
             console.log("initialLoad: Appels de chargement de données lancés.");
             const ctrlSect = document.getElementById('control-section');
