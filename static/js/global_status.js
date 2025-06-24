@@ -4,16 +4,31 @@
 function updateGlobalStatusUI(data) {
     console.log("Mise à jour UI statut GLOBAL:", data);
 
-    // Logique pour le switch scheduler-toggle-switch
+    // Logique pour le switch scheduler-toggle-switch et son texte
     const schedulerToggle = document.getElementById('scheduler-toggle-switch');
-    if (schedulerToggle) {
+    const schedulerStatusText = document.getElementById('scheduler-status-text'); // Récupérer le nouveau span
+
+    if (schedulerToggle && schedulerStatusText) { // S'assurer que les deux éléments existent
+        schedulerStatusText.textContent = ''; // Vider le texte précédent
+        schedulerStatusText.classList.remove('bg-success', 'bg-warning', 'bg-secondary', 'bg-danger'); // Nettoyer les anciennes classes de couleur
+
         if (typeof data.scheduler_running === 'boolean') {
             schedulerToggle.checked = data.scheduler_running;
             schedulerToggle.disabled = false;
+
+            if (data.scheduler_running) {
+                schedulerStatusText.textContent = 'Actif';
+                schedulerStatusText.classList.add('bg-success');
+            } else {
+                schedulerStatusText.textContent = 'Inactif';
+                schedulerStatusText.classList.add('bg-secondary'); // Ou 'bg-warning'
+            }
         } else {
             // En cas d'erreur ou de statut non booléen, on le décoche et le désactive
             schedulerToggle.checked = false;
             schedulerToggle.disabled = true;
+            schedulerStatusText.textContent = 'Erreur';
+            schedulerStatusText.classList.add('bg-danger');
             console.warn("Statut du scheduler non booléen, switch désactivé:", data.scheduler_running);
         }
     }
