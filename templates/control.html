@@ -21,21 +21,6 @@
 	</div>
 	</div>
 
-    <!-- Section Statut -->
-    <div id="status-section">
-        <h2>Statut du Système</h2>
-        {% if user_has_permission('control:view_status') %}
-        <p>État du Scheduler: <span id="scheduler-status" class="status-unknown">Chargement...</span></p>
-        <p>Prochaine Sonnerie: <span id="next-ring" class="status-unknown">Chargement...</span></p>
-        <p>Dernière Erreur: <span id="last-error" class="status-unknown">Chargement...</span></p>
-        <p>Alerte Active: <span id="alert-active" class="status-unknown">Chargement...</span></p>
-        {# Le statut d'authentification n'est plus géré ici directement, car la page est protégée #}
-        {# <p>Authentifié: <span id="auth-status" class="status-error">Non</span></p> #}
-        {% else %}
-        <p><em>Vous n'avez pas la permission de voir le statut détaillé du système.</em></p>
-        {% endif %}
-    </div>
-
     <!-- Section Calendrier -->
     <div id="calendar-section">
         <h2>Calendrier <span id="calendar-title-year">Annuel</span></h2>
