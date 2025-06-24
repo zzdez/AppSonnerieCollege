@@ -142,7 +142,14 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
         console.log("Sur la page de login, initialisation du statut global différée.");
     }
+
+    const reloadConfigSidebarBtn = document.getElementById('reload-config-sidebar-btn');
+    if (reloadConfigSidebarBtn) {
+        reloadConfigSidebarBtn.addEventListener('click', callReloadConfigAPI);
+    }
 });
+
+// --- Fonctions de contrôle spécifiques au statut global ---
 
 // Fonction pour gérer le changement d'état du switch du scheduler
 function handleSchedulerToggleChange() {
@@ -178,5 +185,47 @@ function handleSchedulerToggleChange() {
             // Toujours rafraîchir le statut pour refléter l'état réel du backend
             fetchGlobalStatus();
             // Le switch sera réactivé (ou désactivé correctement en cas d'erreur persistante) par updateGlobalStatusUI appelé par fetchGlobalStatus
+        });
+}
+
+function callReloadConfigAPI() {
+    console.log("Rechargement de la configuration demandé depuis le sidebar...");
+    const btn = document.getElementById('reload-config-sidebar-btn');
+    if(btn) btn.disabled = true;
+
+    fetch('/api/config/reload', { method: 'POST' })
+        .then(response => response.json().then(data => ({ ok: response.ok, data })))
+        .then(({ ok, data }) => {
+            const message = data.message || (ok ? `Configuration rechargée avec succès.` : `Erreur lors du rechargement de la configuration.`);
+            if (ok) {
+                console.info(message);
+                // Ici, on pourrait appeler une fonction de feedback globale si elle existait
+                // exemple: showGlobalNotification(message, 'success');
+            } else {
+                console.error(message);
+                // exemple: showGlobalNotification(message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error(`Erreur réseau lors du rechargement de la configuration: ${error.message}`);
+            // exemple: showGlobalNotification(`Erreur réseau: ${error.message}`, 'error');
+        })
+        .finally(() => {
+            // Toujours rafraîchir le statut global pour refléter tout changement potentiel (même si config reload ne change pas directement le statut)
+            // et pour s'assurer que localUpdateStatusUI est appelé sur control.html si les settings ont changé.
+            if (typeof fetchGlobalStatus === 'function') fetchGlobalStatus();
+
+            // Important: Si la page control.html est ouverte, elle doit aussi recharger ses propres settings et son calendrier.
+            // Cela pourrait être fait en émettant un événement personnalisé ici, que control.html écouterait.
+            // Ou, si `fetchGlobalStatus` provoque l'appel de `localUpdateStatusUI` sur `control.html`,
+            // `control.html` pourrait vérifier si `configSettings` a besoin d'être rechargé.
+            // Pour l'instant, on se contente de rafraîchir le statut global.
+            // Un rechargement complet de la page control.html pourrait être nécessaire pour voir les effets de la config.
+            // ou un appel explicite à des fonctions de rechargement sur control.html.
+            // Par exemple, si `control.html` a une fonction `refreshPageSpecificConfigsAndUI()`:
+            // if (typeof refreshPageSpecificConfigsAndUI === 'function') { refreshPageSpecificConfigsAndUI(); }
+
+
+            if(btn) btn.disabled = false; // Réactiver le bouton
         });
 }

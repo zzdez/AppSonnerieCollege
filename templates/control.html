@@ -6,43 +6,34 @@
 
 {% block content %}
     <div class="row">
-        <div class="col-md-8 col-lg-7 mb-3"> {# Colonne pour les alertes #}
+        <div class="col-md-12 mb-3"> {# Colonne pour les alertes - prend toute la largeur #}
             <div class="card">
                 <div class="card-header">
                     <i class="bi bi-exclamation-triangle-fill me-1"></i> Actions d'Alerte
                 </div>
-                <div class="card-body text-center"> {# text-center pour centrer les groupes de boutons #}
-                    <p class="card-text text-muted mb-3"><small>Double-cliquez sur un bouton pour déclencher ou arrêter l'alerte correspondante.</small></p>
-                    <div class="btn-group mb-2" role="group" aria-label="Alertes Principales">
-                        <button type="button" class="btn btn-lg btn-warning px-4" id="btn-alert-ppms" title="Double-clic pour gérer l'alerte PPMS">
-                            <i class="bi bi-shield-fill-exclamation me-2"></i>ALERTE PPMS
-                        </button>
-                        <button type="button" class="btn btn-lg btn-danger px-4" id="btn-alert-attentat" title="Double-clic pour gérer l'alerte Attentat">
-                            <i class="bi bi-cone-striped me-2"></i>ALERTE ATTENTAT
-                        </button>
-                    </div>
-                    <div>
-                        <button type="button" class="btn btn-success" id="btn-end-alert" title="Terminer l'alerte en cours avec le son de fin" disabled>
-                            <i class="bi bi-check-circle-fill me-2"></i>Fin d'Alerte Programmée
-                        </button>
+                <div class="card-body text-center">
+                    <p class="card-text text-muted mb-3"><small>Double-cliquez sur un bouton d'alerte pour déclencher ou arrêter l'alerte correspondante.</small></p>
+                    <div class="btn-toolbar justify-content-center" role="toolbar" aria-label="Toolbar avec groupes de boutons d'alerte">
+                        <div class="btn-group me-2" role="group" aria-label="Alerte PPMS">
+                            <button type="button" class="btn btn-lg btn-warning px-3" id="btn-alert-ppms" title="Double-clic pour gérer l'alerte PPMS">
+                                <i class="bi bi-shield-fill-exclamation me-1"></i>PPMS
+                            </button>
+                        </div>
+                        <div class="btn-group me-2" role="group" aria-label="Alerte Attentat">
+                            <button type="button" class="btn btn-lg btn-danger px-3" id="btn-alert-attentat" title="Double-clic pour gérer l'alerte Attentat">
+                                <i class="bi bi-cone-striped me-1"></i>ATTENTAT
+                            </button>
+                        </div>
+                        <div class="btn-group" role="group" aria-label="Fin Alerte">
+                            <button type="button" class="btn btn-lg btn-success px-3" id="btn-end-alert" title="Terminer l'alerte en cours avec le son de fin" disabled>
+                                <i class="bi bi-check-circle-fill me-1"></i>Sonnerie Fin d'Alerte
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-
-        <div class="col-md-4 col-lg-5 mb-3"> {# Colonne pour autres contrôles #}
-            <div class="card">
-                <div class="card-header">
-                    <i class="bi bi-gear-wide-connected me-1"></i> Autres Contrôles
-                </div>
-                <div class="card-body">
-                     <button type="button" class="btn btn-outline-secondary w-100" id="btn-reload-config" onclick="reloadConfig()" {% if not user_has_permission('control:config_reload') %}disabled{% endif %}>
-                        <i class="bi bi-arrow-repeat me-2"></i>Recharger la Configuration
-                    </button>
-                    {# D'autres contrôles pourraient venir ici plus tard #}
-                </div>
-            </div>
-        </div>
+        {# Ancienne colonne "Autres Contrôles" supprimée #}
     </div>
 
     <!-- Zone pour afficher les messages de feedback des contrôles (doit être conservée) -->
@@ -179,8 +170,6 @@
                      showFeedback(`Erreur réseau/serveur (${actionText}): ${error.message}`, 'error');
                  });
         }
-
-		function reloadConfig() { sendCommand('reload'); }
 
 		function showCalendar() {
              console.log(`Début showCalendar pour année scolaire: ${selectedAcademicYear}`); const titleElement = document.getElementById('calendar-title-year'); if (titleElement) titleElement.textContent = `Scolaire ${selectedAcademicYear}`;
