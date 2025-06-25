@@ -51,22 +51,36 @@
                     <select id="calendar-view-type-select" class="form-select form-select-sm" style="min-width: 100px;" onchange="changeCalendarView()">
                         <option value="year" selected>Annuelle</option>
                         <option value="month">Mensuelle</option>
-                        <!-- <option value="semester">Semestrielle</option> -->
-                        <!-- <option value="week">Hebdomadaire</option> -->
-                        <!-- <option value="day">Journalière</option> -->
+                        <option value="week">Hebdomadaire</option>
+                        <option value="day">Journalière</option>
                     </select>
                 </div>
 
-                <div id="calendar-controls-year" class="d-flex align-items-center">
+                <div id="calendar-controls-year" class="d-flex align-items-center"> {# Ce conteneur garde le sélecteur d'année et de mois #}
                     <label for="academic-year-select" class="form-label mb-0 me-2 text-nowrap">Année scolaire :</label>
                     <select id="academic-year-select" class="form-select form-select-sm" style="min-width: 120px;" onchange="changeCalendarView()">
                         <!-- Options ajoutées par JS -->
                     </select>
 
-                    {# NOUVEAU Sélecteur de Mois (initialement masqué) #}
+                    {# Sélecteur de Mois (initialement masqué) #}
                     <div id="month-selector-container" class="ms-2 d-flex align-items-center" style="display: none;">
                         <label for="month-select" class="form-label mb-0 me-2 text-nowrap">Mois :</label>
                         <select id="month-select" class="form-select form-select-sm" style="min-width: 130px;" onchange="changeCalendarView()"></select>
+                    </div>
+                </div>
+
+                {# Nouveau conteneur pour les contrôles de date spécifiques (hebdo/jour) #}
+                <div id="calendar-date-specific-controls" class="ms-3 d-flex align-items-center">
+                    {# Pour la vue Hebdomadaire (sélectionner un jour dans la semaine) #}
+                    <div id="week-selector-container" class="d-flex align-items-center me-2" style="display: none;">
+                        <label for="week-date-select" class="form-label mb-0 me-2 text-nowrap">Semaine du :</label>
+                        <input type="date" id="week-date-select" class="form-control form-control-sm" style="min-width: 150px;" onchange="changeCalendarView()">
+                    </div>
+
+                    {# Pour la vue Journalière #}
+                    <div id="day-selector-container" class="d-flex align-items-center" style="display: none;">
+                        <label for="day-date-select" class="form-label mb-0 me-2 text-nowrap">Jour :</label>
+                        <input type="date" id="day-date-select" class="form-control form-control-sm" style="min-width: 150px;" onchange="changeCalendarView()">
                     </div>
                 </div>
             </div>
@@ -102,6 +116,8 @@ let configSettings = { alert_files: { ppms: null, attentat: null } };
 let selectedAcademicYear; // Sera initialisée par getDefaultAcademicYear dans DOMContentLoaded
 let selectedCalendarView = 'year'; // Valeur par défaut
 let selectedMonth = new Date().getMonth() + 1; // Mois actuel par défaut (1-12)
+let selectedWeekStartDate = null; // Stockera l'objet Date du début de la semaine sélectionnée
+let selectedSpecificDay = null; // Stockera l'objet Date du jour sélectionné
 
 // Variables pour la logique d'alerte
 let ppmsClickTimer = null;
@@ -197,53 +213,97 @@ function changeCalendarView() {
     const viewSelect = document.getElementById('calendar-view-type-select');
     const yearSelect = document.getElementById('academic-year-select');
     const monthSelect = document.getElementById('month-select');
-    const monthSelectorContainer = document.getElementById('month-selector-container');
+
+    // Conteneurs de contrôle
+    const yearControlsContainer = document.getElementById('calendar-controls-year'); // Contient année et mois
+    const monthSelectorContainer = document.getElementById('month-selector-container'); // Spécifique au mois
+    const weekSelectorContainer = document.getElementById('week-selector-container');
+    const daySelectorContainer = document.getElementById('day-selector-container');
+
+    // Inputs de date spécifiques
+    const weekDateSelect = document.getElementById('week-date-select');
+    const dayDateSelect = document.getElementById('day-date-select');
 
     if (viewSelect) selectedCalendarView = viewSelect.value;
 
-    // Stocker l'ancienne année scolaire pour détecter un changement
     const previousAcademicYear = selectedAcademicYear;
     if (yearSelect) selectedAcademicYear = yearSelect.value;
 
-    if (monthSelectorContainer && monthSelect) {
-        if (selectedCalendarView === 'month') {
-            monthSelectorContainer.style.display = 'flex'; // Assurer la visibilité avec flex
-            // Peupler le sélecteur de mois si ce n'est pas déjà fait ou si l'année a changé, ou si selectedMonth n'est pas encore initialisé correctement
-            if (!monthSelect.options.length || previousAcademicYear !== selectedAcademicYear || selectedMonth === undefined) {
-                populateMonthSelector(selectedAcademicYear); // populateMonthSelector met à jour selectedMonth
-            }
-            // S'assurer que selectedMonth est synchronisé avec la valeur du sélecteur après population/changement
-             selectedMonth = parseInt(monthSelect.value);
+    // Cacher tous les contrôles spécifiques par défaut, puis réafficher ceux nécessaires
+    // Le conteneur yearControlsContainer (pour année/mois) est géré différemment
+    if (monthSelectorContainer) monthSelectorContainer.style.display = 'none';
+    if (weekSelectorContainer) weekSelectorContainer.style.display = 'none';
+    if (daySelectorContainer) daySelectorContainer.style.display = 'none';
 
+    // Gérer la visibilité du conteneur principal pour année/mois
+    if (yearControlsContainer) {
+        if (selectedCalendarView === 'year' || selectedCalendarView === 'month') {
+            yearControlsContainer.style.display = 'flex';
         } else {
-            monthSelectorContainer.style.display = 'none';
+            // Pour 'week' et 'day', on pourrait vouloir masquer tout le bloc année/mois si les nouveaux sélecteurs sont placés ailleurs.
+            // Ici, on le laisse visible mais on cache le sélecteur de mois spécifiquement.
+            // Ou, si les nouveaux sélecteurs sont DANS calendar-controls-year, on ne le cache pas ici.
+            // Actuellement, ils sont dans calendar-date-specific-controls, donc on peut potentiellement cacher calendar-controls-year.
+            // Pour l'instant, on va le laisser visible par défaut et ne cacher que le mois.
+            // Si on veut cacher tout le bloc année/mois pour 'week'/'day':
+            // yearControlsContainer.style.display = 'none';
         }
     }
 
-    console.log(`Changement vue/période: Vue=${selectedCalendarView}, Année=${selectedAcademicYear}, Mois=${selectedMonth}`);
 
-    // Mettre à jour le titre du calendrier
+    if (selectedCalendarView === 'year') {
+        // selectedAcademicYear est déjà mis à jour
+    } else if (selectedCalendarView === 'month') {
+        if (monthSelectorContainer && monthSelect) {
+            monthSelectorContainer.style.display = 'flex';
+            if (!monthSelect.options.length || previousAcademicYear !== selectedAcademicYear || selectedMonth === undefined) {
+                populateMonthSelector(selectedAcademicYear);
+            }
+            selectedMonth = parseInt(monthSelect.value);
+        }
+    } else if (selectedCalendarView === 'week') {
+        if (weekSelectorContainer) weekSelectorContainer.style.display = 'flex';
+        if (weekDateSelect) {
+            if (!weekDateSelect.value) {
+                weekDateSelect.valueAsDate = new Date(); // Initialiser avec aujourd'hui si vide
+            }
+            selectedWeekStartDate = new Date(weekDateSelect.value);
+        }
+    } else if (selectedCalendarView === 'day') {
+        if (daySelectorContainer) daySelectorContainer.style.display = 'flex';
+        if (dayDateSelect) {
+            if (!dayDateSelect.value) {
+                dayDateSelect.valueAsDate = new Date(); // Initialiser avec aujourd'hui si vide
+            }
+            selectedSpecificDay = new Date(dayDateSelect.value);
+        }
+    }
+
+    console.log(`Vue: ${selectedCalendarView}, Année: ${selectedAcademicYear}, Mois: ${selectedMonth}, Semaine Début: ${selectedWeekStartDate ? selectedWeekStartDate.toISOString().split('T')[0] : 'null'}, Jour Spécifique: ${selectedSpecificDay ? selectedSpecificDay.toISOString().split('T')[0] : 'null'}`);
+
+    // Mise à jour du titre du calendrier
     const calendarTitleSpan = document.getElementById('calendar-title-year');
     if (calendarTitleSpan) {
         if (selectedCalendarView === 'year') {
             calendarTitleSpan.textContent = `Scolaire ${selectedAcademicYear}`;
         } else if (selectedCalendarView === 'month') {
-            if (monthSelect && monthSelect.options.length > 0 && monthSelect.selectedIndex !== -1) {
-                 // Utiliser le texte de l'option sélectionnée qui contient déjà "Mois Annee"
-                calendarTitleSpan.textContent = monthSelect.options[monthSelect.selectedIndex].text;
-            } else {
-                // Fallback si le sélecteur de mois n'est pas prêt (ne devrait pas arriver souvent)
-                calendarTitleSpan.textContent = `Mensuel (Année ${selectedAcademicYear})`;
-            }
+            const monthName = monthSelect && monthSelect.options.length > 0 && monthSelect.selectedIndex !== -1 ? monthSelect.options[monthSelect.selectedIndex].text : `Mois ${selectedMonth}`;
+            calendarTitleSpan.textContent = `${monthName}`;
+        } else if (selectedCalendarView === 'week' && selectedWeekStartDate) {
+            const endDate = new Date(selectedWeekStartDate);
+            endDate.setDate(selectedWeekStartDate.getDate() + 6);
+            calendarTitleSpan.textContent = `Sem. du ${selectedWeekStartDate.toLocaleDateString('fr-FR')} au ${endDate.toLocaleDateString('fr-FR')}`;
+        } else if (selectedCalendarView === 'day' && selectedSpecificDay) {
+            calendarTitleSpan.textContent = `Jour du ${selectedSpecificDay.toLocaleDateString('fr-FR')}`;
         } else {
-            calendarTitleSpan.textContent = selectedAcademicYear; // Fallback pour autres vues
+            calendarTitleSpan.textContent = selectedAcademicYear; // Fallback
         }
     }
-    showSelectedCalendarView(); // Nouvelle fonction pour afficher la vue choisie
+    showSelectedCalendarView();
 }
 
 function showSelectedCalendarView() {
-    console.log(`Affichage calendrier pour vue: ${selectedCalendarView}, année: ${selectedAcademicYear}`);
+    console.log(`Affichage calendrier pour vue: ${selectedCalendarView}, année: ${selectedAcademicYear}, mois: ${selectedMonth}, semaine: ${selectedWeekStartDate}, jour: ${selectedSpecificDay}`);
     const calendarContainer = document.getElementById('calendar-container');
     if (!calendarContainer) return;
 
@@ -283,15 +343,13 @@ function showSelectedCalendarView() {
                 selectedMonth = monthValue;
             } else {
                 console.error("selectedMonth n'a pas pu être déterminé à partir du sélecteur.");
-                // Utiliser le mois actuel comme fallback si selectedMonth est toujours indéfini
-                if (typeof selectedMonth !== 'number') {
+                if (typeof selectedMonth !== 'number') { // Fallback
                     selectedMonth = new Date().getMonth() + 1;
                 }
             }
         } else if (typeof selectedMonth !== 'number') {
-             // Fallback ultime si le sélecteur n'existe pas ou si selectedMonth est invalide
             console.warn("selectedMonth est indéfini et le sélecteur de mois n'est pas disponible. Utilisation du mois actuel.");
-            selectedMonth = new Date().getMonth() + 1;
+            selectedMonth = new Date().getMonth() + 1; // Fallback ultime
         }
 
         apiUrl = `/api/calendar_view?year=${selectedAcademicYear}&month=${selectedMonth}&view_type=month`;
@@ -313,9 +371,33 @@ function showSelectedCalendarView() {
                 console.error("Erreur showSelectedCalendarView (month):", error);
                 calendarContainer.innerHTML = `<p>Erreur chargement vue mensuelle: ${error.message}</p>`;
             });
-    }
-    // Ajouter ici d'autres 'else if' pour les vues 'week', 'day' etc.
-    else {
+    } else if (selectedCalendarView === 'week') {
+        if (!selectedWeekStartDate) {
+            calendarContainer.innerHTML = "<p>Veuillez sélectionner une date pour la vue hebdomadaire.</p>";
+            return;
+        }
+        // Calculer le début (Lundi) et la fin (Dimanche) de la semaine
+        let dayOfWeek = selectedWeekStartDate.getDay(); // 0=Dim, 1=Lun, ..., 6=Sam
+        let diffToMonday = selectedWeekStartDate.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Ajuster pour Lundi
+        let mondayOfSelectedWeek = new Date(new Date(selectedWeekStartDate).setDate(diffToMonday)); // Crée une nouvelle instance pour ne pas modifier selectedWeekStartDate
+        let sundayOfSelectedWeek = new Date(new Date(mondayOfSelectedWeek).setDate(mondayOfSelectedWeek.getDate() + 6));
+
+        const startDateStr = mondayOfSelectedWeek.toISOString().split('T')[0]; // YYYY-MM-DD
+        apiUrl = `/api/daily_schedule_range?start_date=${startDateStr}&days=7`;
+        console.log(`API call for Weekly view: ${apiUrl}`);
+        calendarContainer.innerHTML = `<p>Vue Hebdomadaire pour la semaine du ${mondayOfSelectedWeek.toLocaleDateString('fr-FR')} au ${sundayOfSelectedWeek.toLocaleDateString('fr-FR')} - Implémentation à venir. API: ${apiUrl}</p>`;
+        // fetch(apiUrl)... then(data => generateWeekView(data)); ...
+    } else if (selectedCalendarView === 'day') {
+        if (!selectedSpecificDay) {
+            calendarContainer.innerHTML = "<p>Veuillez sélectionner une date pour la vue journalière.</p>";
+            return;
+        }
+        const dateStr = selectedSpecificDay.toISOString().split('T')[0]; // YYYY-MM-DD
+        apiUrl = `/api/daily_schedule?date=${dateStr}`;
+        console.log(`API call for Daily view: ${apiUrl}`);
+        calendarContainer.innerHTML = `<p>Vue Journalière pour le ${selectedSpecificDay.toLocaleDateString('fr-FR')} - Implémentation à venir. API: ${apiUrl}</p>`;
+        // fetch(apiUrl)... then(data => generateDayView(data)); ...
+    } else {
         calendarContainer.innerHTML = `<p>Type de vue '${selectedCalendarView}' non supporté pour le moment.</p>`;
     }
 }
