@@ -368,7 +368,7 @@ function generateMonthCalendar(apiResponseData, academicYearString, monthNumber)
     }
 
     // Cellules des jours du mois
-    const daysDataFromApi = apiResponseData.days;
+    const daysDataFromApi = apiResponseData.days; // Supposons que apiResponseData.days est bien l'objet des jours pour le mois
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
@@ -377,24 +377,29 @@ function generateMonthCalendar(apiResponseData, academicYearString, monthNumber)
         dayCell.classList.add('calendar-day');
         dayCell.textContent = day;
 
+        // Créer l'objet Date pour le jour courant du mois
+        // monthNumber est 1-indexé, mais le constructeur Date attend 0-indexé pour le mois
+        const currentDateObject = new Date(targetYear, monthNumber - 1, day);
         const dateKey = `${targetYear}-${String(monthNumber).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const dayData = daysDataFromApi[dateKey]; // Les données sont déjà filtrées pour le mois par le backend
+        
+        const dayData = daysDataFromApi ? daysDataFromApi[dateKey] : null; // Vérifier si daysDataFromApi existe
+        
+        // Déterminer le jour de la semaine (0 = Dimanche, 1 = Lundi, ..., 6 = Samedi)
+        const dayOfWeek = currentDateObject.getDay(); // Utilisation directe de getDay()
+
+        let cssClass = '';
+        let tooltipText = ''; // Initialiser le tooltip
 
         if (dateKey === todayStr) {
-            dayCell.classList.add('today');
+            dayCell.classList.add('today'); // La classe 'today' peut coexister avec d'autres
         }
 
-        const dayObject = new Date(targetYear, monthNumber - 1, day); // mois est 0-indexé pour Date
-        const dayOfWeek = (dayObject.getDay() + 6) % 7; // 0:Lundi, ..., 5:Samedi, 6:Dimanche
-
-        if (dayData) {
-            let cssClass = '';
-            let tooltipText = dayData.description || dayData.type || '';
+        if (dayData) { // Si des données existent pour ce jour depuis l'API
             const typeValue = dayData.type || 'ERREUR';
             const typeLower = typeValue.toLowerCase().trim();
-            tooltipText = dayData.description || typeValue; // Utiliser typeValue comme fallback pour tooltip si description est vide
+            tooltipText = dayData.description || typeValue; // Description prioritaire, sinon le type
 
-            // Nouvel ordre de priorité pour les classes :
+            // 1. Priorité absolue aux types spécifiques de l'API (Exception, Férié, Vacances)
             if (typeLower.startsWith('exception (silence)')) {
                 cssClass = 'exception-silence';
             } else if (typeLower.startsWith('exception (utiliser_jt')) {
@@ -403,46 +408,56 @@ function generateMonthCalendar(apiResponseData, academicYearString, monthNumber)
                 cssClass = 'ferie';
             } else if (typeLower === 'vacances') {
                 cssClass = 'vacances';
-            } else if (dayOfWeek === 6) { // Dimanche (prioritaire sur 'classe' ou 'weekend' du backend pour la couleur)
-                cssClass = 'weekend-dimanche';
-            } else if (dayOfWeek === 5) { // Samedi (prioritaire sur 'classe' ou 'weekend' du backend pour la couleur)
-                cssClass = 'weekend-samedi';
+            } 
+            // 2. Si ce n'est pas un des types ci-dessus, on regarde si c'est un weekend ou un jour de classe
+            else if (dayOfWeek === 0) { // Dimanche
+                cssClass = 'weekend-dimanche'; // Ta classe pour dimanche (rouge)
+                if (!tooltipText && !typeLower.startsWith('classe')) tooltipText = "Dimanche"; // Tooltip par défaut si pas d'info API pertinente
+            } else if (dayOfWeek === 6) { // Samedi
+                cssClass = 'weekend-samedi'; // Ta classe pour samedi
+                if (!tooltipText && !typeLower.startsWith('classe')) tooltipText = "Samedi"; // Tooltip par défaut
             } else if (typeLower.startsWith('classe')) {
                 cssClass = 'classe';
-            } else if (typeLower === 'weekend') {
-                // Si le backend spécifie 'weekend' mais que ce n'est ni Sam/Dim (ce qui serait étrange)
-                cssClass = 'weekend'; // Classe weekend générique
-                console.warn(`Jour marqué 'weekend' par backend mais pas Sam/Dim: ${dateKey}, type: ${typeValue}`);
-            } else if (typeLower === 'autre' || typeLower === 'erreur' || typeLower === 'erreurhm') {
-                console.warn(`Type jour 'Autre' ou 'Erreur': '${typeValue}' pour ${dateKey}`);
-                if (typeLower === 'erreur' || typeLower === 'erreurhm') cssClass = 'erreur-donnees';
-                // Si 'autre', cssClass reste '', style par défaut.
-            } else { // Type inconnu du backend
-                console.error(`Type jour INCONNU: '${typeValue}' pour ${dateKey}`);
+            } else if (typeLower === 'weekend') { 
+                // Cas où le backend dit 'weekend' mais ce n'est ni Sam ni Dim (peut arriver si la logique backend est différente)
+                // On applique une couleur weekend générique ou on se fie au jour de la semaine
+                cssClass = (dayOfWeek === 0) ? 'weekend-dimanche' : (dayOfWeek === 6 ? 'weekend-samedi' : 'classe'); // fallback plus sûr
+                console.warn(`Jour ${dateKey} marqué 'weekend' par backend mais dayOfWeek=${dayOfWeek}. Appliqué: ${cssClass}`);
+            } else if (typeLower === 'autre' || typeLower.includes('erreur')) { // 'erreurhm' inclus par .includes('erreur')
                 cssClass = 'erreur-donnees';
+                console.warn(`Type jour 'Autre' ou 'Erreur': '${typeValue}' pour ${dateKey}`);
+            } else { // Type inconnu du backend
+                cssClass = 'erreur-donnees';
+                console.error(`Type jour INCONNU du backend: '${typeValue}' pour ${dateKey}`);
             }
-            console.log(`Debug DayData: dateKey=${dateKey}, type='${typeValue}', dayOfWeek=${dayOfWeek}, finalCssClass='${cssClass}'`);
-
-        } else { // Pas de dayData du backend pour ce jour
-            if (dayOfWeek === 6) { // Dimanche
+        } else { // Pas de dayData du backend pour ce jour (comportement par défaut)
+            if (dayOfWeek === 0) { // Dimanche
                 cssClass = 'weekend-dimanche';
                 tooltipText = "Dimanche";
-            } else if (dayOfWeek === 5) { // Samedi
+            } else if (dayOfWeek === 6) { // Samedi
                 cssClass = 'weekend-samedi';
                 tooltipText = "Samedi";
-            } else { // Jour de semaine normal sans info spécifique
-                cssClass = 'classe';
-                tooltipText = "Jour de classe";
+            } else { // Jour de semaine normal sans info spécifique (Lundi-Vendredi)
+                cssClass = 'classe'; // Par défaut, on considère que c'est un jour de classe
+                tooltipText = "Jour de classe (par défaut)";
             }
-            console.log(`Debug NoDayData: dateKey=${dateKey}, dayOfWeek=${dayOfWeek}, finalCssClass='${cssClass}'`);
         }
 
         if (cssClass) {
             dayCell.classList.add(cssClass);
         }
-        dayCell.title = tooltipText;
+        dayCell.title = tooltipText; // Appliquer le tooltip
+        
+        // Ajout du data-attribute pour le débogage (optionnel)
+        dayCell.setAttribute('data-date', dateKey);
+        dayCell.setAttribute('data-day-type-api', dayData ? dayData.type : 'N/A');
+        dayCell.setAttribute('data-day-of-week', dayOfWeek);
+        dayCell.setAttribute('data-final-css', cssClass);
+
+
         dayCell.style.cursor = 'pointer';
-        dayCell.onclick = () => showDailySchedule(dayObject.getFullYear(), dayObject.getMonth() + 1, day);
+        // Utiliser currentDateObject pour showDailySchedule car monthNumber est 1-indexé et getMonth est 0-indexé.
+        dayCell.onclick = () => showDailySchedule(currentDateObject.getFullYear(), currentDateObject.getMonth() + 1, day);
         daysGridContainer.appendChild(dayCell);
     }
     calendarContainer.appendChild(daysGridContainer);
@@ -453,47 +468,92 @@ function generateCalendar(apiData, academicYear) {
     console.log(`Entrée generateCalendar pour année: ${academicYear}`);
     const calendarContainer = document.getElementById('calendar-container');
     if (!calendarContainer) { console.error("Conteneur #calendar-container introuvable !"); return; }
-    calendarContainer.innerHTML = '';
+    calendarContainer.innerHTML = ''; // Vider le conteneur
+
     const today = new Date();
-    const currentDay = today.getDate(); const currentMonth = today.getMonth() + 1; const currentYearToday = today.getFullYear();
-    const todayStr = `${currentYearToday}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
-    console.log(`Date actuelle: ${todayStr}`);
-    if (!apiData || typeof apiData !== 'object' || !apiData.days || typeof apiData.days !== 'object') { console.error("Données calendrier invalides:", apiData); calendarContainer.innerHTML = "<p>Erreur: Données calendrier invalides.</p>"; return; }
-    const daysData = apiData.days;
+    const currentDayNum = today.getDate(); 
+    const currentMonthNum = today.getMonth() + 1; // 1-12
+    const currentYearToday = today.getFullYear();
+    const todayStr = `${currentYearToday}-${String(currentMonthNum).padStart(2, '0')}-${String(currentDayNum).padStart(2, '0')}`;
+    console.log(`Date actuelle pour 'today' highlight: ${todayStr}`);
+
+    if (!apiData || typeof apiData !== 'object' || !apiData.days || typeof apiData.days !== 'object') { 
+        console.error("Données calendrier invalides reçues par generateCalendar:", apiData); 
+        calendarContainer.innerHTML = "<p>Erreur: Données calendrier invalides.</p>"; 
+        return; 
+    }
+    const daysDataFromApi = apiData.days; // daysDataFromApi contient les données pour toute l'année scolaire
+
     const [startYear, endYear] = academicYear.split('-').map(Number);
     console.log(`Affichage de Sept ${startYear} à Août ${endYear}`);
-    for (let m = 0; m < 12; m++) {
-        let month, year;
-        if (m < 4) { month = m + 9; year = startYear; }
-        else { month = m - 3; year = endYear; }
-        const monthDiv = document.createElement('div'); monthDiv.classList.add('calendar-month');
-        const monthDate = new Date(year, month - 1, 1);
-        const monthName = monthDate.toLocaleString('fr-FR', { month: 'long' });
-        monthDiv.innerHTML = `<h3>${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}</h3>`;
-        const daysInMonth = new Date(year, month, 0).getDate();
-        const firstDayWeekday = (monthDate.getDay() + 6) % 7;
-        const daysContainer = document.createElement('div'); daysContainer.classList.add('calendar-days');
-        const weekDays = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-        weekDays.forEach(wd => { const d = document.createElement('div'); d.classList.add('calendar-weekday'); d.textContent = wd; daysContainer.appendChild(d); });
-        for (let i = 0; i < firstDayWeekday; i++) { const emptyCell = document.createElement('div'); emptyCell.classList.add('calendar-day', 'empty'); daysContainer.appendChild(emptyCell); }
-        for (let day = 1; day <= daysInMonth; day++) {
-            const dayCell = document.createElement('div'); dayCell.classList.add('calendar-day'); dayCell.textContent = day;
-            const monthStrPad = String(month).padStart(2, '0'); const dayStrPad = String(day).padStart(2, '0');
-            const dateKey = `${year}-${monthStrPad}-${dayStrPad}`;
-            const dayData = daysData[dateKey];
-            if (dateKey === todayStr) { dayCell.classList.add('today'); }
 
-            const dayObject = new Date(year, month - 1, day); // month est 1-indexé, Date attend 0-indexé
-            const dayOfWeek = (dayObject.getDay() + 6) % 7; // 0:Lundi, ..., 5:Samedi, 6:Dimanche
+    for (let m = 0; m < 12; m++) { // Boucle sur les 12 mois de l'année scolaire
+        let monthForLoop, yearForLoop; // Variables pour le mois (1-12) et l'année civile du mois courant
+        if (m < 4) { // Sept, Oct, Nov, Dec
+            monthForLoop = m + 9; 
+            yearForLoop = startYear; 
+        } else { // Jan, Fev, ..., Aou
+            monthForLoop = m - 3; 
+            yearForLoop = endYear; 
+        }
 
-            if (dayData) {
-                let cssClass = '';
-                let tooltipText = dayData.description || dayData.type || '';
+        const monthDiv = document.createElement('div'); 
+        monthDiv.classList.add('calendar-month');
+        
+        // monthForLoop est 1-indexé. Pour new Date(), le mois est 0-indexé.
+        const monthDateObject = new Date(yearForLoop, monthForLoop - 1, 1); 
+        const monthName = monthDateObject.toLocaleString('fr-FR', { month: 'long' });
+        monthDiv.innerHTML = `<h3>${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${yearForLoop}</h3>`;
+        
+        const daysInCurrentMonth = new Date(yearForLoop, monthForLoop, 0).getDate(); // Nombre de jours dans le mois courant
+        const firstDayWeekdayOffset = (monthDateObject.getDay() + 6) % 7; // 0 pour Lundi, 1 pour Mardi ... 6 pour Dimanche
+
+        const daysGridContainer = document.createElement('div'); 
+        daysGridContainer.classList.add('calendar-days');
+        
+        const weekDayLabels = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+        weekDayLabels.forEach(wd => { 
+            const d = document.createElement('div'); 
+            d.classList.add('calendar-weekday'); 
+            d.textContent = wd; 
+            daysGridContainer.appendChild(d); 
+        });
+        
+        // Cellules vides pour les jours avant le début du mois
+        for (let i = 0; i < firstDayWeekdayOffset; i++) {
+            const emptyCell = document.createElement('div');
+            emptyCell.classList.add('calendar-day', 'empty');
+            daysGridContainer.appendChild(emptyCell);
+        }
+
+        // Cellules des jours du mois
+        for (let dayNum = 1; dayNum <= daysInCurrentMonth; dayNum++) {
+            const dayCell = document.createElement('div');
+            dayCell.classList.add('calendar-day');
+            dayCell.textContent = dayNum;
+
+            // Créer l'objet Date pour le jour courant du mois
+            const currentDateObject = new Date(yearForLoop, monthForLoop - 1, dayNum);
+            const dateKey = `${yearForLoop}-${String(monthForLoop).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+            
+            const dayData = daysDataFromApi[dateKey]; // Récupérer les données de l'API pour ce jour
+            
+            // Déterminer le jour de la semaine (0 = Dimanche, 1 = Lundi, ..., 6 = Samedi)
+            const dayOfWeek = currentDateObject.getDay(); 
+
+            let cssClass = '';
+            let tooltipText = '';
+
+            if (dateKey === todayStr) {
+                dayCell.classList.add('today');
+            }
+
+            if (dayData) { // Si des données existent pour ce jour depuis l'API
                 const typeValue = dayData.type || 'ERREUR';
                 const typeLower = typeValue.toLowerCase().trim();
                 tooltipText = dayData.description || typeValue;
 
-                // Nouvel ordre de priorité pour les classes :
+                // 1. Priorité absolue aux types spécifiques de l'API
                 if (typeLower.startsWith('exception (silence)')) {
                     cssClass = 'exception-silence';
                 } else if (typeLower.startsWith('exception (utiliser_jt')) {
@@ -502,49 +562,58 @@ function generateCalendar(apiData, academicYear) {
                     cssClass = 'ferie';
                 } else if (typeLower === 'vacances') {
                     cssClass = 'vacances';
-                } else if (dayOfWeek === 6) { // Dimanche (prioritaire sur 'classe' ou 'weekend' du backend pour la couleur)
+                } 
+                // 2. Si pas un type prioritaire, vérifier weekend
+                else if (dayOfWeek === 0) { // Dimanche
                     cssClass = 'weekend-dimanche';
-                } else if (dayOfWeek === 5) { // Samedi (prioritaire sur 'classe' ou 'weekend' du backend pour la couleur)
+                    if (!dayData.description && !typeLower.startsWith('classe')) tooltipText = "Dimanche";
+                } else if (dayOfWeek === 6) { // Samedi
                     cssClass = 'weekend-samedi';
+                    if (!dayData.description && !typeLower.startsWith('classe')) tooltipText = "Samedi";
                 } else if (typeLower.startsWith('classe')) {
                     cssClass = 'classe';
-                } else if (typeLower === 'weekend') {
-                    cssClass = 'weekend';
-                    console.warn(`Jour marqué 'weekend' par backend mais pas Sam/Dim: ${dateKey}, type: ${typeValue}`);
-                } else if (typeLower === 'autre' || typeLower === 'erreur' || typeLower === 'erreurhm') {
-                    console.warn(`Type jour 'Autre' ou 'Erreur': '${typeValue}' pour ${dateKey}`);
-                    if (typeLower === 'erreur' || typeLower === 'erreurhm') cssClass = 'erreur-donnees';
-                } else {
-                    console.error(`Type jour INCONNU: '${typeValue}' pour ${dateKey}`);
+                } else if (typeLower === 'weekend') { // Fallback si le backend envoie 'weekend' explicitement
+                    cssClass = (dayOfWeek === 0) ? 'weekend-dimanche' : (dayOfWeek === 6 ? 'weekend-samedi' : 'classe');
+                    console.warn(`Jour ${dateKey} marqué 'weekend' par backend mais dayOfWeek=${dayOfWeek}. Appliqué: ${cssClass}`);
+                } else if (typeLower === 'autre' || typeLower.includes('erreur')) {
                     cssClass = 'erreur-donnees';
+                    console.warn(`Type jour 'Autre' ou 'Erreur': '${typeValue}' pour ${dateKey}`);
+                } else { 
+                    cssClass = 'erreur-donnees';
+                    console.error(`Type jour INCONNU du backend: '${typeValue}' pour ${dateKey}`);
                 }
-                console.log(`Debug DayData: dateKey=${dateKey}, type='${typeValue}', dayOfWeek=${dayOfWeek}, finalCssClass='${cssClass}'`);
-
-            } else { // Pas de dayData du backend pour ce jour
-                if (dayOfWeek === 6) { // Dimanche
+            } else { // Pas de dayData du backend pour ce jour (comportement par défaut)
+                if (dayOfWeek === 0) { // Dimanche
                     cssClass = 'weekend-dimanche';
                     tooltipText = "Dimanche";
-                } else if (dayOfWeek === 5) { // Samedi
+                } else if (dayOfWeek === 6) { // Samedi
                     cssClass = 'weekend-samedi';
                     tooltipText = "Samedi";
                 } else { // Jour de semaine normal sans info spécifique
-                    cssClass = 'classe';
-                    tooltipText = "Jour de classe";
+                    cssClass = 'classe'; 
+                    tooltipText = "Jour de classe (par défaut)";
                 }
-                console.log(`Debug NoDayData: dateKey=${dateKey}, dayOfWeek=${dayOfWeek}, finalCssClass='${cssClass}'`);
             }
 
             if (cssClass) {
                 dayCell.classList.add(cssClass);
             }
             dayCell.title = tooltipText;
+            
+            // Attributs de débogage (optionnel)
+            dayCell.setAttribute('data-date', dateKey);
+            dayCell.setAttribute('data-day-type-api', dayData ? dayData.type : 'N/A');
+            dayCell.setAttribute('data-day-of-week', dayOfWeek);
+            dayCell.setAttribute('data-final-css', cssClass);
+
             dayCell.style.cursor = 'pointer';
-            dayCell.onclick = () => showDailySchedule(dayObject.getFullYear(), dayObject.getMonth() + 1, day);
-            daysContainer.appendChild(dayCell);
+            dayCell.onclick = () => showDailySchedule(currentDateObject.getFullYear(), currentDateObject.getMonth() + 1, dayNum);
+            daysGridContainer.appendChild(dayCell);
         }
-        monthDiv.appendChild(daysContainer); calendarContainer.appendChild(monthDiv);
+        monthDiv.appendChild(daysGridContainer); 
+        calendarContainer.appendChild(monthDiv);
     }
-    console.log("Fin de generateCalendar");
+    console.log("Fin de generateCalendar (vue annuelle)");
 }
 
 function showDailySchedule(year, month, day) {
