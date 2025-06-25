@@ -100,19 +100,32 @@
 
         // --- Fonctions Principales ( API, Calendrier) ---
         function loadConfigSettings() {
-             console.log("Chargement settings via /api/config/settings...");
-             fetch('/api/config/settings')
+            console.log("Chargement settings via /api/config/settings...");
+            return fetch('/api/config/settings') // Retourner la promesse
                 .then(response => {
                     console.log("Réponse /api/config/settings, statut:", response.status);
-                    if (!response.ok) { throw new Error(`Erreur HTTP settings: ${response.status}`); } // showLogin() est géré par Flask-Login
+                    if (!response.ok) {
+                        throw new Error(`Erreur HTTP settings: ${response.status} ${response.statusText}`);
+                    }
                     return response.json();
                 })
                 .then(data => {
                     console.log("Settings reçus:", data);
-                    if (data.alert_files) { configSettings.alert_files = data.alert_files; console.log("Noms fichiers alerte stockés:", configSettings.alert_files); }
-                    else { console.warn("Aucun fichier alerte dans settings API."); configSettings.alert_files = { ppms: null, attentat: null }; }
+                    if (data && data.alert_files) {
+                        configSettings.alert_files = data.alert_files;
+                        console.log("Noms fichiers alerte stockés:", configSettings.alert_files);
+                    } else {
+                        console.warn("Aucun fichier alerte (ou données invalides) dans settings API.");
+                        configSettings.alert_files = { ppms: null, attentat: null }; // Fallback
+                    }
+                    // La promesse résout sans valeur spécifique, l'important est que configSettings soit peuplé.
                 })
-                .catch(error => { console.error("Erreur chargement settings:", error); configSettings.alert_files = { ppms: null, attentat: null }; });
+                .catch(error => {
+                    console.error("Erreur critique chargement settings:", error);
+                    configSettings.alert_files = { ppms: null, attentat: null }; // Fallback crucial
+                    showFeedback("Erreur critique: Impossible de charger la configuration des alertes. Les fonctionnalités d'alerte peuvent être compromises.", "error", 10000);
+                    return Promise.reject(error); // Renvoyer une promesse rejetée pour que la chaîne .then échoue aussi
+                });
         }
 
         // Les fonctions updateStatusUI() et updateStatus() sont maintenant dans global_status.js
@@ -284,87 +297,154 @@
         document.addEventListener('DOMContentLoaded', initialLoad);
 
         // --- NOUVELLE LOGIQUE POUR LES ALERTES ---
-        let ppmsAlertActive = false;
-        let attentatAlertActive = false;
-        // Ces variables seront synchronisées avec l'état réel du backend via currentStatus
+        // Les variables globales ppmsAlertActive et attentatAlertActive ne sont plus nécessaires ici,
+        // l'état est déterminé dans updateAlertButtonsUI à partir de currentStatus.
 
         // Timers pour gérer le double-clic
         let ppmsClickTimer = null;
         let attentatClickTimer = null;
         const DBL_CLICK_DELAY = 300; // ms
 
-        const btnAlertPpms = document.getElementById('btn-alert-ppms');
-        const btnAlertAttentat = document.getElementById('btn-alert-attentat');
-        const btnEndAlert = document.getElementById('btn-end-alert');
+        // Les constantes globales pour les éléments boutons ne sont plus nécessaires ici,
+        // car les éléments sont récupérés directement dans updateAlertButtonsUI et les listeners.
 
         // Fonction pour mettre à jour l'état visuel des boutons d'alerte
         function updateAlertButtonsUI(statusData) {
-            if (!statusData || !configSettings || !configSettings.alert_files) {
-                console.warn("updateAlertButtonsUI: statusData ou configSettings non prêts.", statusData, configSettings);
-                // Optionnel: mettre les boutons dans un état neutre/désactivé par défaut
-                if(btnAlertPpms) btnAlertPpms.disabled = true;
-                if(btnAlertAttentat) btnAlertAttentat.disabled = true;
-                if(btnEndAlert) btnEndAlert.disabled = true;
+            // S'assurer que les boutons sont bien récupérés (au cas où cette fonction serait appelée avant DOMContentLoaded, bien que peu probable ici)
+            const btnAlertPpms = document.getElementById('btn-alert-ppms');
+            const btnAlertAttentat = document.getElementById('btn-alert-attentat');
+            const btnEndAlert = document.getElementById('btn-end-alert');
+
+            if (!btnAlertPpms || !btnAlertAttentat || !btnEndAlert) {
+                console.error("updateAlertButtonsUI: Un ou plusieurs boutons d'alerte sont introuvables dans le DOM.");
                 return;
             }
 
-            // Assurer que les noms de fichiers dans configSettings.alert_files existent
+            if (!statusData) {
+                console.warn("updateAlertButtonsUI: statusData est null ou undefined. Les boutons seront mis dans un état par défaut/désactivé.");
+                // État par défaut si statusData n'est pas disponible (erreur de chargement par exemple)
+                btnAlertPpms.classList.remove('btn-danger', 'active');
+                btnAlertPpms.classList.add('btn-warning');
+                btnAlertPpms.innerHTML = '<i class="bi bi-shield-fill-exclamation me-1"></i>PPMS';
+                btnAlertPpms.title = "Double-clic pour DECLENCHER...";
+                btnAlertPpms.disabled = true; // Désactiver si pas de statut
+
+                btnAlertAttentat.classList.remove('btn-dark', 'active');
+                btnAlertAttentat.classList.add('btn-danger');
+                btnAlertAttentat.innerHTML = '<i class="bi bi-cone-striped me-1"></i>ATTENTAT';
+                btnAlertAttentat.title = "Double-clic pour DECLENCHER...";
+                btnAlertAttentat.disabled = true; // Désactiver si pas de statut
+
+                btnEndAlert.disabled = true;
+                return;
+            }
+
+            if (!configSettings || !configSettings.alert_files || configSettings.alert_files.ppms === undefined || configSettings.alert_files.attentat === undefined) {
+                console.warn("updateAlertButtonsUI: configSettings.alert_files non prêt ou incomplet.", configSettings);
+                showFeedback("Configuration des noms de fichiers d'alerte manquante ou incomplète. L'état des boutons pourrait être incorrect.", "error", 7000);
+                // Mettre les boutons dans un état désactivé pour éviter les actions incorrectes.
+                btnAlertPpms.disabled = true; btnAlertPpms.title = "Configuration alerte PPMS manquante";
+                btnAlertAttentat.disabled = true; btnAlertAttentat.title = "Configuration alerte Attentat manquante";
+                btnEndAlert.disabled = true;
+                return;
+            }
+
             const ppmsFileName = configSettings.alert_files.ppms;
             const attentatFileName = configSettings.alert_files.attentat;
 
-            ppmsAlertActive = (statusData.alert_active && statusData.alert_type === ppmsFileName);
-            attentatAlertActive = (statusData.alert_active && statusData.alert_type === attentatFileName);
+            // Déterminer si une alerte spécifique est active
+            const isPpmsAlertActive = statusData.alert_active && statusData.alert_type === ppmsFileName;
+            const isAttentatAlertActive = statusData.alert_active && statusData.alert_type === attentatFileName;
 
-            // Style du bouton PPMS
-            if (btnAlertPpms) {
-                if (ppmsAlertActive) {
-                    btnAlertPpms.classList.remove('btn-warning');
-                    btnAlertPpms.classList.add('btn-danger', 'active');
-                    btnAlertPpms.innerHTML = '<i class="bi bi-shield-fill-exclamation me-2"></i>PPMS ACTIVE (Dbl-Clic Arrêt)';
+            // Mise à jour du bouton PPMS
+            if (isPpmsAlertActive) {
+                btnAlertPpms.classList.remove('btn-warning');
+                btnAlertPpms.classList.add('btn-danger', 'active');
+                btnAlertPpms.innerHTML = '<i class="bi bi-shield-fill-exclamation me-1"></i>PPMS ACTIVE';
+                btnAlertPpms.title = "Double-clic pour ARRETER l'alerte PPMS";
+            } else {
+                btnAlertPpms.classList.remove('btn-danger', 'active');
+                btnAlertPpms.classList.add('btn-warning');
+                btnAlertPpms.innerHTML = '<i class="bi bi-shield-fill-exclamation me-1"></i>PPMS';
+                btnAlertPpms.title = "Double-clic pour DECLENCHER l'alerte PPMS";
+            }
+
+            // Mise à jour du bouton Attentat
+            if (isAttentatAlertActive) {
+                btnAlertAttentat.classList.remove('btn-danger');
+                btnAlertAttentat.classList.add('btn-dark', 'active');
+                btnAlertAttentat.innerHTML = '<i class="bi bi-cone-striped me-1"></i>ATTENTAT ACTIF';
+                btnAlertAttentat.title = "Double-clic pour ARRETER l'alerte Attentat";
+            } else {
+                btnAlertAttentat.classList.remove('btn-dark', 'active');
+                btnAlertAttentat.classList.add('btn-danger');
+                btnAlertAttentat.innerHTML = '<i class="bi bi-cone-striped me-1"></i>ATTENTAT';
+                btnAlertAttentat.title = "Double-clic pour DECLENCHER l'alerte Attentat";
+            }
+
+            // Activer/Désactiver le bouton "Sonnerie Fin d'Alerte"
+            btnEndAlert.disabled = !statusData.alert_active;
+
+            // Désactiver les boutons d'alerte en fonction de l'état
+            // Si une alerte PPMS est active, on ne peut pas déclencher Attentat (et PPMS est déjà "active" pour arrêt)
+            // Si une alerte Attentat est active, on ne peut pas déclencher PPMS
+            // Si aucune alerte n'est active, les deux sont activables (pour déclenchement)
+            if (statusData.alert_active) {
+                if (isPpmsAlertActive) {
+                    btnAlertPpms.disabled = false; // Permettre l'arrêt de PPMS
+                    btnAlertAttentat.disabled = true; // Désactiver Attentat car PPMS est active
+                } else if (isAttentatAlertActive) {
+                    btnAlertAttentat.disabled = false; // Permettre l'arrêt d'Attentat
+                    btnAlertPpms.disabled = true; // Désactiver PPMS car Attentat est active
                 } else {
-                    btnAlertPpms.classList.remove('btn-danger', 'active');
-                    btnAlertPpms.classList.add('btn-warning');
-                    btnAlertPpms.innerHTML = '<i class="bi bi-shield-fill-exclamation me-2"></i>ALERTE PPMS';
+                    // Une alerte est active, mais ce n'est ni PPMS ni Attentat (cas étrange, ex: son de fin en cours?)
+                    // Par sécurité, désactiver les deux boutons de déclenchement.
+                    btnAlertPpms.disabled = true;
+                    btnAlertAttentat.disabled = true;
+                    console.warn("Une alerte est active mais ni PPMS ni Attentat. Boutons désactivés.");
                 }
+            } else {
+                // Aucune alerte active, les deux boutons sont disponibles pour déclencher.
+                btnAlertPpms.disabled = false;
+                btnAlertAttentat.disabled = false;
             }
-
-            // Style du bouton Attentat
-            if (btnAlertAttentat) {
-                if (attentatAlertActive) {
-                    btnAlertAttentat.classList.remove('btn-danger');
-                    btnAlertAttentat.classList.add('btn-dark', 'active');
-                    btnAlertAttentat.innerHTML = '<i class="bi bi-cone-striped me-2"></i>ATTENTAT ACTIF (Dbl-Clic Arrêt)';
-                } else {
-                    btnAlertAttentat.classList.remove('btn-dark', 'active');
-                    btnAlertAttentat.classList.add('btn-danger');
-                    btnAlertAttentat.innerHTML = '<i class="bi bi-cone-striped me-2"></i>ALERTE ATTENTAT';
-                }
-            }
-
-            // État du bouton Fin d'Alerte
-            if (btnEndAlert) {
-                btnEndAlert.disabled = !statusData.alert_active;
-            }
-
-            // S'assurer que les boutons de déclenchement ne sont pas cliquables si une alerte d'un autre type est active
-            if (btnAlertPpms) btnAlertPpms.disabled = attentatAlertActive;
-            if (btnAlertAttentat) btnAlertAttentat.disabled = ppmsAlertActive;
-
-            // Réactiver les boutons si aucune alerte n'est active et qu'ils étaient désactivés par la condition précédente
-            if (!statusData.alert_active) {
-                if (btnAlertPpms && btnAlertPpms.disabled) btnAlertPpms.disabled = false;
-                if (btnAlertAttentat && btnAlertAttentat.disabled) btnAlertAttentat.disabled = false;
-            }
+             // Log final de l'état des boutons
+            console.debug(`UI Boutons MàJ: PPMS Actif=${isPpmsAlertActive}, Attentat Actif=${isAttentatAlertActive}, Fin Alerte Disabled=${btnEndAlert.disabled}, PPMS Disabled=${btnAlertPpms.disabled}, Attentat Disabled=${btnAlertAttentat.disabled}`);
         }
 
-        // Fonction locale à control.html pour mettre à jour l'état local et appeler la mise à jour UI des boutons
-        // Cette fonction sera appelée après la récupération du statut (par exemple dans initialLoad ou par un event listener si global_status.js le permet)
-        function localUpdateStatusUI(data) {
-            console.log("Mise à jour UI status (control.html - localUpdateStatusUI):", data);
-            currentStatus = data; // Stocker les données globalement pour cette page
-            updateAlertButtonsUI(currentStatus);
-            // Il n'est pas nécessaire d'appeler fetchGlobalStatus() ici car cette fonction est PENSÉE pour être appelée QUAND global_status.js a DÉJÀ mis à jour le statut.
-            // L'objectif est de réagir à la mise à jour de currentStatus.
+        // La fonction localUpdateStatusUI n'est plus nécessaire,
+        // fetchPageStatusAndUpdateAlertUI s'en chargera.
+
+        function fetchPageStatusAndUpdateAlertUI() {
+            console.log("fetchPageStatusAndUpdateAlertUI: Récupération du statut pour la page de contrôle...");
+            return fetch('/api/status') // Retourner la promesse pour chaînage optionnel
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Erreur HTTP status: ${response.status} ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(statusData => {
+                    console.log("fetchPageStatusAndUpdateAlertUI: Statut reçu:", statusData);
+                    currentStatus = statusData; // Mettre à jour la variable globale de la page
+                    updateAlertButtonsUI(currentStatus); // Mettre à jour l'UI des boutons d'alerte
+
+                    if (typeof fetchGlobalStatus === 'function') {
+                        console.log("fetchPageStatusAndUpdateAlertUI: Appel de fetchGlobalStatus pour synchroniser le sidebar.");
+                        fetchGlobalStatus(); // Synchroniser le statut global du sidebar
+                    } else {
+                        console.warn("fetchPageStatusAndUpdateAlertUI: fetchGlobalStatus() n'est pas défini. Le sidebar ne sera peut-être pas synchronisé.");
+                    }
+                })
+                .catch(error => {
+                    console.error("fetchPageStatusAndUpdateAlertUI: Erreur lors de la récupération du statut:", error);
+                    showFeedback("Erreur récupération du statut des alertes. L'affichage peut être incorrect.", "error", 7000);
+                    // En cas d'erreur, mettre à jour l'UI avec un statut vide pour refléter l'incertitude
+                    currentStatus = { alert_active: false, alert_type: null, scheduler_running: 'Erreur' }; // Statut d'erreur minimal
+                    updateAlertButtonsUI(currentStatus);
+                    // Il faut aussi propager l'erreur si cette fonction est chaînée
+                    return Promise.reject(error);
+                });
         }
 
         // Modification de initialLoad pour s'assurer que tout est prêt
@@ -390,110 +470,163 @@
 
         // --- Fonctions d'appel API pour les alertes ---
         function callTriggerAlertAPI(alertType) {
+            // alertType sera 'PPMS' ou 'Attentat'
             if (!configSettings || !configSettings.alert_files) {
                 showFeedback("Erreur: Configuration des alertes non chargée.", 'error');
-                return;
+                return Promise.reject("Config non chargée");
             }
-            let alertFileNameKey = alertType.toLowerCase(); // 'ppms' ou 'attentat'
-            let alertFileName = configSettings.alert_files[alertFileNameKey];
+            const alertFileNameKey = alertType.toLowerCase(); // 'ppms' ou 'attentat'
+            const alertFileName = configSettings.alert_files[alertFileNameKey];
 
             if (!alertFileName) {
-                showFeedback(`Sonnerie alerte '${alertType}' non configurée !`, 'error');
-                return;
+                showFeedback(`Sonnerie pour alerte '${alertType}' non configurée! Vérifiez la configuration générale.`, 'error', 7000);
+                return Promise.reject("Nom de fichier pour alerte non configuré");
             }
+
             const apiUrlTrigger = `/api/alert/trigger/${encodeURIComponent(alertFileName)}`;
-            console.log(`Déclenchement alerte ${alertType} via ${apiUrlTrigger}`);
-            fetch(apiUrlTrigger, { method: 'POST' })
-                .then(response => response.json().then(data => ({ ok: response.ok, data })))
-                .then(({ ok, data }) => {
-                    const message = data.message || (ok ? `Alerte ${alertType} déclenchée.` : `Erreur déclenchement.`);
+            console.log(`Déclenchement alerte ${alertType} (${alertFileName}) via ${apiUrlTrigger}`);
+            showFeedback(`Déclenchement alerte ${alertType}...`, 'info', 2000);
+
+            return fetch(apiUrlTrigger, { method: 'POST' })
+                .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
+                .then(({ ok, status, data }) => {
+                    const message = data.message || (ok ? `Alerte ${alertType} déclenchée.` : `Erreur ${status} déclenchement: ${data.error || 'Erreur inconnue'}`);
                     showFeedback(message, ok ? 'success' : 'error');
-                    // Rafraîchir le statut global (qui devrait appeler updateAlertButtonsUI via la chaîne de màj de statut)
-                    if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); } else { console.warn("fetchGlobalStatus non défini, màj UI manuelle nécessaire ou statut sera décalé");}
+                    if (!ok) console.error(`Erreur API Trigger Alert: ${status}`, data);
                 })
                 .catch(error => {
-                    showFeedback(`Erreur réseau (Déclenchement ${alertType}): ${error.message}`, 'error');
-                    if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); }
+                    console.error(`Erreur réseau (Déclenchement ${alertType}):`, error);
+                    showFeedback(`Erreur réseau/serveur (Déclenchement ${alertType}): ${error.message}`, 'error');
+                })
+                .finally(() => {
+                    if (typeof fetchPageStatusAndUpdateAlertUI === 'function') {
+                        fetchPageStatusAndUpdateAlertUI();
+                    }
                 });
         }
 
-        function callStopAlertAPI() { // Arrêt d'urgence
+        function callStopAlertAPI() { // Arrêt d'urgence de TOUTE alerte
             console.log("Arrêt urgence alerte via /api/alert/stop");
-            fetch('/api/alert/stop', { method: 'POST' })
-                .then(response => response.json().then(data => ({ ok: response.ok, data })))
-                .then(({ ok, data }) => {
-                    const message = data.message || (ok ? `Alerte arrêtée (urgence).` : `Erreur arrêt urgence.`);
+            showFeedback("Arrêt d'urgence de l'alerte en cours...", 'info', 2000);
+
+            return fetch('/api/alert/stop', { method: 'POST' })
+                .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
+                .then(({ ok, status, data }) => {
+                    const message = data.message || (ok ? `Alerte arrêtée (urgence).` : `Erreur ${status} arrêt urgence: ${data.error || 'Erreur inconnue'}`);
                     showFeedback(message, ok ? 'success' : 'error');
-                    if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); }
+                    if (!ok) console.error(`Erreur API Stop Alert: ${status}`, data);
                 })
                 .catch(error => {
-                    showFeedback(`Erreur réseau (Arrêt Urgence): ${error.message}`, 'error');
-                    if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); }
+                    console.error("Erreur réseau (Arrêt Urgence):", error);
+                    showFeedback(`Erreur réseau/serveur (Arrêt Urgence): ${error.message}`, 'error');
+                })
+                .finally(() => {
+                    if (typeof fetchPageStatusAndUpdateAlertUI === 'function') {
+                        fetchPageStatusAndUpdateAlertUI();
+                    }
                 });
         }
 
-        function callEndAlertAPI() { // Fin d'alerte programmée (avec son de fin)
+        function callEndAlertAPI() { // Fin d'alerte programmée (avec son de fin spécifique)
             console.log("Fin d'alerte programmée via /api/alert/end");
-            fetch('/api/alert/end', { method: 'POST' })
-                .then(response => response.json().then(data => ({ ok: response.ok, data })))
-                .then(({ ok, data }) => {
-                    const message = data.message || (ok ? `Fin d'alerte programmée effectuée.` : `Erreur fin d'alerte.`);
+            showFeedback("Lancement sonnerie de fin d'alerte...", 'info', 2000);
+
+            return fetch('/api/alert/end', { method: 'POST' })
+                .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
+                .then(({ ok, status, data }) => {
+                    const message = data.message || (ok ? `Fin d'alerte programmée effectuée.` : `Erreur ${status} fin d'alerte: ${data.error || 'Erreur inconnue'}`);
                     showFeedback(message, ok ? 'success' : 'error');
-                    if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); }
+                    if (!ok) console.error(`Erreur API End Alert: ${status}`, data);
                 })
                 .catch(error => {
-                    showFeedback(`Erreur réseau (Fin Alerte): ${error.message}`, 'error');
-                    if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); }
+                    console.error("Erreur réseau (Fin Alerte):", error);
+                    showFeedback(`Erreur réseau/serveur (Fin Alerte): ${error.message}`, 'error');
+                })
+                .finally(() => {
+                    if (typeof fetchPageStatusAndUpdateAlertUI === 'function') {
+                        fetchPageStatusAndUpdateAlertUI();
+                    }
                 });
         }
 
         // Attachement des Event Listeners (doit être après la définition des fonctions et la dispo des boutons)
-        if (btnAlertPpms) {
-            btnAlertPpms.addEventListener('click', function() {
+        // Assurer que cela est appelé APRÈS que les boutons sont disponibles dans le DOM (par ex. dans DOMContentLoaded ou après)
+        // Pour ce projet, initialLoad est appelé par DOMContentLoaded, donc les boutons devraient être prêts.
+        // On va récupérer les éléments ici à nouveau au cas où les références globales ne seraient pas fiables
+        // au moment où le code s'exécute (bien qu'elles devraient l'être).
+
+        const btnAlertPpmsElem = document.getElementById('btn-alert-ppms');
+        const btnAlertAttentatElem = document.getElementById('btn-alert-attentat');
+        const btnEndAlertElem = document.getElementById('btn-end-alert');
+
+        if (btnAlertPpmsElem) {
+            btnAlertPpmsElem.addEventListener('click', function() {
+                if (this.disabled) return; // Ne rien faire si le bouton est désactivé
                 if (ppmsClickTimer === null) {
                     ppmsClickTimer = setTimeout(function() {
                         ppmsClickTimer = null;
-                        console.log("Simple clic PPMS (ignoré)");
+                        // console.log("Simple clic PPMS (action si nécessaire, ici ignoré pour double-clic)");
                     }, DBL_CLICK_DELAY);
-                } else {
+                } else { // Double-clic
                     clearTimeout(ppmsClickTimer);
                     ppmsClickTimer = null;
-                    console.log("Double-clic PPMS détecté");
-                    if (ppmsAlertActive) {
-                        callStopAlertAPI();
+                    console.log("Double-clic PPMS détecté.");
+                    // Vérifier l'état actuel basé sur currentStatus et configSettings
+                    if (currentStatus && configSettings && configSettings.alert_files) {
+                        const isPpmsCurrentlyActive = currentStatus.alert_active && currentStatus.alert_type === configSettings.alert_files.ppms;
+                        if (isPpmsCurrentlyActive) {
+                            console.log("PPMS active, tentative d'arrêt...");
+                            callStopAlertAPI();
+                        } else if (!currentStatus.alert_active) { // Ne déclencher que si AUCUNE alerte n'est active
+                            console.log("Aucune alerte active, tentative de déclenchement PPMS...");
+                            callTriggerAlertAPI('PPMS');
+                        } else {
+                             console.warn("Double-clic PPMS alors qu'une autre alerte est active. Action ignorée (normalement bouton désactivé).");
+                        }
                     } else {
-                        callTriggerAlertAPI('PPMS');
+                        showFeedback("Impossible de déterminer l'état de l'alerte (statut ou config manquant).", "error");
                     }
                 }
             });
-        } else { console.error("Bouton #btn-alert-ppms non trouvé"); }
+        } else { console.error("Bouton #btn-alert-ppms non trouvé pour attacher listener."); }
 
-        if (btnAlertAttentat) {
-            btnAlertAttentat.addEventListener('click', function() {
+        if (btnAlertAttentatElem) {
+            btnAlertAttentatElem.addEventListener('click', function() {
+                if (this.disabled) return; // Ne rien faire si le bouton est désactivé
                 if (attentatClickTimer === null) {
                     attentatClickTimer = setTimeout(function() {
                         attentatClickTimer = null;
-                        console.log("Simple clic Attentat (ignoré)");
+                        // console.log("Simple clic Attentat (action si nécessaire, ici ignoré pour double-clic)");
                     }, DBL_CLICK_DELAY);
-                } else {
+                } else { // Double-clic
                     clearTimeout(attentatClickTimer);
                     attentatClickTimer = null;
-                    console.log("Double-clic Attentat détecté");
-                    if (attentatAlertActive) {
-                        callStopAlertAPI();
+                    console.log("Double-clic Attentat détecté.");
+                    if (currentStatus && configSettings && configSettings.alert_files) {
+                        const isAttentatCurrentlyActive = currentStatus.alert_active && currentStatus.alert_type === configSettings.alert_files.attentat;
+                        if (isAttentatCurrentlyActive) {
+                            console.log("Attentat actif, tentative d'arrêt...");
+                            callStopAlertAPI();
+                        } else if (!currentStatus.alert_active) { // Ne déclencher que si AUCUNE alerte n'est active
+                            console.log("Aucune alerte active, tentative de déclenchement Attentat...");
+                            callTriggerAlertAPI('Attentat');
+                        } else {
+                            console.warn("Double-clic Attentat alors qu'une autre alerte est active. Action ignorée (normalement bouton désactivé).");
+                        }
                     } else {
-                        callTriggerAlertAPI('Attentat');
+                        showFeedback("Impossible de déterminer l'état de l'alerte (statut ou config manquant).", "error");
                     }
                 }
             });
-        } else { console.error("Bouton #btn-alert-attentat non trouvé"); }
+        } else { console.error("Bouton #btn-alert-attentat non trouvé pour attacher listener."); }
 
-        if (btnEndAlert) {
-            btnEndAlert.addEventListener('click', function() {
-                console.log("Clic sur Fin d'Alerte Programmée");
+        if (btnEndAlertElem) {
+            btnEndAlertElem.addEventListener('click', function() {
+                if (this.disabled) return; // Ne rien faire si le bouton est désactivé
+                console.log("Clic sur Fin d'Alerte Programmée.");
                 callEndAlertAPI();
             });
-        } else { console.error("Bouton #btn-end-alert non trouvé"); }
+        } else { console.error("Bouton #btn-end-alert non trouvé pour attacher listener."); }
 
         // S'assurer que la fonction initialLoad est adaptée
         // La fonction initialLoad doit être redéfinie ou modifiée pour prendre en compte la nouvelle logique
@@ -605,49 +738,46 @@
 
         // Redéfinissons `initialLoad` pour `control.html` pour mieux contrôler le flux
         function initialLoad() { // Cette fonction sera appelée par DOMContentLoaded
-            console.log("Appel initialLoad() sur page control.html (NOUVELLE VERSION)...");
-            if (typeof populateAcademicYearSelector === 'function') populateAcademicYearSelector();
+            console.log("Appel initialLoad() sur page control.html (Logique Alertes UX)...");
+            if (typeof populateAcademicYearSelector === 'function') {
+                populateAcademicYearSelector();
+            }
+            if (typeof showCalendar === 'function') {
+                showCalendar(); // Peut être appelé en parallèle ou après, selon les dépendances. Ici, parallèle.
+            }
 
-            // 1. Charger la configuration (nécessaire pour les noms de fichiers d'alerte)
-            // loadConfigSettings(); // Est asynchrone, donc on ne peut pas compter sur configSettings immédiatement après
-
-            // Chaînage pour s'assurer que configSettings est chargé AVANT de tenter de mettre à jour l'UI des boutons
-            fetch('/api/config/settings')
-                .then(response => {
-                    if (!response.ok) throw new Error(`Erreur HTTP config: ${response.status}`);
-                    return response.json();
-                })
-                .then(settingsData => {
-                    console.log("Settings reçus dans initialLoad (control.html):", settingsData);
-                    if (settingsData.alert_files) {
-                        configSettings.alert_files = settingsData.alert_files;
-                        console.log("Noms fichiers alerte stockés (control.html):", configSettings.alert_files);
-                    } else {
-                        console.warn("Aucun fichier alerte dans settings API (control.html).");
-                        configSettings.alert_files = { ppms: null, attentat: null };
-                    }
-                    // Maintenant que configSettings est (potentiellement) chargé, on peut essayer de récupérer le statut
-                    // et mettre à jour les boutons.
-                    // Le fetchGlobalStatus de global_status.js s'occupera des mises à jour périodiques
-                    // et de la première mise à jour du sidebar. S'il appelle localUpdateStatusUI, c'est encore mieux.
-                    // Mais faisons un appel ici pour être sûr pour le premier affichage des boutons de control.html
-                    return fetch('/api/status');
-                })
-                .then(response => {
-                    if (!response.ok) throw new Error(`Erreur HTTP status: ${response.status}`);
-                    return response.json();
-                })
-                .then(statusData => {
-                    console.log("Statut initial reçu dans initialLoad (control.html):", statusData);
-                    localUpdateStatusUI(statusData); // Met à jour currentStatus et les boutons d'alerte
-                })
-                .catch(error => {
-                    console.error("Erreur dans la séquence de chargement initial (config/status) pour control.html:", error);
-                    localUpdateStatusUI({ alert_active: false, alert_type: null }); // Tente de mettre les boutons dans un état par défaut/erreur
-                });
-
-            if (typeof showCalendar === 'function') showCalendar();
-            console.log("initialLoad (control.html): Appels de chargement de données lancés.");
+            // Charger la configuration, puis le statut et mettre à jour l'UI des alertes
+            if (typeof loadConfigSettings === 'function') {
+                loadConfigSettings()
+                    .then(() => {
+                        console.log("loadConfigSettings a terminé avec succès dans initialLoad.");
+                        if (typeof fetchPageStatusAndUpdateAlertUI === 'function') {
+                            fetchPageStatusAndUpdateAlertUI(); // Appel réel de la fonction
+                        } else {
+                            // Ce cas ne devrait plus arriver si le script est correctement structuré.
+                            console.error("fetchPageStatusAndUpdateAlertUI n'est pas définie au moment de l'appel dans initialLoad !");
+                            showFeedback("Erreur critique: Initialisation de l'état des alertes impossible.", "error", 10000);
+                        }
+                    })
+                    .catch(error => {
+                        console.error("Erreur lors de loadConfigSettings dans initialLoad. Impossible de charger le statut des alertes initial.", error);
+                        // On pourrait vouloir afficher un message d'erreur plus permanent ici ou désactiver les boutons d'alerte.
+                        // updateAlertButtonsUI sera appelée avec un currentStatus vide ou un configSettings fallback
+                        // si fetchPageStatusAndUpdateAlertUI est appelée, ou si localUpdateStatusUI est appelée.
+                        // Pour l'instant, showFeedback dans loadConfigSettings gère l'erreur.
+                        // On peut s'assurer que l'UI des boutons reflète un état d'erreur.
+                        if (typeof updateAlertButtonsUI === 'function') {
+                             updateAlertButtonsUI({ alert_active: false, alert_type: null }); // Appeler avec un statut vide pour forcer désactivation/état initial
+                        }
+                    });
+            } else {
+                console.error("Fonction loadConfigSettings non trouvée! L'UI des alertes ne sera pas initialisée correctement.");
+                showFeedback("Erreur critique: Fonction de chargement de configuration manquante.", "error", 10000);
+                if (typeof updateAlertButtonsUI === 'function') {
+                    updateAlertButtonsUI({ alert_active: false, alert_type: null });
+                }
+            }
+            console.log("initialLoad (control.html - Logique Alertes UX): Appels de chargement de données lancés.");
         }
         // Le DOMContentLoaded existant appellera cette nouvelle version de initialLoad.
 
