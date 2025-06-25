@@ -6,6 +6,7 @@ import threading
 import time
 import subprocess
 from datetime import datetime, date, timedelta
+import calendar # Ajouté pour calendar.monthrange
 import logging
 from logging.handlers import RotatingFileHandler
 import sys
@@ -1109,39 +1110,107 @@ def get_audio_devices():
 @login_required
 @require_permission("page:view_control")
 def api_calendar_view():
-    """Fournit les données pour le calendrier annuel/scolaire."""
-    user = current_user.id; logger.debug(f"User '{user}' requête /api/calendar_view")
+    """Fournit les données pour le calendrier, supportant une vue annuelle ou mensuelle."""
+    user = current_user.id
+    academic_year_str = request.args.get('year')
+    view_type = request.args.get('view_type', default='year').lower()
+    target_month_num = request.args.get('month', default=None, type=int)
+
+    logger.debug(f"User '{user}' requête /api/calendar_view with params: year='{academic_year_str}', view_type='{view_type}', month='{target_month_num}'")
+
+    if not academic_year_str:
+        logger.warning("API /api/calendar_view: Paramètre 'year' manquant.")
+        return jsonify({"error": "Paramètre 'year' (année scolaire YYYY-YYYY) manquant."}), 400
+
     try:
-        year_param = request.args.get('year', default=str(datetime.now().year))
-        start_date, end_date = None, None; year_label = year_param # Pour log
-        if '-' in year_param: # Année scolaire YYYY-YYYY
-            try:
-                start_y, end_y = map(int, year_param.split('-')); assert end_y == start_y + 1
-                start_date = date(start_y, 9, 1); end_date = date(end_y, 8, 31)
-            except: logger.warning(f"Format année scolaire invalide: {year_param}. Utilisation année civile."); year_param = str(datetime.now().year) # Fallback
-        if start_date is None: # Année civile YYYY
-             try: year = int(year_param); start_date = date(year, 1, 1); end_date = date(year, 12, 31)
-             except ValueError: logger.error(f"Param année invalide: {year_param}. Utilisation année courante."); year = datetime.now().year; start_date = date(year, 1, 1); end_date = date(year, 12, 31); year_label = str(year)
-        logger.info(f"Calcul calendrier pour période: {start_date} à {end_date} (demandé: {year_label})")
-        data = get_calendar_view_data_range(start_date, end_date)
-        if 'error' in data: return jsonify({"error": f"Erreur gen calendrier: {data['error']}"}), 500
-        return jsonify(data)
-    except Exception as e: logger.error(f"Erreur API /api/calendar_view: {e}", exc_info=True); return jsonify({"error": f"Erreur serveur API: {e}"}), 500
+        # L'année de référence est toujours une année scolaire pour déterminer le contexte.
+        start_acad_year, end_acad_year = map(int, academic_year_str.split('-'))
+        if end_acad_year != start_acad_year + 1:
+            raise ValueError("L'année de fin doit être l'année de début + 1.")
+    except ValueError as e:
+        logger.warning(f"API /api/calendar_view: Format année scolaire 'year' invalide: {academic_year_str}. Erreur: {e}")
+        return jsonify({"error": f"Format année scolaire 'year' invalide. Attendu YYYY-YYYY. Détail: {e}"}), 400
+
+    start_date, end_date = None, None
+
+    if view_type == 'month':
+        if target_month_num is None or not (1 <= target_month_num <= 12):
+            logger.warning(f"API /api/calendar_view (month view): Paramètre 'month' invalide ou manquant: {target_month_num}")
+            return jsonify({"error": "Paramètre 'month' invalide ou manquant pour la vue mensuelle."}), 400
+
+        current_calendar_year_for_month = start_acad_year if target_month_num >= 9 else end_acad_year
+
+        import calendar # Assurer l'import
+        try:
+            _, num_days_in_month = calendar.monthrange(current_calendar_year_for_month, target_month_num)
+            start_date = date(current_calendar_year_for_month, target_month_num, 1)
+            end_date = date(current_calendar_year_for_month, target_month_num, num_days_in_month)
+            logger.info(f"Calcul calendrier pour vue mensuelle: {start_date.strftime('%B %Y')} (Année scolaire: {academic_year_str})")
+        except ValueError as e_date: # Mois invalide pour l'année (ne devrait pas arriver avec 1-12)
+             logger.error(f"Erreur création date pour mois {target_month_num}, année {current_calendar_year_for_month}: {e_date}", exc_info=True)
+             return jsonify({"error": "Erreur interne lors de la détermination des dates du mois."}), 500
+
+    elif view_type == 'year':
+        # Logique pour l'année scolaire complète (Septembre à Août)
+        start_date = date(start_acad_year, 9, 1)
+        end_date = date(end_acad_year, 8, 31)
+        logger.info(f"Calcul calendrier pour vue annuelle: {start_date} à {end_date} (Année scolaire: {academic_year_str})")
+    else:
+        logger.warning(f"API /api/calendar_view: Type de vue '{view_type}' non supporté.")
+        return jsonify({"error": f"Type de vue '{view_type}' non supporté."}), 400
+
+    # Appel de la fonction existante qui génère les données pour une plage de dates
+    # La fonction get_calendar_view_data_range retourne déjà un dict avec une clé "days"
+    # et potentiellement "vacations", "holidays", "error"
+    calendar_data = get_calendar_view_data_range(start_date, end_date)
+
+    if 'error' in calendar_data:
+        logger.error(f"Erreur lors de la génération des données calendrier pour {start_date}-{end_date}: {calendar_data['error']}")
+        return jsonify({"error": f"Erreur génération calendrier: {calendar_data['error']}"}), 500
+
+    # Ajouter les paramètres de debug au retour pour faciliter le développement frontend
+    calendar_data["debug_params"] = {
+        "requested_academic_year": academic_year_str,
+        "requested_view_type": view_type,
+        "requested_month": target_month_num,
+        "calculated_start_date": start_date.isoformat() if start_date else None,
+        "calculated_end_date": end_date.isoformat() if end_date else None
+    }
+    return jsonify(calendar_data)
 
 def get_calendar_view_data_range(start_date, end_date):
-    """Prépare les données calendrier pour une période."""
+    """Prépare les données calendrier pour une période. (Fonction existante, inchangée)"""
     logger.debug(f"Prep données calendrier: {start_date} -> {end_date}"); data = {'days': {}, 'vacations': [], 'holidays': []}
     try:
+        # S'assurer que holiday_manager, weekly_planning, planning_exceptions sont accessibles
+        # Elles sont globales dans ce module.
         curr = start_date
         while curr <= end_date:
             date_str = curr.strftime('%Y-%m-%d')
-            if holiday_manager: day_info = holiday_manager.get_day_type_and_desc(curr, weekly_planning, planning_exceptions)
-            else: day_info = {"type": "Erreur", "description": "HolidayManager NA", "schedule_name": None}
-            data['days'][date_str] = {"type": day_info['type'], "description": day_info['description']}
+            # La fonction get_day_type_and_desc doit être robuste et retourner des valeurs même si HM n'est pas init.
+            if holiday_manager:
+                day_info = holiday_manager.get_day_type_and_desc(curr, weekly_planning, planning_exceptions)
+            else:
+                logger.error("HolidayManager non disponible dans get_calendar_view_data_range.")
+                day_info = {"type": "ErreurHM", "description": "HolidayManager non initialisé", "schedule_name": None}
+
+            data['days'][date_str] = {"type": day_info.get('type', 'Erreur'), "description": day_info.get('description', 'N/A')}
             curr += timedelta(days=1)
-        if holiday_manager: data['vacations'] = holiday_manager.get_vacation_periods(); data['holidays'] = [{"date": d.strftime('%Y-%m-%d'), "description": desc} for d, desc in holiday_manager.get_holidays()]
-    except Exception as e: logger.error(f"Erreur get_calendar_view_data_range: {e}", exc_info=True); data['error'] = str(e)
-    logger.debug(f"Données calendrier prêtes ({len(data['days'])} jours)."); return data
+
+        if holiday_manager:
+            # Ces informations sont-elles pertinentes pour une vue mensuelle seule ?
+            # Pour l'instant, on les laisse, le front-end pourra les ignorer si besoin.
+            data['vacations'] = holiday_manager.get_vacation_periods()
+            data['holidays'] = [{"date": d.strftime('%Y-%m-%d'), "description": desc} for d, desc in holiday_manager.get_holidays()]
+        else:
+            logger.warning("HolidayManager non disponible pour récupérer vacances/fériés dans get_calendar_view_data_range.")
+
+    except Exception as e:
+        logger.error(f"Erreur get_calendar_view_data_range pour {start_date}-{end_date}: {e}", exc_info=True)
+        data['error'] = str(e)
+
+    logger.debug(f"Données calendrier prêtes ({len(data['days'])} jours).");
+    return data
 
 @app.route('/api/daily_schedule')
 @login_required
