@@ -1225,21 +1225,25 @@ def api_calendar_view():
         "requested_academic_year": academic_year_str,
         "requested_view_type": view_type,
         "requested_month": target_month_num if view_type == 'month' else None,
-        "requested_trimester": target_trimester_num if view_type == 'trimester' else None,
-        "calculated_start_date": start_date.isoformat() if start_date and (view_type == 'year' or view_type == 'month') else None, # Adapté
-        "calculated_end_date": end_date.isoformat() if end_date and (view_type == 'year' or view_type == 'month') else None # Adapté
+        "requested_trimester": target_trimester_num if view_type == 'trimester' else None
     })
-    # Si c'est une vue trimestrielle, start_date et end_date ne sont pas définis au même niveau,
-    # on pourrait les calculer spécifiquement pour le debug si nécessaire.
-    if view_type == 'trimester' and months_in_trimester:
-        first_month_info = months_in_trimester[0]
-        last_month_info = months_in_trimester[-1]
-        trimester_start_date = date(first_month_info[1], first_month_info[0], 1)
-        num_days_last_month = calendar.monthrange(last_month_info[1], last_month_info[0])[1]
-        trimester_end_date = date(last_month_info[1], last_month_info[0], num_days_last_month)
-        calendar_data["debug_params"]["calculated_trimester_start_date"] = trimester_start_date.isoformat()
-        calendar_data["debug_params"]["calculated_trimester_end_date"] = trimester_end_date.isoformat()
 
+    if view_type == 'year' or view_type == 'month':
+        if start_date:
+            calendar_data["debug_params"]["calculated_start_date"] = start_date.isoformat()
+        if end_date:
+            calendar_data["debug_params"]["calculated_end_date"] = end_date.isoformat()
+    elif view_type == 'trimester':
+        # Pour la vue trimestrielle, calculons les dates de début et de fin du trimestre pour le debug
+        # Assurons-nous que months_in_trimester est défini (ce qui devrait être le cas si nous sommes ici)
+        if 'months_in_trimester' in locals() and months_in_trimester: # Vérifie si la variable existe et n'est pas vide
+            first_month_info = months_in_trimester[0]
+            last_month_info = months_in_trimester[-1]
+            trimester_start_date = date(first_month_info[1], first_month_info[0], 1)
+            num_days_last_month = calendar.monthrange(last_month_info[1], last_month_info[0])[1]
+            trimester_end_date = date(last_month_info[1], last_month_info[0], num_days_last_month)
+            calendar_data["debug_params"]["calculated_trimester_start_date"] = trimester_start_date.isoformat()
+            calendar_data["debug_params"]["calculated_trimester_end_date"] = trimester_end_date.isoformat()
 
     return jsonify(calendar_data)
 
