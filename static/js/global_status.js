@@ -1,5 +1,7 @@
 // static/js/global_status.js
 
+let globalStatusRefreshIntervalMs = 15000; // Valeur par défaut (15 secondes)
+
 // Fonction pour mettre à jour l'UI du statut global
 function updateGlobalStatusUI(data) {
     console.log("Mise à jour UI statut GLOBAL:", data);
@@ -134,11 +136,37 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Vérifier si l'utilisateur est sur la page de login pour ne pas lancer les appels fetch
-    // Cela suppose que la page de login a un body avec une classe 'login-page' ou un ID spécifique.
-    // Pour l'instant, on lance toujours, mais c'est une piste d'amélioration si des erreurs console apparaissent sur /login
     if (!document.body.classList.contains('login-page')) { // Adaptez 'login-page' si besoin
-        fetchGlobalStatus(); // Charger le statut une première fois
-        setInterval(fetchGlobalStatus, 15000); // Mettre à jour toutes les 15 secondes
+        // D'abord, récupérer la configuration pour l'intervalle de rafraîchissement
+        fetch('/api/config/settings')
+            .then(response => {
+                if (!response.ok) {
+                    // Si la config ne peut pas être chargée, on utilise l'intervalle par défaut
+                    console.warn(`Erreur chargement /api/config/settings (${response.status}), utilisation intervalle rafraîchissement par défaut.`);
+                    return { status_refresh_interval_seconds: globalStatusRefreshIntervalMs / 1000 }; // Retourne un objet avec la valeur par défaut en secondes
+                }
+                return response.json();
+            })
+            .then(settings => {
+                if (settings && typeof settings.status_refresh_interval_seconds === 'number' && settings.status_refresh_interval_seconds >= 1) {
+                    globalStatusRefreshIntervalMs = settings.status_refresh_interval_seconds * 1000;
+                    console.log(`Intervalle de rafraîchissement du statut global réglé à: ${globalStatusRefreshIntervalMs}ms`);
+                } else {
+                    console.warn(`Intervalle de rafraîchissement invalide ou non fourni par /api/config/settings. Utilisation de la valeur par défaut: ${globalStatusRefreshIntervalMs}ms`);
+                }
+
+                // Lancer le premier fetch et le setInterval avec l'intervalle (mis à jour ou par défaut)
+                fetchGlobalStatus(); // Charger le statut une première fois
+                setInterval(fetchGlobalStatus, globalStatusRefreshIntervalMs);
+                console.log(`Statut global sera rafraîchi toutes les ${globalStatusRefreshIntervalMs / 1000} secondes.`);
+            })
+            .catch(error => {
+                console.error("Erreur critique lors de la récupération de /api/config/settings:", error);
+                // En cas d'erreur critique (ex: réseau), on lance quand même avec l'intervalle par défaut
+                fetchGlobalStatus();
+                setInterval(fetchGlobalStatus, globalStatusRefreshIntervalMs);
+                console.warn(`Utilisation de l'intervalle de rafraîchissement par défaut (${globalStatusRefreshIntervalMs}ms) suite à une erreur de fetch config.`);
+            });
     } else {
         console.log("Sur la page de login, initialisation du statut global différée.");
     }

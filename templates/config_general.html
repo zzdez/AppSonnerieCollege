@@ -55,6 +55,27 @@
     </div>
 
     <div class="config-section">
+        <h2>Configuration des Interactions Utilisateur</h2>
+        <div class="form-group">
+            <label>Mode d'activation des boutons d'alerte :</label>
+            <div>
+                <input type="radio" id="alert_click_mode_single" name="alert_click_mode" value="single" {% if not user_has_permission('config_general:edit_settings') %}disabled{% endif %}>
+                <label for="alert_click_mode_single" class="radio-label">Simple Clic</label>
+            </div>
+            <div>
+                <input type="radio" id="alert_click_mode_double" name="alert_click_mode" value="double" checked {% if not user_has_permission('config_general:edit_settings') %}disabled{% endif %}> <!-- Double clic par défaut -->
+                <label for="alert_click_mode_double" class="radio-label">Double Clic</label>
+            </div>
+            <p class="help-text">Choisissez si les boutons d'alerte (PPMS, Attentat, Fin Alerte) sur la page de contrôle s'activent par un simple ou un double clic.</p>
+        </div>
+        <div class="form-group">
+            <label for="status_refresh_interval">Intervalle de rafraîchissement du statut (secondes) :</label>
+            <input type="number" id="status_refresh_interval" name="status_refresh_interval" min="5" max="60" step="1" value="15" {% if not user_has_permission('config_general:edit_settings') %}disabled{% endif %}>
+            <p class="help-text">Définit la fréquence (en secondes) à laquelle le widget de statut (ex: prochaine sonnerie) se met à jour automatiquement. Minimum 5s, Maximum 60s.</p>
+        </div>
+    </div>
+
+    <div class="config-section">
         <h2>Configuration du Périphérique Audio de Sortie</h2>
         <div class="form-group">
             <label for="audio_device_select">Périphérique Audio pour les Sonneries :</label>
@@ -323,7 +344,11 @@
             const sonnerie_ppms = document.getElementById('sonnerie_ppms').value;
             const sonnerie_attentat = document.getElementById('sonnerie_attentat').value;
             const sonnerie_fin_alerte = document.getElementById('sonnerie_fin_alerte').value;
-            const selected_audio_device = document.getElementById('audio_device_select').value; // Nouvelle ligne
+            const selected_audio_device = document.getElementById('audio_device_select').value;
+
+            // Récupérer les nouvelles valeurs
+            const alert_click_mode = document.querySelector('input[name="alert_click_mode"]:checked').value;
+            const status_refresh_interval_seconds = parseInt(document.getElementById('status_refresh_interval').value, 10);
 
             const configToSave = {
                 departement: departement,
@@ -332,7 +357,9 @@
                 sonnerie_ppms: sonnerie_ppms,
                 sonnerie_attentat: sonnerie_attentat,
                 sonnerie_fin_alerte: sonnerie_fin_alerte,
-                nom_peripherique_audio_sonneries: selected_audio_device === "" ? null : selected_audio_device // Nouvelle ligne, "" devient null
+                nom_peripherique_audio_sonneries: selected_audio_device === "" ? null : selected_audio_device,
+                alert_click_mode: alert_click_mode, // Ajouté
+                status_refresh_interval_seconds: status_refresh_interval_seconds // Ajouté
             };
 
             // ... (reste de la fonction saveConfig inchangé) ...
@@ -389,6 +416,13 @@
                     populateDropdown('sonnerie_ppms', data.available_ringtones, data.sonnerie_ppms, "Aucune Sonnerie (PPMS)");
                     populateDropdown('sonnerie_attentat', data.available_ringtones, data.sonnerie_attentat, "Aucune Sonnerie (Attentat)");
                     populateDropdown('sonnerie_fin_alerte', data.available_ringtones, data.sonnerie_fin_alerte, "Aucune Sonnerie (Fin Alerte)");
+
+                    // Charger les nouveaux champs de configuration d'interaction
+                    const alertClickMode = data.alert_click_mode || "double"; // Défaut à double si non fourni
+                    document.querySelector(`input[name="alert_click_mode"][value="${alertClickMode}"]`).checked = true;
+
+                    const refreshInterval = data.status_refresh_interval_seconds || 15; // Défaut à 15 si non fourni
+                    document.getElementById('status_refresh_interval').value = refreshInterval;
 
                     // Maintenant, charger les périphériques audio
                     console.log("Appel API GET /api/audio_devices");
