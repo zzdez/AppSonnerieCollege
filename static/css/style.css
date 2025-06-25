@@ -815,6 +815,16 @@ h2 { color: #333; } /* Gardé pour certains titres spécifiques si besoin */
     /* background-color: #6c757d; */
     /* color: white; */
 }
+/* Effet de clignotement pour les alertes actives */
+@keyframes blinker {
+    50% {
+        opacity: 0.3;
+    }
+}
+
+.blinking-alert {
+    animation: blinker 1s linear infinite;
+}
 
 /* Feedback dans cette page (utilise déjà .feedback-message global) */
 /* #exception-feedback, #list-feedback { margin-top: 15px; } */
