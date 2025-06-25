@@ -397,8 +397,24 @@ function showSelectedCalendarView() {
     } else if (selectedCalendarView === 'trimester') {
         apiUrl = `/api/calendar_view?year=${selectedAcademicYear}&trimester=${selectedTrimester}&view_type=trimester`;
         console.log(`API call for Trimester view: ${apiUrl}`);
-        calendarContainer.innerHTML = `<p>Vue Trimestrielle pour ${selectedAcademicYear}, Trimestre ${selectedTrimester} - Implémentation à venir. API: ${apiUrl}</p>`;
-        // fetch(apiUrl)... then(data => generateTrimesterView(data)); ...
+        calendarContainer.innerHTML = `<p>Chargement de la vue trimestrielle pour ${selectedAcademicYear}, Trimestre ${selectedTrimester}...</p>`;
+
+        fetch(apiUrl)
+            .then(response => {
+                if (!response.ok) {
+                    // Essayer de lire le corps de l'erreur JSON si possible
+                    return response.json().then(err => {throw new Error(`Erreur HTTP ${response.status}: ${err.error || response.statusText}`)}).catch(() => {throw new Error(`Erreur HTTP ${response.status}`)});
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) throw new Error(`Erreur API calendrier (trimestre): ${data.error}`);
+                generateTrimesterView(data, selectedAcademicYear, selectedTrimester); // APPEL À LA NOUVELLE FONCTION
+            })
+            .catch(error => {
+                console.error("Erreur showSelectedCalendarView (trimester):", error);
+                calendarContainer.innerHTML = `<p>Erreur chargement vue trimestrielle: ${error.message}</p>`;
+            });
     } else if (selectedCalendarView === 'week') {
         if (!selectedWeekStartDate) {
             calendarContainer.innerHTML = "<p>Veuillez sélectionner une date pour la vue hebdomadaire.</p>";
@@ -432,6 +448,126 @@ function showSelectedCalendarView() {
 
 // --- Fonctions Calendrier Existantes (celles qui restent) ---
 // La fonction showCalendar() a été supprimée car sa logique est maintenant dans showSelectedCalendarView() et changeCalendarView().
+
+function generateTrimesterView(apiResponseData, academicYearString, trimesterNumber) {
+    console.log(`generateTrimesterView pour Année: ${academicYearString}, Trimestre: ${trimesterNumber}`);
+    const calendarContainer = document.getElementById('calendar-container');
+    if (!calendarContainer) { console.error("Conteneur #calendar-container introuvable !"); return; }
+    calendarContainer.innerHTML = ''; // Vider le conteneur
+
+    if (!apiResponseData || !apiResponseData.days) {
+        calendarContainer.innerHTML = "<p>Aucune donnée reçue pour la vue trimestrielle.</p>";
+        console.error("generateTrimesterView: Données API manquantes ou incorrectes.", apiResponseData);
+        return;
+    }
+
+    const [startYear, endYear] = academicYearString.split('-').map(Number);
+    const daysDataFromApi = apiResponseData.days; // Contient les jours UNIQUEMENT pour ce trimestre
+
+    let monthsToDisplay = []; // Array de {month: (1-12), year: YYYY}
+    if (trimesterNumber === 1) {
+        monthsToDisplay = [{month: 9, year: startYear}, {month: 10, year: startYear}, {month: 11, year: startYear}, {month: 12, year: startYear}];
+    } else if (trimesterNumber === 2) {
+        monthsToDisplay = [{month: 1, year: endYear}, {month: 2, year: endYear}, {month: 3, year: endYear}, {month: 4, year: endYear}];
+    } else if (trimesterNumber === 3) {
+        monthsToDisplay = [{month: 5, year: endYear}, {month: 6, year: endYear}, {month: 7, year: endYear}, {month: 8, year: endYear}];
+    } else {
+        calendarContainer.innerHTML = "<p>Numéro de trimestre invalide.</p>";
+        console.error("generateTrimesterView: Numéro de trimestre invalide:", trimesterNumber);
+        return;
+    }
+
+    const today = new Date();
+    const currentDayNum = today.getDate();
+    const currentMonthNum = today.getMonth() + 1;
+    const currentYearToday = today.getFullYear();
+    const todayStr = `${currentYearToday}-${String(currentMonthNum).padStart(2, '0')}-${String(currentDayNum).padStart(2, '0')}`;
+
+    for (const monthInfo of monthsToDisplay) {
+        const monthForLoop = monthInfo.month;
+        const yearForLoop = monthInfo.year;
+
+        const monthDiv = document.createElement('div');
+        monthDiv.classList.add('calendar-month'); // Classe existante pour le style
+
+        const monthDateObject = new Date(yearForLoop, monthForLoop - 1, 1);
+        const monthName = monthDateObject.toLocaleString('fr-FR', { month: 'long' });
+        monthDiv.innerHTML = `<h3>${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${yearForLoop}</h3>`;
+
+        const daysInCurrentMonth = new Date(yearForLoop, monthForLoop, 0).getDate();
+        const firstDayWeekdayOffset = (monthDateObject.getDay() + 6) % 7; // 0 pour Lundi
+
+        const daysGridContainer = document.createElement('div');
+        daysGridContainer.classList.add('calendar-days'); // Classe existante pour le style
+
+        const weekDayLabels = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+        weekDayLabels.forEach(wdText => {
+            const wdCell = document.createElement('div');
+            wdCell.classList.add('calendar-weekday');
+            wdCell.textContent = wdText;
+            daysGridContainer.appendChild(wdCell);
+        });
+
+        for (let i = 0; i < firstDayWeekdayOffset; i++) {
+            const emptyCell = document.createElement('div');
+            emptyCell.classList.add('calendar-day', 'empty');
+            daysGridContainer.appendChild(emptyCell);
+        }
+
+        for (let dayNum = 1; dayNum <= daysInCurrentMonth; dayNum++) {
+            const dayCell = document.createElement('div');
+            dayCell.classList.add('calendar-day');
+            dayCell.textContent = dayNum;
+
+            const currentDateObject = new Date(yearForLoop, monthForLoop - 1, dayNum);
+            const dateKey = `${yearForLoop}-${String(monthForLoop).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+            const dayData = daysDataFromApi[dateKey];
+            const dayOfWeek = currentDateObject.getDay(); // 0=Dim, 1=Lun, ..., 6=Sam
+
+            let cssClass = '';
+            let tooltipText = '';
+
+            if (dateKey === todayStr) {
+                dayCell.classList.add('today');
+            }
+
+            if (dayData) {
+                const typeValue = dayData.type || 'ERREUR';
+                const typeLower = typeValue.toLowerCase().trim();
+                tooltipText = dayData.description || typeValue;
+
+                if (typeLower.startsWith('exception (silence)')) { cssClass = 'exception-silence'; }
+                else if (typeLower.startsWith('exception (utiliser_jt')) { cssClass = 'exception-jt'; }
+                else if (typeLower === 'férié') { cssClass = 'ferie'; }
+                else if (typeLower === 'vacances') { cssClass = 'vacances'; }
+                else if (dayOfWeek === 0) { cssClass = 'weekend-dimanche'; if (!dayData.description && !typeLower.startsWith('classe')) tooltipText = "Dimanche"; }
+                else if (dayOfWeek === 6) { cssClass = 'weekend-samedi'; if (!dayData.description && !typeLower.startsWith('classe')) tooltipText = "Samedi"; }
+                else if (typeLower.startsWith('classe')) { cssClass = 'classe'; }
+                else if (typeLower === 'weekend') { // Fallback si backend envoie 'weekend' pour un jour de semaine
+                    cssClass = (dayOfWeek === 0) ? 'weekend-dimanche' : (dayOfWeek === 6 ? 'weekend-samedi' : 'classe');
+                    console.warn(`Jour ${dateKey} marqué 'weekend' par backend mais dayOfWeek=${dayOfWeek}. Appliqué: ${cssClass}`);
+                }
+                else if (typeLower === 'autre' || typeLower.includes('erreur')) { cssClass = 'erreur-donnees'; console.warn(`Type jour 'Autre' ou 'Erreur': '${typeValue}' pour ${dateKey}`); }
+                else { cssClass = 'erreur-donnees'; console.error(`Type jour INCONNU du backend: '${typeValue}' pour ${dateKey}`); }
+            } else { // Pas de données API pour ce jour (ne devrait pas arriver car le backend filtre pour le trimestre)
+                 console.warn(`generateTrimesterView: Aucune donnée API pour ${dateKey}. Application des styles par défaut.`);
+                 if (dayOfWeek === 0) { cssClass = 'weekend-dimanche'; tooltipText = "Dimanche"; }
+                 else if (dayOfWeek === 6) { cssClass = 'weekend-samedi'; tooltipText = "Samedi"; }
+                 else { cssClass = 'classe'; tooltipText = "Jour de classe (par défaut)"; }
+            }
+
+            if (cssClass) dayCell.classList.add(cssClass);
+            dayCell.title = tooltipText;
+            dayCell.style.cursor = 'pointer';
+            dayCell.setAttribute('data-date', dateKey); // Utile pour débogage
+            dayCell.onclick = () => showDailySchedule(currentDateObject.getFullYear(), currentDateObject.getMonth() + 1, dayNum);
+            daysGridContainer.appendChild(dayCell);
+        }
+        monthDiv.appendChild(daysGridContainer);
+        calendarContainer.appendChild(monthDiv);
+    }
+    console.log("Fin de generateTrimesterView");
+}
 
 function generateMonthCalendar(apiResponseData, academicYearString, monthNumber) {
     const calendarContainer = document.getElementById('calendar-container');
