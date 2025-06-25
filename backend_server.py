@@ -309,6 +309,7 @@ holiday_manager = HolidayManager(logger, cache_dir=CONFIG_PATH)
 scheduler_thread = None
 schedule_manager = None
 alert_process = None # Référence au subprocess de l'alerte active
+current_alert_filename = None # Nom du fichier de l'alerte active
 
 
 # ==============================================================================
@@ -729,13 +730,52 @@ def index():
 @app.route('/api/status')
 # @login_required # Laisser public pour affichage initial simple
 def api_status():
-    """Retourne le statut actuel (scheduler, alerte, prochaine sonnerie)."""
     logger.debug("Requête /api/status")
-    # ... (Code de api_status, inchangé et correct) ...
-    sch_running = False; next_time = None; next_label = None; last_err = "Scheduler non initialisé"; alert_act = alert_process is not None and alert_process.poll() is None
-    if schedule_manager: sch_running = schedule_manager.is_running(); next_time = schedule_manager.get_next_ring_time_iso(); next_label = schedule_manager.get_next_ring_label(); last_err = schedule_manager.get_last_error()
-    status = {"scheduler_running": sch_running, "next_ring_time": next_time, "next_ring_label": next_label, "last_error": last_err or "Aucune", "alert_active": alert_act, "current_time": datetime.now().isoformat()}
-    logger.debug(f"Statut renvoyé: {status}"); return jsonify(status)
+    global current_alert_filename, alert_process # Accéder aux variables globales
+
+    sch_running = False
+    next_time = None
+    next_label = None
+    last_err = "Scheduler non initialisé"
+
+    alert_is_truly_active = False # Sera déterminée ci-dessous
+
+    # Vérifier l'état du processus d'alerte
+    if alert_process is not None:
+        if alert_process.poll() is None: # Le processus est toujours en cours
+            alert_is_truly_active = True
+            # current_alert_filename devrait déjà être correct s'il est en cours
+        else: # Le processus s'est terminé (ou n'a pas pu démarrer correctement)
+            logger.info(f"Le processus d'alerte pour '{current_alert_filename}' (PID: {alert_process.pid if alert_process else 'N/A'}) semble terminé. Nettoyage de l'état.")
+            # Appeler stop_current_alert_process pour nettoyer current_alert_filename et alert_process
+            # Cela mettra current_alert_filename à None et alert_is_truly_active restera False.
+            stop_current_alert_process()
+            alert_is_truly_active = False # Explicitement False après nettoyage
+    else:
+        # S'il n'y a pas de processus, current_alert_filename devrait être None.
+        # On s'en assure au cas où.
+        if current_alert_filename is not None:
+            logger.warning(f"alert_process est None, mais current_alert_filename ('{current_alert_filename}') ne l'est pas. Réinitialisation.")
+            current_alert_filename = None
+
+
+    if schedule_manager:
+        sch_running = schedule_manager.is_running()
+        next_time = schedule_manager.get_next_ring_time_iso()
+        next_label = schedule_manager.get_next_ring_label()
+        last_err = schedule_manager.get_last_error()
+
+    status = {
+        "scheduler_running": sch_running,
+        "next_ring_time": next_time,
+        "next_ring_label": next_label,
+        "last_error": last_err or "Aucune",
+        "alert_active": alert_is_truly_active,
+        "alert_type": current_alert_filename if alert_is_truly_active else None, # AJOUT DE LA CLÉ alert_type
+        "current_time": datetime.now().isoformat()
+    }
+    logger.debug(f"Statut renvoyé par /api/status: {status}")
+    return jsonify(status)
 
 @app.route('/api/planning/activate', methods=['POST'])
 @login_required
@@ -763,17 +803,35 @@ def deactivate_planning():
 
 # --- Fonction Helper pour arrêter l'alerte ---
 def stop_current_alert_process():
-    """Tente d'arrêter le processus d'alerte courant."""
-    global alert_process; action_taken = False
-    if alert_process and alert_process.poll() is None:
-        pid = alert_process.pid; logger.warning(f"Arrêt processus alerte (PID: {pid})...")
-        action_taken = True
+    """Tente d'arrêter le processus d'alerte courant et réinitialise current_alert_filename."""
+    global alert_process, current_alert_filename # Déclaration des globales
+    action_taken = False
+    if alert_process and alert_process.poll() is None: # Si le processus existe et est en cours
+        pid = alert_process.pid
+        logger.warning(f"Arrêt processus alerte (PID: {pid}) pour l'alerte '{current_alert_filename}'...")
         try:
-            alert_process.terminate(); alert_process.wait(timeout=2); logger.info(f"Alerte (PID: {pid}) arrêtée (terminate).")
-        except subprocess.TimeoutExpired: logger.error(f"Timeout arrêt alerte (PID:{pid}), kill."); alert_process.kill(); alert_process.wait(); logger.info(f"Alerte (PID: {pid}) arrêtée (kill).")
-        except Exception as e: logger.error(f"Erreur arrêt alerte (PID:{pid}): {e}", exc_info=True)
-        finally: alert_process = None # Toujours réinitialiser
-    else: logger.debug("stop_current_alert_process: Pas d'alerte active.")
+            alert_process.terminate()
+            alert_process.wait(timeout=2) # Attendre que le processus se termine
+            logger.info(f"Alerte (PID: {pid}, type: '{current_alert_filename}') arrêtée (terminate).")
+        except subprocess.TimeoutExpired:
+            logger.error(f"Timeout arrêt alerte (PID:{pid}, type: '{current_alert_filename}'), tentative de kill.")
+            alert_process.kill()
+            alert_process.wait() # Attendre après kill
+            logger.info(f"Alerte (PID: {pid}, type: '{current_alert_filename}') arrêtée (kill).")
+        except Exception as e:
+            logger.error(f"Erreur lors de l'arrêt de l'alerte (PID:{pid}, type: '{current_alert_filename}'): {e}", exc_info=True)
+        finally:
+            alert_process = None
+            current_alert_filename = None # RÉINITIALISER ICI
+            action_taken = True # Une action a été tentée
+    else: # Pas de processus actif ou processus déjà terminé
+        if alert_process: # Le processus existe mais n'est plus en cours (poll() is not None)
+             logger.debug(f"stop_current_alert_process: Processus d'alerte (type: '{current_alert_filename}') déjà terminé. Nettoyage.")
+             alert_process = None # Nettoyer la référence au processus
+        else:
+             logger.debug("stop_current_alert_process: Pas de processus d'alerte actif à arrêter.")
+        current_alert_filename = None # S'ASSURER QUE C'EST RÉINITIALISÉ AUSSI DANS CE CAS
+        # action_taken reste False si aucun processus n'était activement en cours
     return action_taken
 
 @app.route('/api/alert/trigger/<filename>', methods=['POST'])
@@ -781,11 +839,22 @@ def stop_current_alert_process():
 @require_permission("control:alert_trigger_any")
 def trigger_alert(filename):
     """Déclenche une alerte (arrête la précédente si besoin)."""
-    user = current_user.id; logger.info(f"User '{user}': Trigger alert: {filename}"); global alert_process
-    logger.info("Vérification et arrêt alerte précédente..."); stop_current_alert_process()
-    if not MP3_PATH or not os.path.isdir(MP3_PATH): logger.error(f"Trigger alert échoué: MP3_PATH invalide: {MP3_PATH}"); return jsonify({"error": "Config MP3 invalide."}), 500
+    user = current_user.id
+    global alert_process, current_alert_filename # Déclaration des globales
+    logger.info(f"User '{user}': Trigger alert: {filename}")
+
+    logger.info("Vérification et arrêt alerte précédente...");
+    stop_current_alert_process() # Cela va aussi mettre current_alert_filename à None
+
+    if not MP3_PATH or not os.path.isdir(MP3_PATH):
+        logger.error(f"Trigger alert échoué: MP3_PATH invalide: {MP3_PATH}")
+        return jsonify({"error": "Config MP3 invalide."}), 500
+
     sound_path = os.path.join(MP3_PATH, filename)
-    if not os.path.isfile(sound_path): logger.error(f"Alert file not found: {sound_path}"); return jsonify({"error": f"Fichier alerte '{filename}' introuvable."}), 404
+    if not os.path.isfile(sound_path):
+        logger.error(f"Alert file not found: {sound_path}")
+        return jsonify({"error": f"Fichier alerte '{filename}' introuvable."}), 404
+
     try:
         # Vérifications de permission spécifiques pour PPMS et Attentat
         is_ppms = (filename == college_params.get("sonnerie_ppms"))
@@ -795,7 +864,7 @@ def trigger_alert(filename):
             return permission_access_denied("control:alert_trigger_ppms")
         if is_attentat and not user_has_permission(current_user, "control:alert_trigger_attentat"):
             return permission_access_denied("control:alert_trigger_attentat")
-        # Si ce n'est ni PPMS ni Attentat, la permission "control:alert_trigger_any" est suffisante.
+        # Si ce n'est ni PPMS ni Attentat, la permission "control:alert_trigger_any" est suffisante (déjà vérifiée par le décorateur).
 
         logger.info(f"Lancement processus alerte '{filename}' (non-boucle)...")
         audio_device_name = college_params.get("nom_peripherique_audio_sonneries")
@@ -805,10 +874,18 @@ def trigger_alert(filename):
             logger.info(f"Triggering alert '{filename}' on device: {audio_device_name}")
         else:
             logger.info(f"Triggering alert '{filename}' on default device.")
+
         logger.debug(f"Cmd: {' '.join(cmd)}")
-        flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0; alert_process = subprocess.Popen(cmd, creationflags=flags)
-        logger.info(f"Nouveau processus alerte démarré (PID: {alert_process.pid})."); return jsonify({"message": f"Alerte '{filename}' déclenchée (durée limitée)."}), 200
-    except Exception as e: logger.error(f"Erreur lancement processus alerte: {e}", exc_info=True); alert_process = None; return jsonify({"error": f"Erreur serveur: {e}"}), 500
+        flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        alert_process = subprocess.Popen(cmd, creationflags=flags)
+        current_alert_filename = filename  # STOCKER LE NOM DU FICHIER
+        logger.info(f"Nouveau processus alerte démarré (PID: {alert_process.pid}) pour '{current_alert_filename}'.")
+        return jsonify({"message": f"Alerte '{filename}' déclenchée."}), 200
+    except Exception as e:
+        logger.error(f"Erreur lancement processus alerte: {e}", exc_info=True)
+        alert_process = None
+        current_alert_filename = None # RÉINITIALISER EN CAS D'ERREUR
+        return jsonify({"error": f"Erreur serveur: {e}"}), 500
 
 @app.route('/api/alert/stop', methods=['POST'])
 @login_required
