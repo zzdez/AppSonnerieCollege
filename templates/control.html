@@ -299,15 +299,16 @@ function updateAlertButtonsUI(statusData) {
         if (isAttentatActiveBackend) btnAlertPpms.disabled = true;
     }
 
-    btnAlertAttentat.classList.remove('btn-dark', 'active', 'btn-danger', 'blinking-alert'); // Nettoyer blinking-alert
+    btnAlertAttentat.classList.remove('btn-dark', 'active', 'btn-danger', 'blinking-alert'); // Nettoyer 'btn-dark' aussi
     btnAlertAttentat.disabled = false;
+
     if (isAttentatActiveBackend) {
-        btnAlertAttentat.classList.add('btn-dark', 'active', 'blinking-alert'); // Ajouter blinking-alert
+        btnAlertAttentat.classList.add('btn-danger', 'active', 'blinking-alert'); // <<< CHANGEMENT ICI : btn-danger au lieu de btn-dark
         btnAlertAttentat.innerHTML = '<i class="bi bi-cone-striped me-1"></i>ATTENTAT ACTIF';
         btnAlertAttentat.title = "Double-clic pour ARRETER l'alerte Attentat";
         btnAlertPpms.disabled = true;
     } else {
-        btnAlertAttentat.classList.add('btn-danger');
+        btnAlertAttentat.classList.add('btn-danger'); // Couleur par défaut reste btn-danger
         btnAlertAttentat.innerHTML = '<i class="bi bi-cone-striped me-1"></i>ATTENTAT';
         btnAlertAttentat.title = "Double-clic pour DECLENCHER l'alerte Attentat";
         if (isPpmsActiveBackend) btnAlertAttentat.disabled = true;
