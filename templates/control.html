@@ -79,6 +79,7 @@ let selectedAcademicYear; // Sera initialisée par getDefaultAcademicYear dans D
 // Variables pour la logique d'alerte
 let ppmsClickTimer = null;
 let attentatClickTimer = null;
+let endAlertClickTimer = null;
 const DBL_CLICK_DELAY = 300;
 let btnAlertPpms, btnAlertAttentat, btnEndAlert; // Seront initialisées dans DOMContentLoaded
 
@@ -452,10 +453,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (btnEndAlert) {
         btnEndAlert.addEventListener('click', function() {
-            if (this.disabled) return;
-            callEndAlertAPI();
+            if (this.disabled) return; // Ne rien faire si le bouton est désactivé
+
+            if (endAlertClickTimer === null) { // Premier clic
+                endAlertClickTimer = setTimeout(() => {
+                    endAlertClickTimer = null; // Reset timer
+                    // Aucune action sur simple clic pour ce bouton
+                    console.log("[control.html] Simple clic sur Sonnerie Fin d'Alerte (ignoré)");
+                }, DBL_CLICK_DELAY);
+            } else { // Double clic
+                clearTimeout(endAlertClickTimer);
+                endAlertClickTimer = null;
+
+                console.log("[control.html] Double-clic sur Sonnerie Fin d'Alerte détecté.");
+                if (typeof callEndAlertAPI === 'function') {
+                    callEndAlertAPI(); // Appeler la fonction existante pour l'API
+                } else {
+                    console.error("[control.html] La fonction callEndAlertAPI n'est pas définie !");
+                }
+            }
         });
-    } else { console.error("Bouton #btn-end-alert non trouvé."); }
+    } else { console.error("Bouton #btn-end-alert non trouvé pour attacher listener."); }
 
     console.log("[control.html] DOMContentLoaded: Fin de l'initialisation.");
 });
