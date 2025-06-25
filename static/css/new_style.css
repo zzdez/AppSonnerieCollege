@@ -1,0 +1,41 @@
+/* Styles pour le widget de statut dans le sidebar */
+.sidebar-status-widget {
+    font-size: 0.9rem; /* Ou 1rem. À ajuster pour correspondre au menu. */
+    /* background-color: #f8f9fa; /* Conserver ou ajuster si besoin */
+    line-height: 1.4; /* Ajuster pour un bon espacement vertical */
+}
+.sidebar-status-widget h6 {
+    font-size: 1rem; /* Un peu plus grand que le texte du statut */
+    font-weight: bold;
+}
+.sidebar-status-widget p, .sidebar-status-widget div[class^="mb-"] { /* Cible les <p> et les <div> pour Proch. Sonnerie */
+    margin-bottom: 0.35rem !important; /* Espacement ajusté */
+}
+.sidebar-status-widget .status-unknown { color: #6c757d; } /* Gris pour inconnu/N/A */
+.sidebar-status-widget .status-ok { color: #198754; }      /* Vert pour OK */
+.sidebar-status-widget .status-error { color: #dc3545; }   /* Rouge pour erreur */
+.sidebar-status-widget .status-inactive { color: #ffc107; } /* Jaune/Orange pour inactif */
+
+/* Tentative de rendre le calendrier de control.html plus compact */
+#calendar-section h2 { /* Titre de la section Calendrier */
+    font-size: 1.5rem; /* Un peu plus petit */
+    margin-bottom: 0.75rem;
+}
+#calendar-container .calendar-month h3 { /* Noms des mois dans le calendrier */
+    font-size: 1rem;
+    padding: 0.3rem 0;
+    margin-bottom: 0.3rem;
+}
+#calendar-container .calendar-weekday { /* Lettres des jours L, M, M... */
+    font-size: 0.7rem;
+    padding: 0.1rem;
+}
+#calendar-container .calendar-day { /* Cellules des jours */
+    font-size: 0.75rem;
+    padding: 0.2rem;
+    min-height: 30px; /* Réduire hauteur minimale si besoin */
+    line-height: 1.2; /* Ajuster pour que le numéro du jour soit bien centré si besoin */
+}
+#calendar-selector label, #calendar-selector select {
+    font-size: 0.9rem;
+}
