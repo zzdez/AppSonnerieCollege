@@ -285,10 +285,10 @@ function updateAlertButtonsUI(statusData) {
 
     console.log(`[control.html] updateAlertButtonsUI: PPMS Active? ${isPpmsActiveBackend}, Attentat Actif? ${isAttentatActiveBackend}, Alerte Active Générique? ${statusData.alert_active}, Type: ${statusData.alert_type}`);
 
-    btnAlertPpms.classList.remove('btn-danger', 'active', 'btn-warning');
+    btnAlertPpms.classList.remove('btn-danger', 'active', 'btn-warning', 'blinking-alert'); // Nettoyer blinking-alert
     btnAlertPpms.disabled = false;
     if (isPpmsActiveBackend) {
-        btnAlertPpms.classList.add('btn-danger', 'active');
+        btnAlertPpms.classList.add('btn-danger', 'active', 'blinking-alert'); // Ajouter blinking-alert
         btnAlertPpms.innerHTML = '<i class="bi bi-shield-fill-exclamation me-1"></i>PPMS ACTIVE';
         btnAlertPpms.title = "Double-clic pour ARRETER l'alerte PPMS";
         btnAlertAttentat.disabled = true;
@@ -299,10 +299,10 @@ function updateAlertButtonsUI(statusData) {
         if (isAttentatActiveBackend) btnAlertPpms.disabled = true;
     }
 
-    btnAlertAttentat.classList.remove('btn-dark', 'active', 'btn-danger');
+    btnAlertAttentat.classList.remove('btn-dark', 'active', 'btn-danger', 'blinking-alert'); // Nettoyer blinking-alert
     btnAlertAttentat.disabled = false;
     if (isAttentatActiveBackend) {
-        btnAlertAttentat.classList.add('btn-dark', 'active');
+        btnAlertAttentat.classList.add('btn-dark', 'active', 'blinking-alert'); // Ajouter blinking-alert
         btnAlertAttentat.innerHTML = '<i class="bi bi-cone-striped me-1"></i>ATTENTAT ACTIF';
         btnAlertAttentat.title = "Double-clic pour ARRETER l'alerte Attentat";
         btnAlertPpms.disabled = true;
