@@ -57,13 +57,17 @@
                     </select>
                 </div>
 
-                <div id="calendar-controls-year" class="d-flex align-items-center"> {# Sélecteur d'Année (et futur mois/semaine) #}
+                <div id="calendar-controls-year" class="d-flex align-items-center">
                     <label for="academic-year-select" class="form-label mb-0 me-2 text-nowrap">Année scolaire :</label>
-                    <select id="academic-year-select" class="form-select form-select-sm" style="min-width: 120px;" onchange="changeCalendarView()"> {# Appelle la même fonction pour l'instant #}
+                    <select id="academic-year-select" class="form-select form-select-sm" style="min-width: 120px;" onchange="changeCalendarView()">
                         <!-- Options ajoutées par JS -->
                     </select>
-                    {# Ici, on pourrait ajouter un sélecteur de mois si la vue "Mensuelle" est active #}
-                    {# <select id="month-select" class="form-select form-select-sm ms-2" style="min-width: 120px; display: none;" onchange="changeCalendarView()"></select> #}
+
+                    {# NOUVEAU Sélecteur de Mois (initialement masqué) #}
+                    <div id="month-selector-container" class="ms-2 d-flex align-items-center" style="display: none;">
+                        <label for="month-select" class="form-label mb-0 me-2 text-nowrap">Mois :</label>
+                        <select id="month-select" class="form-select form-select-sm" style="min-width: 130px;" onchange="changeCalendarView()"></select>
+                    </div>
                 </div>
             </div>
             {% endif %}
@@ -97,6 +101,7 @@ let currentStatus = { alert_active: false, alert_type: null };
 let configSettings = { alert_files: { ppms: null, attentat: null } };
 let selectedAcademicYear; // Sera initialisée par getDefaultAcademicYear dans DOMContentLoaded
 let selectedCalendarView = 'year'; // Valeur par défaut
+let selectedMonth = new Date().getMonth() + 1; // Mois actuel par défaut (1-12)
 
 // Variables pour la logique d'alerte
 let ppmsClickTimer = null;
@@ -119,6 +124,44 @@ function populateAcademicYearSelector() {
         const startYear = currentStartYear + i; const yearString = `${startYear}-${startYear + 1}`;
         const option = document.createElement('option'); option.value = yearString; option.textContent = yearString; selectElement.appendChild(option);
     } selectElement.value = selectedAcademicYear;
+}
+
+function populateMonthSelector(academicYear) {
+    const monthSelect = document.getElementById('month-select');
+    if (!monthSelect) return;
+    monthSelect.innerHTML = ''; // Vider les options existantes
+    const [startYear, endYear] = academicYear.split('-').map(Number);
+
+    const moisNoms = ["Septembre", "Octobre", "Novembre", "Décembre", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août"];
+    const moisValeurs = [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8]; // Numéros de mois (1-12)
+
+    for (let i = 0; i < 12; i++) {
+        const option = document.createElement('option');
+        option.value = moisValeurs[i]; // Utiliser le numéro du mois comme valeur
+        let anneePourCeMois = (moisValeurs[i] >= 9) ? startYear : endYear;
+        option.textContent = `${moisNoms[i]} ${anneePourCeMois}`;
+        monthSelect.appendChild(option);
+    }
+
+    // Sélectionner le mois actuel par défaut si possible, ou le premier mois
+    const now = new Date();
+    const currentRealMonth = now.getMonth() + 1; // Mois réel (1-12)
+    const currentRealYear = now.getFullYear();
+    let defaultMonthSelected = false;
+
+    // Tenter de sélectionner le mois en cours de l'année en cours si elle fait partie de l'année scolaire
+    if ((currentRealMonth >= 9 && currentRealYear === startYear) || (currentRealMonth <= 8 && currentRealYear === endYear)) {
+        monthSelect.value = currentRealMonth;
+        selectedMonth = currentRealMonth; // Mettre à jour la variable globale
+        defaultMonthSelected = true;
+    }
+
+    if (!defaultMonthSelected) { // Sinon, sélectionner le premier mois de la liste (Septembre)
+        if (monthSelect.options.length > 0) { // S'assurer qu'il y a des options
+            monthSelect.value = moisValeurs[0]; // Septembre
+            selectedMonth = moisValeurs[0];
+        }
+    }
 }
 
 function closeModal() {
@@ -153,22 +196,31 @@ function showFeedback(message, type = 'info', duration = 4000) {
 function changeCalendarView() {
     const viewSelect = document.getElementById('calendar-view-type-select');
     const yearSelect = document.getElementById('academic-year-select');
-    // const monthSelect = document.getElementById('month-select'); // Pour plus tard
+    const monthSelect = document.getElementById('month-select');
+    const monthSelectorContainer = document.getElementById('month-selector-container');
 
     if (viewSelect) selectedCalendarView = viewSelect.value;
-    if (yearSelect) selectedAcademicYear = yearSelect.value; // selectedAcademicYear est déjà globale
-    // if (monthSelect && selectedCalendarView === 'month') selectedMonth = monthSelect.value; // Pour plus tard
 
-    console.log(`Changement vue/période calendrier: Vue=${selectedCalendarView}, Année Scolaire=${selectedAcademicYear}`);
+    // Stocker l'ancienne année scolaire pour détecter un changement
+    const previousAcademicYear = selectedAcademicYear;
+    if (yearSelect) selectedAcademicYear = yearSelect.value;
 
-    // Gérer la visibilité des contrôles spécifiques à la vue (pour plus tard)
-    // const monthSelectorContainer = document.getElementById('month-select'); // Si on met le select dans un conteneur
-    // if (monthSelectorContainer) {
-    //     monthSelectorContainer.style.display = (selectedCalendarView === 'month') ? 'block' : 'none';
-    // }
-    // if (selectedCalendarView === 'month' && !monthSelect.options.length) {
-    //     populateMonthSelector(); // À créer si on active la vue mensuelle
-    // }
+    if (monthSelectorContainer && monthSelect) {
+        if (selectedCalendarView === 'month') {
+            monthSelectorContainer.style.display = 'flex'; // Assurer la visibilité avec flex
+            // Peupler le sélecteur de mois si ce n'est pas déjà fait ou si l'année a changé, ou si selectedMonth n'est pas encore initialisé correctement
+            if (!monthSelect.options.length || previousAcademicYear !== selectedAcademicYear || selectedMonth === undefined) {
+                populateMonthSelector(selectedAcademicYear); // populateMonthSelector met à jour selectedMonth
+            }
+            // S'assurer que selectedMonth est synchronisé avec la valeur du sélecteur après population/changement
+             selectedMonth = parseInt(monthSelect.value);
+
+        } else {
+            monthSelectorContainer.style.display = 'none';
+        }
+    }
+
+    console.log(`Changement vue/période: Vue=${selectedCalendarView}, Année=${selectedAcademicYear}, Mois=${selectedMonth}`);
 
     // Mettre à jour le titre du calendrier
     const calendarTitleSpan = document.getElementById('calendar-title-year');
@@ -176,12 +228,15 @@ function changeCalendarView() {
         if (selectedCalendarView === 'year') {
             calendarTitleSpan.textContent = `Scolaire ${selectedAcademicYear}`;
         } else if (selectedCalendarView === 'month') {
-            // Pour l'instant, on affiche l'année, on affinera avec le mois sélectionné
-            // const monthName = monthSelect ? monthSelect.options[monthSelect.selectedIndex].text : '';
-            // calendarTitleSpan.textContent = `${monthName} ${selectedAcademicYear.substring(0,4) ou (5,9)}`; // A affiner
-            calendarTitleSpan.textContent = `Mensuel (Année ${selectedAcademicYear})`;
+            if (monthSelect && monthSelect.options.length > 0 && monthSelect.selectedIndex !== -1) {
+                 // Utiliser le texte de l'option sélectionnée qui contient déjà "Mois Annee"
+                calendarTitleSpan.textContent = monthSelect.options[monthSelect.selectedIndex].text;
+            } else {
+                // Fallback si le sélecteur de mois n'est pas prêt (ne devrait pas arriver souvent)
+                calendarTitleSpan.textContent = `Mensuel (Année ${selectedAcademicYear})`;
+            }
         } else {
-            calendarTitleSpan.textContent = selectedAcademicYear; // Fallback
+            calendarTitleSpan.textContent = selectedAcademicYear; // Fallback pour autres vues
         }
     }
     showSelectedCalendarView(); // Nouvelle fonction pour afficher la vue choisie
@@ -221,13 +276,44 @@ function showSelectedCalendarView() {
                 if (calendarContainer) calendarContainer.innerHTML = `<p>Erreur chargement vue annuelle: ${error.message}</p>`;
             });
     } else if (selectedCalendarView === 'month') {
-        // Logique pour la vue mensuelle (à implémenter plus tard)
-        calendarContainer.innerHTML = `<p>Vue Mensuelle pour ${selectedAcademicYear} - Implémentation à venir.</p>`;
-        console.log("Vue Mensuelle sélectionnée. API et rendu à développer.");
-        // Exemple d'appel API future:
-        // const currentMonthForView = document.getElementById('month-select') ? document.getElementById('month-select').value : new Date().getMonth() + 1;
-        // apiUrl = `/api/calendar_view?year=${selectedAcademicYear}&month=${currentMonthForView}&view_type=month;
-        // fetch(apiUrl)... then(data => generateMonthView(data)); ...
+        // S'assurer que selectedMonth est bien défini et est un nombre
+        if (typeof selectedMonth !== 'number' && document.getElementById('month-select')) {
+            const monthValue = parseInt(document.getElementById('month-select').value);
+            if (!isNaN(monthValue)) {
+                selectedMonth = monthValue;
+            } else {
+                console.error("selectedMonth n'a pas pu être déterminé à partir du sélecteur.");
+                // Utiliser le mois actuel comme fallback si selectedMonth est toujours indéfini
+                if (typeof selectedMonth !== 'number') {
+                    selectedMonth = new Date().getMonth() + 1;
+                }
+            }
+        } else if (typeof selectedMonth !== 'number') {
+             // Fallback ultime si le sélecteur n'existe pas ou si selectedMonth est invalide
+            console.warn("selectedMonth est indéfini et le sélecteur de mois n'est pas disponible. Utilisation du mois actuel.");
+            selectedMonth = new Date().getMonth() + 1;
+        }
+
+        apiUrl = `/api/calendar_view?year=${selectedAcademicYear}&month=${selectedMonth}&view_type=month`;
+        console.log(`API call for Monthly view: ${apiUrl}`);
+        calendarContainer.innerHTML = `<p>Chargement de la vue mensuelle pour ${selectedAcademicYear}, Mois ${selectedMonth}...</p>`;
+
+        fetch(apiUrl)
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {throw new Error(`Erreur HTTP ${response.status}: ${err.error||response.statusText}`)}).catch(() => {throw new Error(`Erreur HTTP ${response.status}`)});
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) throw new Error(`Erreur API calendrier (mois): ${data.error}`);
+                // generateMonthCalendar(data, selectedAcademicYear, selectedMonth); // FUTURE FONCTION DE RENDU
+                calendarContainer.innerHTML = `<p>Données pour la vue mensuelle reçues. Rendu à implémenter. Mois: ${selectedMonth}</p><pre>${JSON.stringify(data, null, 2)}</pre>`; // Affichage temporaire des données
+            })
+            .catch(error => {
+                console.error("Erreur showSelectedCalendarView (month):", error);
+                calendarContainer.innerHTML = `<p>Erreur chargement vue mensuelle: ${error.message}</p>`;
+            });
     }
     // Ajouter ici d'autres 'else if' pour les vues 'week', 'day' etc.
     else {
