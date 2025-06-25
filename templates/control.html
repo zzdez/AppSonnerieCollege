@@ -12,7 +12,7 @@
                     <i class="bi bi-exclamation-triangle-fill me-1"></i> Actions d'Alerte
                 </div>
                 <div class="card-body text-center">
-                    <p class="card-text text-muted mb-3"><small>Double-cliquez sur un bouton d'alerte pour déclencher ou arrêter l'alerte correspondante.</small></p>
+
                     <div class="btn-toolbar justify-content-center" role="toolbar" aria-label="Toolbar avec groupes de boutons d'alerte">
                         <div class="btn-group me-2" role="group" aria-label="Alerte PPMS">
                             <button type="button" class="btn btn-lg btn-warning px-3" id="btn-alert-ppms" title="Double-clic pour gérer l'alerte PPMS">
@@ -39,28 +39,29 @@
     <!-- Zone pour afficher les messages de feedback des contrôles (doit être conservée) -->
     <div id="control-message" class="feedback-message" style="display: none; margin-top: 15px;"></div>
 
- <!-- Section Calendrier -->
- <div id="calendar-section" class="mt-4">
-     <div class="d-flex justify-content-between align-items-center mb-3"> {# NOUVEAU conteneur Flex #}
-         <h2 class="mb-0">Calendrier <span id="calendar-title-year">Annuel</span></h2> {# mb-0 pour enlever la marge du h2 #}
-         {% if user_has_permission('control:view_calendar') %}
-         <div id="calendar-selector" class="ms-3"> {# ms-3 pour un peu d'espace à gauche, mb-0 implicite car plus de bloc séparé #}
-             <label for="academic-year-select" class="form-label me-2">Afficher l'année scolaire :</label> {# form-label pour un style Bootstrap standard #}
-             <select id="academic-year-select" class="form-select form-select-sm" onchange="changeAcademicYear()"> {# form-select et form-select-sm pour style Bootstrap #}
-                 <!-- Options ajoutées par JS -->
-             </select>
-         </div>
-         {% endif %}
-     </div>
+    <!-- Section Calendrier -->
+    <div id="calendar-section" class="mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap"> {# flex-wrap pour les petits écrans #}
+            <h2 class="mb-0 me-auto">Calendrier <span id="calendar-title-year">Annuel</span></h2> {# me-auto pour pousser le sélecteur à droite si besoin #}
 
-     {% if user_has_permission('control:view_calendar') %}
-     <div id="calendar-container">
-         <p>Chargement du calendrier...</p>
-     </div>
-     {% else %}
-     <p><em>Vous n'avez pas la permission de voir le calendrier.</em></p>
-     {% endif %}
- </div>
+            {% if user_has_permission('control:view_calendar') %}
+            <div id="calendar-selector" class="ms-3 d-flex align-items-center"> {# d-flex et align-items-center pour le label et select #}
+                <label for="academic-year-select" class="form-label mb-0 me-2" style="white-space: nowrap; flex-shrink: 0;">Année scolaire :</label> {# mb-0 car c'est un form-label dans un flex #}
+                <select id="academic-year-select" class="form-select form-select-sm" style="min-width: 120px;" onchange="changeAcademicYear()">
+                    <!-- Options ajoutées par JS -->
+                </select>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if user_has_permission('control:view_calendar') %}
+        <div id="calendar-container">
+            <p>Chargement du calendrier...</p>
+        </div>
+        {% else %}
+        <p><em>Vous n'avez pas la permission de voir le calendrier.</em></p>
+        {% endif %}
+    </div>
 
     <!-- Fenêtre Modale (initialement cachée) -->
     <div id="modal-overlay" class="modal-overlay" onclick="if (event.target === this) { closeModal(); }">

@@ -69,64 +69,16 @@ h2 { color: #333; } /* Gardé pour certains titres spécifiques si besoin */
 .status-unknown { color: #6c757d; }
 
 /* Calendar Styles (control.html) */
-#calendar-section h2 { 
-    border-bottom: 1px solid #eee; 
-    padding-bottom: 8px; /* Réduit */
-    margin-bottom: 12px; /* Réduit */
-}
-#calendar-selector { 
-    margin-bottom: 12px; /* Réduit */
-    text-align: right; 
-}
+#calendar-section h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px;}
+#calendar-selector { margin-bottom: 15px; text-align: right; }
 #calendar-selector label { margin-right: 5px; }
-
-#calendar-container { 
-    display: grid; 
-    /* Essaie repeat(4, 1fr) pour forcer 4 colonnes si tu cibles spécifiquement 1920px */
-    /* ou garde auto-fit et ajuste minmax */
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* Réduit la largeur min des mois */
-    gap: 10px; /* Réduit */
-}
-.calendar-month { 
-    border: 1px solid #ddd; 
-    padding: 8px; /* Réduit */
-    border-radius: 6px; 
-    background-color: #fdfdfd;
-}
-.calendar-month h3 { 
-    text-align: center; 
-    margin-top: 0; 
-    margin-bottom: 6px; /* Réduit */
-    font-size: 1em; /* Réduit */
-    color: #555; 
-}
-.calendar-days { 
-    display: grid; 
-    grid-template-columns: repeat(7, 1fr); 
-    gap: 2px; /* Réduit */
-}
-.calendar-weekday, .calendar-day { 
-    text-align: center; 
-    padding: 2px 0; /* Réduit */
-    font-size: 0.75em; /* Réduit */
-    border-radius: 3px; 
-    height: 22px; /* Réduit - à ajuster avec font-size et padding */
-    display: flex; 
-    justify-content: center; 
-    align-items: center; 
-    transition: background-color 0.15s, transform 0.1s; 
-    overflow: hidden; 
-}
-.calendar-weekday { 
-    font-weight: bold; 
-    background-color: #e9ecef; 
-    color: #495057; 
-    /* Peut-être une hauteur légèrement différente si besoin */
-    /* height: 24px; */ 
-}
-.calendar-day { 
-    border: 1px solid #eee; 
-}
+#calendar-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; }
+.calendar-month { border: 1px solid #ddd; padding: 10px; border-radius: 6px; background-color: #fdfdfd;}
+.calendar-month h3 { text-align: center; margin-top: 0; margin-bottom: 10px; font-size: 1.1em; color: #555; }
+.calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.calendar-weekday, .calendar-day { text-align: center; padding: 4px 0; font-size: 0.8em; border-radius: 3px; height: 26px; display: flex; justify-content: center; align-items: center; transition: background-color 0.15s, transform 0.1s; overflow: hidden; }
+.calendar-weekday { font-weight: bold; background-color: #e9ecef; color: #495057; }
+.calendar-day { border: 1px solid #eee; }
 .calendar-day.empty { background-color: #f8f9fa; border-color: #f8f9fa; cursor: default; }
 .calendar-day.ferie { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; font-weight: bold;}
 .calendar-day.vacances { background-color: #d1ecf1; color: #0c5460; border-color: #bee5eb; }
