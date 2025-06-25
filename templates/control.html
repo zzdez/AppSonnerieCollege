@@ -51,6 +51,7 @@
                     <select id="calendar-view-type-select" class="form-select form-select-sm" style="min-width: 100px;" onchange="changeCalendarView()">
                         <option value="year" selected>Annuelle</option>
                         <option value="semester">Semestrielle</option>
+                        <option value="trimester">Trimestrielle</option>
                         <option value="month">Mensuelle</option>
                         <option value="week">Hebdomadaire</option>
                         <option value="day">Journalière</option>
@@ -74,6 +75,15 @@
                         <select id="semester-select" class="form-select form-select-sm" style="min-width: 150px;" onchange="changeCalendarView()">
                             <option value="1">S1 (Sept-Jan)</option>
                             <option value="2">S2 (Fev-Août)</option>
+                        </select>
+                    </div>
+
+                    <div id="trimester-selector-container" class="d-flex align-items-center me-3 mb-2" style="display: none;">
+                        <label for="trimester-select" class="form-label mb-0 me-2 text-nowrap">Trimestre :</label>
+                        <select id="trimester-select" class="form-select form-select-sm" style="min-width: 150px;" onchange="changeCalendarView()">
+                            <option value="1">T1 (Sept - Déc)</option>
+                            <option value="2">T2 (Jan - Avr)</option>
+                            <option value="3">T3 (Mai - Août)</option>
                         </select>
                     </div>
 
@@ -123,6 +133,7 @@ let selectedMonth = new Date().getMonth() + 1; // Mois actuel par défaut (1-12)
 let selectedWeekStartDate = null; // Stockera l'objet Date du début de la semaine sélectionnée
 let selectedSpecificDay = null; // Stockera l'objet Date du jour sélectionné
 let selectedSemester = 1; // 1 pour S1, 2 pour S2
+let selectedTrimester = 1; // 1, 2, ou 3
 
 // Variables pour la logique d'alerte
 let ppmsClickTimer = null;
@@ -216,9 +227,11 @@ function showFeedback(message, type = 'info', duration = 4000) {
 // --- NOUVELLES Fonctions Calendrier ---
 function changeCalendarView() {
     const viewSelect = document.getElementById('calendar-view-type-select');
+    const viewSelect = document.getElementById('calendar-view-type-select');
     const yearSelect = document.getElementById('academic-year-select');
     const monthSelect = document.getElementById('month-select');
     const semesterSelect = document.getElementById('semester-select');
+    const trimesterSelect = document.getElementById('trimester-select');
     const weekDateSelect = document.getElementById('week-date-select');
     const dayDateSelect = document.getElementById('day-date-select');
 
@@ -226,6 +239,7 @@ function changeCalendarView() {
     const academicYearSelectorContainer = document.getElementById('academic-year-selector-container');
     const monthSelectorContainer = document.getElementById('month-selector-container');
     const semesterSelectorContainer = document.getElementById('semester-selector-container');
+    const trimesterSelectorContainer = document.getElementById('trimester-selector-container');
     const weekSelectorContainer = document.getElementById('week-selector-container');
     const daySelectorContainer = document.getElementById('day-selector-container');
 
@@ -238,26 +252,29 @@ function changeCalendarView() {
     if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'none';
     if (monthSelectorContainer) monthSelectorContainer.style.display = 'none';
     if (semesterSelectorContainer) semesterSelectorContainer.style.display = 'none';
+    if (trimesterSelectorContainer) trimesterSelectorContainer.style.display = 'none';
     if (weekSelectorContainer) weekSelectorContainer.style.display = 'none';
     if (daySelectorContainer) daySelectorContainer.style.display = 'none';
 
     // Afficher les conteneurs pertinents et mettre à jour les valeurs
     if (selectedCalendarView === 'year') {
         if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
-        // selectedAcademicYear est déjà mis à jour
     } else if (selectedCalendarView === 'semester') {
         if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
         if (semesterSelectorContainer) semesterSelectorContainer.style.display = 'flex';
         if (semesterSelect) selectedSemester = parseInt(semesterSelect.value);
-        // selectedAcademicYear est déjà mis à jour
+    } else if (selectedCalendarView === 'trimester') {
+        if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
+        if (trimesterSelectorContainer) trimesterSelectorContainer.style.display = 'flex';
+        if (trimesterSelect) selectedTrimester = parseInt(trimesterSelect.value);
     } else if (selectedCalendarView === 'month') {
         if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
         if (monthSelectorContainer) monthSelectorContainer.style.display = 'flex';
-        if (monthSelect) { // S'assurer que monthSelect existe
+        if (monthSelect) {
             if (!monthSelect.options.length || previousAcademicYear !== selectedAcademicYear || selectedMonth === undefined) {
-                populateMonthSelector(selectedAcademicYear); // populateMonthSelector met à jour selectedMonth
+                populateMonthSelector(selectedAcademicYear);
             }
-            selectedMonth = parseInt(monthSelect.value); // S'assurer que selectedMonth est à jour
+            selectedMonth = parseInt(monthSelect.value);
         }
     } else if (selectedCalendarView === 'week') {
         if (weekSelectorContainer) weekSelectorContainer.style.display = 'flex';
@@ -277,7 +294,7 @@ function changeCalendarView() {
         }
     }
 
-    console.log(`Vue: ${selectedCalendarView}, Année: ${selectedAcademicYear}, Semestre: ${selectedSemester}, Mois: ${selectedMonth}, Semaine Début: ${selectedWeekStartDate ? selectedWeekStartDate.toISOString().split('T')[0] : 'null'}, Jour Spécifique: ${selectedSpecificDay ? selectedSpecificDay.toISOString().split('T')[0] : 'null'}`);
+    console.log(`Vue: ${selectedCalendarView}, Année: ${selectedAcademicYear}, Semestre: ${selectedSemester}, Trimestre: ${selectedTrimester}, Mois: ${selectedMonth}, Semaine Début: ${selectedWeekStartDate ? selectedWeekStartDate.toISOString().split('T')[0] : 'null'}, Jour Spécifique: ${selectedSpecificDay ? selectedSpecificDay.toISOString().split('T')[0] : 'null'}`);
 
     // Mise à jour du titre du calendrier
     const calendarTitleSpan = document.getElementById('calendar-title-year');
@@ -286,6 +303,8 @@ function changeCalendarView() {
             calendarTitleSpan.textContent = `Scolaire ${selectedAcademicYear}`;
         } else if (selectedCalendarView === 'semester' && selectedAcademicYear) {
             calendarTitleSpan.textContent = `Semestre ${selectedSemester} (${selectedAcademicYear})`;
+        } else if (selectedCalendarView === 'trimester' && selectedAcademicYear) {
+            calendarTitleSpan.textContent = `Trimestre ${selectedTrimester} (${selectedAcademicYear})`;
         } else if (selectedCalendarView === 'month') {
             const monthName = monthSelect && monthSelect.options.length > 0 && monthSelect.selectedIndex !== -1 ? monthSelect.options[monthSelect.selectedIndex].text : `Mois ${selectedMonth}`;
             calendarTitleSpan.textContent = `${monthName}`;
@@ -376,6 +395,11 @@ function showSelectedCalendarView() {
         console.log(`API call for Semester view: ${apiUrl}`);
         calendarContainer.innerHTML = `<p>Vue Semestrielle pour ${selectedAcademicYear}, Semestre ${selectedSemester} - Implémentation à venir. API: ${apiUrl}</p>`;
         // fetch(apiUrl)... then(data => generateSemesterView(data)); ...
+    } else if (selectedCalendarView === 'trimester') {
+        apiUrl = `/api/calendar_view?year=${selectedAcademicYear}&trimester=${selectedTrimester}&view_type=trimester`;
+        console.log(`API call for Trimester view: ${apiUrl}`);
+        calendarContainer.innerHTML = `<p>Vue Trimestrielle pour ${selectedAcademicYear}, Trimestre ${selectedTrimester} - Implémentation à venir. API: ${apiUrl}</p>`;
+        // fetch(apiUrl)... then(data => generateTrimesterView(data)); ...
     } else if (selectedCalendarView === 'week') {
         if (!selectedWeekStartDate) {
             calendarContainer.innerHTML = "<p>Veuillez sélectionner une date pour la vue hebdomadaire.</p>";
