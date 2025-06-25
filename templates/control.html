@@ -53,6 +53,8 @@
             </div>
             {% endif %}
         </div>
+
+        {% if user_has_permission('control:view_calendar') %}
         <div id="calendar-container">
             <p>Chargement du calendrier...</p>
         </div>
