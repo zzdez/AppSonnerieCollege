@@ -1132,7 +1132,9 @@ def api_calendar_view():
         logger.warning(f"API /api/calendar_view: Format année scolaire 'year' invalide: {academic_year_str}. Erreur: {e}")
         return jsonify({"error": f"Format année scolaire 'year' invalide. Attendu YYYY-YYYY. Détail: {e}"}), 400
 
-    start_date, end_date = None, None
+    # Initialiser calendar_data pour s'assurer qu'elle est toujours définie
+    calendar_data = {}
+    start_date, end_date = None, None # Pour les vues qui utilisent get_calendar_view_data_range
 
     if view_type == 'month':
         if target_month_num is None or not (1 <= target_month_num <= 12):
