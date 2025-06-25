@@ -39,23 +39,28 @@
     <!-- Zone pour afficher les messages de feedback des contrôles (doit être conservée) -->
     <div id="control-message" class="feedback-message" style="display: none; margin-top: 15px;"></div>
 
-    <!-- Section Calendrier (reste inchangée pour l'instant) -->
-    <div id="calendar-section" class="mt-4">
-        <h2>Calendrier <span id="calendar-title-year">Annuel</span></h2>
-        {% if user_has_permission('control:view_calendar') %}
-        <div id="calendar-selector"> <!-- Sélecteur année scolaire -->
-            <label for="academic-year-select">Afficher l'année scolaire :</label>
-            <select id="academic-year-select" onchange="changeAcademicYear()">
-                <!-- Options ajoutées par JS -->
-            </select>
-        </div>
-        <div id="calendar-container">
-            <p>Chargement du calendrier...</p>
-        </div>
-        {% else %}
-        <p><em>Vous n'avez pas la permission de voir le calendrier.</em></p>
-        {% endif %}
-    </div>
+ <!-- Section Calendrier -->
+ <div id="calendar-section" class="mt-4">
+     <div class="d-flex justify-content-between align-items-center mb-3"> {# NOUVEAU conteneur Flex #}
+         <h2 class="mb-0">Calendrier <span id="calendar-title-year">Annuel</span></h2> {# mb-0 pour enlever la marge du h2 #}
+         {% if user_has_permission('control:view_calendar') %}
+         <div id="calendar-selector" class="ms-3"> {# ms-3 pour un peu d'espace à gauche, mb-0 implicite car plus de bloc séparé #}
+             <label for="academic-year-select" class="form-label me-2">Afficher l'année scolaire :</label> {# form-label pour un style Bootstrap standard #}
+             <select id="academic-year-select" class="form-select form-select-sm" onchange="changeAcademicYear()"> {# form-select et form-select-sm pour style Bootstrap #}
+                 <!-- Options ajoutées par JS -->
+             </select>
+         </div>
+         {% endif %}
+     </div>
+
+     {% if user_has_permission('control:view_calendar') %}
+     <div id="calendar-container">
+         <p>Chargement du calendrier...</p>
+     </div>
+     {% else %}
+     <p><em>Vous n'avez pas la permission de voir le calendrier.</em></p>
+     {% endif %}
+ </div>
 
     <!-- Fenêtre Modale (initialement cachée) -->
     <div id="modal-overlay" class="modal-overlay" onclick="if (event.target === this) { closeModal(); }">
@@ -242,16 +247,32 @@ function loadConfigSettings() {
         })
         .then(data => {
             console.log("[control.html] Settings reçus:", data);
-            if (data && data.alert_files) {
-                configSettings.alert_files = data.alert_files;
+            if (data) {
+                configSettings = data; // Stocker tous les settings (inclut alert_files, alert_click_mode, etc.)
+                // Assurer une valeur par défaut pour alert_files si non présent
+                if (!configSettings.alert_files) {
+                    console.warn("[control.html] configSettings.alert_files manquant après chargement. Initialisation par défaut.");
+                    configSettings.alert_files = { ppms: null, attentat: null };
+                }
+                // Assurer une valeur par défaut pour alert_click_mode si non présent
+                if (configSettings.alert_click_mode === undefined) {
+                    console.warn("[control.html] configSettings.alert_click_mode manquant. Défaut à 'double'.");
+                    configSettings.alert_click_mode = "double";
+                }
             } else {
-                console.warn("[control.html] Aucun fichier alerte dans settings API ou data est null.");
-                configSettings.alert_files = { ppms: null, attentat: null };
+                console.warn("[control.html] Données de settings API null ou vides. Utilisation des valeurs par défaut.");
+                configSettings = {
+                    alert_files: { ppms: null, attentat: null },
+                    alert_click_mode: "double"
+                };
             }
         })
         .catch(error => {
             console.error("[control.html] Erreur critique chargement settings:", error);
-            configSettings.alert_files = { ppms: null, attentat: null };
+            configSettings = {
+                alert_files: { ppms: null, attentat: null },
+                alert_click_mode: "double"
+            };
             if (typeof showFeedback === 'function') showFeedback("Erreur chargement configuration des alertes. Fonctionnalité d'alerte affectée.", "error");
             throw error;
         });
@@ -421,55 +442,86 @@ document.addEventListener('DOMContentLoaded', function() {
     if (btnAlertPpms) {
         btnAlertPpms.addEventListener('click', function() {
             if (this.disabled) return;
-            if (ppmsClickTimer === null) {
-                ppmsClickTimer = setTimeout(() => { ppmsClickTimer = null; }, DBL_CLICK_DELAY);
-            } else {
-                clearTimeout(ppmsClickTimer); ppmsClickTimer = null;
+
+            const performActionPpms = () => {
                 const ppmsFile = configSettings.alert_files ? configSettings.alert_files.ppms : null;
                 const isActive = (currentStatus && currentStatus.alert_active && currentStatus.alert_type === ppmsFile);
+                console.log(`[control.html] Action PPMS (mode: ${configSettings.alert_click_mode || 'double'}). Actif? ${isActive}`);
                 if (isActive) callStopAlertAPI();
                 else if (currentStatus && !currentStatus.alert_active) callTriggerAlertAPI('PPMS');
                 else if (typeof showFeedback === 'function') showFeedback("Action PPMS impossible: autre alerte active ou statut inconnu.", "warning");
+            };
+
+            const currentAlertClickMode = configSettings.alert_click_mode || 'double'; // Récupérer ou défaut
+
+            if (currentAlertClickMode === 'single') {
+                performActionPpms();
+            } else { // Mode double-clic (par défaut)
+                if (ppmsClickTimer === null) {
+                    ppmsClickTimer = setTimeout(() => { ppmsClickTimer = null; }, DBL_CLICK_DELAY);
+                } else {
+                    clearTimeout(ppmsClickTimer); ppmsClickTimer = null;
+                    performActionPpms();
+                }
             }
         });
     } else { console.error("Bouton #btn-alert-ppms non trouvé."); }
 
     if (btnAlertAttentat) {
         btnAlertAttentat.addEventListener('click', function() {
-            // ... (logique similaire à btnAlertPpms, adaptée pour Attentat)
             if (this.disabled) return;
-            if (attentatClickTimer === null) {
-                attentatClickTimer = setTimeout(() => { attentatClickTimer = null; }, DBL_CLICK_DELAY);
-            } else {
-                clearTimeout(attentatClickTimer); attentatClickTimer = null;
+
+            const performActionAttentat = () => {
                 const attentatFile = configSettings.alert_files ? configSettings.alert_files.attentat : null;
                 const isActive = (currentStatus && currentStatus.alert_active && currentStatus.alert_type === attentatFile);
+                console.log(`[control.html] Action Attentat (mode: ${configSettings.alert_click_mode || 'double'}). Actif? ${isActive}`);
                 if (isActive) callStopAlertAPI();
                 else if (currentStatus && !currentStatus.alert_active) callTriggerAlertAPI('Attentat');
                 else if (typeof showFeedback === 'function') showFeedback("Action Attentat impossible: autre alerte active ou statut inconnu.", "warning");
+            };
+
+            const currentAlertClickMode = configSettings.alert_click_mode || 'double';
+
+            if (currentAlertClickMode === 'single') {
+                performActionAttentat();
+            } else { // Mode double-clic
+                if (attentatClickTimer === null) {
+                    attentatClickTimer = setTimeout(() => { attentatClickTimer = null; }, DBL_CLICK_DELAY);
+                } else {
+                    clearTimeout(attentatClickTimer); attentatClickTimer = null;
+                    performActionAttentat();
+                }
             }
         });
     } else { console.error("Bouton #btn-alert-attentat non trouvé."); }
 
     if (btnEndAlert) {
         btnEndAlert.addEventListener('click', function() {
-            if (this.disabled) return; // Ne rien faire si le bouton est désactivé
+            if (this.disabled) return;
 
-            if (endAlertClickTimer === null) { // Premier clic
-                endAlertClickTimer = setTimeout(() => {
-                    endAlertClickTimer = null; // Reset timer
-                    // Aucune action sur simple clic pour ce bouton
-                    console.log("[control.html] Simple clic sur Sonnerie Fin d'Alerte (ignoré)");
-                }, DBL_CLICK_DELAY);
-            } else { // Double clic
-                clearTimeout(endAlertClickTimer);
-                endAlertClickTimer = null;
-
-                console.log("[control.html] Double-clic sur Sonnerie Fin d'Alerte détecté.");
+            const performActionEndAlert = () => {
+                console.log(`[control.html] Action Fin d'Alerte (mode: ${configSettings.alert_click_mode || 'double'}).`);
                 if (typeof callEndAlertAPI === 'function') {
-                    callEndAlertAPI(); // Appeler la fonction existante pour l'API
+                    callEndAlertAPI();
                 } else {
                     console.error("[control.html] La fonction callEndAlertAPI n'est pas définie !");
+                }
+            };
+
+            const currentAlertClickMode = configSettings.alert_click_mode || 'double';
+
+            if (currentAlertClickMode === 'single') {
+                performActionEndAlert();
+            } else { // Mode double-clic
+                if (endAlertClickTimer === null) {
+                    endAlertClickTimer = setTimeout(() => {
+                        endAlertClickTimer = null;
+                        console.log("[control.html] Simple clic sur Sonnerie Fin d'Alerte (ignoré en mode double-clic)");
+                    }, DBL_CLICK_DELAY);
+                } else {
+                    clearTimeout(endAlertClickTimer);
+                    endAlertClickTimer = null;
+                    performActionEndAlert();
                 }
             }
         });

@@ -504,17 +504,50 @@ def save_users_data(filename=USERS_FILE):
 def load_college_params(filename=PARAMS_FILE):
     """Charge les paramètres généraux (parametres_college.json) et lance le chargement API fériés."""
     global college_params, holiday_manager
-    path = os.path.join(CONFIG_PATH, filename); logger.info(f"Load params: {path}")
+    path = os.path.join(CONFIG_PATH, filename)
+    logger.info(f"Chargement des paramètres généraux depuis : {path}")
+    default_params = {
+        "alert_click_mode": "double",
+        "status_refresh_interval_seconds": 15
+        # Ajoutez ici d'autres valeurs par défaut si nécessaire pour d'autres clés
+    }
     try:
-        with open(path, 'r', encoding='utf-8') as f: college_params = json.load(f)
-        logger.info(f"Params OK: {college_params}")
-        api_url = college_params.get('api_holidays_url'); country = college_params.get('country_code_holidays', 'FR')
-        if holiday_manager: holiday_manager.load_holidays_from_api(api_url, country) # Log interne à HM
-        else: logger.error("HolidayManager non init pour load holidays.")
+        with open(path, 'r', encoding='utf-8') as f:
+            loaded_params_from_file = json.load(f)
+
+        # Fusionner les paramètres chargés avec les valeurs par défaut
+        # Les valeurs du fichier écrasent les valeurs par défaut si elles existent
+        college_params = {**default_params, **loaded_params_from_file}
+
+        # Vérifier si des clés par défaut ont été ajoutées (si elles n'étaient pas dans le fichier)
+        # et si oui, potentiellement sauvegarder le fichier pour persister ces défauts.
+        # Pour l'instant, on ne resauvegarde pas ici, on attend une action explicite de sauvegarde.
+        # if any(key not in loaded_params_from_file for key in default_params):
+        #     logger.info(f"Des valeurs par défaut ont été appliquées à parametres_college.json. Envisagez de sauvegarder.")
+
+        logger.info(f"Paramètres généraux chargés : {college_params}")
+
+        api_url = college_params.get('api_holidays_url')
+        country = college_params.get('country_code_holidays', 'FR')
+        if holiday_manager:
+            holiday_manager.load_holidays_from_api(api_url, country) # Log interne à HM
+        else:
+            logger.error("HolidayManager non initialisé, impossible de charger les jours fériés.")
         return True
-    except FileNotFoundError: logger.info(f"Params file not found: {path}. Init vide."); college_params = {}; return True
-    except json.JSONDecodeError: logger.error(f"Params file JSON error: {path}"); college_params = {}; return False
-    except Exception as e: logger.error(f"Params load error: {path}: {e}", exc_info=True); college_params = {}; return False
+    except FileNotFoundError:
+        logger.info(f"Fichier de paramètres '{path}' non trouvé. Initialisation avec les valeurs par défaut uniquement.")
+        college_params = default_params.copy() # Utiliser une copie des défauts
+        # Il serait bien de sauvegarder le fichier avec les défauts ici, mais load_all_configs ne gère pas la sauvegarde.
+        # Cela sera fait lors de la première sauvegarde via l'interface.
+        return True # Pas une erreur fatale, on continue avec les défauts
+    except json.JSONDecodeError:
+        logger.error(f"Erreur de décodage JSON dans le fichier de paramètres '{path}'. Utilisation des valeurs par défaut.")
+        college_params = default_params.copy()
+        return False # Erreur de formatage est plus sérieuse
+    except Exception as e:
+        logger.error(f"Erreur inattendue lors du chargement du fichier de paramètres '{path}': {e}", exc_info=True)
+        college_params = default_params.copy()
+        return False
 
 def load_sonneries_data(filename=DONNEES_SONNERIES_FILE):
     """Charge les données des sonneries (donnees_sonneries.json) et lance le chargement des vacances."""
@@ -975,9 +1008,28 @@ def api_config_settings():
     """Retourne les paramètres utiles à l'UI (noms fichiers alerte)."""
     user = current_user.id; logger.debug(f"User '{user}' requête /api/config/settings")
     try:
-        settings = {"alert_files": {"ppms": college_params.get("sonnerie_ppms"), "attentat": college_params.get("sonnerie_attentat")}}
+        # Assurer que college_params est chargé et contient les valeurs (avec défauts si besoin)
+        # Les valeurs par défaut sont appliquées dans load_college_params
+        settings = {
+            "alert_files": {
+                "ppms": college_params.get("sonnerie_ppms"),
+                "attentat": college_params.get("sonnerie_attentat")
+            },
+            "alert_click_mode": college_params.get("alert_click_mode", "double"), # Défaut ici aussi par sécurité
+            "status_refresh_interval_seconds": college_params.get("status_refresh_interval_seconds", 15) # Défaut ici aussi
+        }
+        logger.debug(f"API /api/config/settings renvoie: {settings}")
         return jsonify(settings)
-    except Exception as e: logger.error(f"Erreur API /api/config/settings: {e}", exc_info=True); return jsonify({"error": "Erreur serveur"}), 500
+    except Exception as e:
+        logger.error(f"Erreur API /api/config/settings: {e}", exc_info=True)
+        # Renvoyer des valeurs par défaut en cas d'erreur pour ne pas bloquer le front-end
+        # mais loguer l'erreur pour investigation.
+        default_settings_on_error = {
+            "alert_files": {"ppms": None, "attentat": None},
+            "alert_click_mode": "double",
+            "status_refresh_interval_seconds": 15
+        }
+        return jsonify(default_settings_on_error), 500
 
 @app.route('/api/audio_devices', methods=['GET'])
 @login_required
@@ -1159,13 +1211,15 @@ def get_general_and_alerts_config():
             "vacances_ics_base_url_manuel": current_params.get("vacances_ics_base_url_manuel"),
             "sonnerie_ppms": current_params.get("sonnerie_ppms"),
             "sonnerie_attentat": current_params.get("sonnerie_attentat"),
-            "sonnerie_fin_alerte": current_params.get("sonnerie_fin_alerte"), # Ajouté !
-            "nom_peripherique_audio_sonneries": current_params.get("nom_peripherique_audio_sonneries"), # LIGNE IMPORTANTE
-            "available_ringtones": available_ringtones # Format { "Nom Affiché": "fichier.mp3", ... }
+            "sonnerie_fin_alerte": current_params.get("sonnerie_fin_alerte"),
+            "nom_peripherique_audio_sonneries": current_params.get("nom_peripherique_audio_sonneries"),
+            "alert_click_mode": current_params.get("alert_click_mode", "double"), # Ajout pour config_general
+            "status_refresh_interval_seconds": current_params.get("status_refresh_interval_seconds", 15), # Ajout pour config_general
+            "available_ringtones": available_ringtones
         }
-        # On pourrait aussi inclure api_holidays_url et country_code_holidays si on veut les configurer
+        # api_holidays_url et country_code_holidays ne sont pas modifiables via cette page pour l'instant.
 
-        logger.debug(f"Config générale et alertes renvoyée: {config_data_to_return}")
+        logger.debug(f"Config générale, alertes et interactions renvoyée: {config_data_to_return}")
         return jsonify(config_data_to_return), 200
 
     except json.JSONDecodeError as e_json:
@@ -1244,6 +1298,33 @@ def set_general_and_alerts_config():
             # La valeur envoyée par le JS sera soit le nom du device (string), soit null (qui devient None en Python).
             current_params["nom_peripherique_audio_sonneries"] = data_from_client["nom_peripherique_audio_sonneries"]
             logger.info(f"Audio device for sonneries set to: {current_params['nom_peripherique_audio_sonneries']}")
+
+        # Ajout pour alert_click_mode
+        if "alert_click_mode" in data_from_client:
+            click_mode = data_from_client["alert_click_mode"]
+            if click_mode in ["single", "double"]:
+                current_params["alert_click_mode"] = click_mode
+                logger.info(f"Mode de clic des alertes configuré à : {click_mode}")
+            else:
+                logger.warning(f"Valeur invalide pour alert_click_mode reçue : {click_mode}. Conservations de l'ancienne valeur ou du défaut.")
+                # Optionnel: retourner une erreur au client si la valeur est invalide
+                # return jsonify({"error": f"Valeur invalide pour alert_click_mode: {click_mode}"}), 400
+
+
+        # Ajout pour status_refresh_interval_seconds
+        if "status_refresh_interval_seconds" in data_from_client:
+            try:
+                interval = int(data_from_client["status_refresh_interval_seconds"])
+                # Ajouter des bornes de validation si nécessaire, ex: if 5 <= interval <= 300:
+                if interval >= 1: # Doit être au moins 1 seconde
+                    current_params["status_refresh_interval_seconds"] = interval
+                    logger.info(f"Intervalle de rafraîchissement du statut configuré à : {interval} secondes")
+                else:
+                    logger.warning(f"Valeur invalide pour status_refresh_interval_seconds reçue : {interval}. Doit être >= 1.")
+            except ValueError:
+                logger.warning(f"Valeur non entière reçue pour status_refresh_interval_seconds : {data_from_client['status_refresh_interval_seconds']}.")
+                # Optionnel: retourner une erreur
+                # return jsonify({"error": "status_refresh_interval_seconds doit être un entier."}), 400
 
         # Sauvegarder le fichier mis à jour
         with open(params_path, 'w', encoding='utf-8') as f:
