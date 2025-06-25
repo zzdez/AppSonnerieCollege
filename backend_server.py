@@ -1151,6 +1151,12 @@ def api_calendar_view():
              logger.error(f"Erreur création date pour mois {target_month_num}, année {current_calendar_year_for_month}: {e_date}", exc_info=True)
              return jsonify({"error": "Erreur interne lors de la détermination des dates du mois."}), 500
 
+        # Appel de la fonction existante qui génère les données pour une plage de dates
+        calendar_data = get_calendar_view_data_range(start_date, end_date)
+        if 'error' in calendar_data:
+            logger.error(f"Erreur lors de la génération des données calendrier (month view): {calendar_data['error']}")
+            return jsonify({"error": f"Erreur génération calendrier: {calendar_data['error']}"}), 500
+
     elif view_type == 'year':
         # Logique pour l'année scolaire complète (Septembre à Août)
         start_date = date(start_acad_year, 9, 1)
