@@ -310,106 +310,81 @@
 
         // Fonction pour mettre à jour l'état visuel des boutons d'alerte
         function updateAlertButtonsUI(statusData) {
-            // S'assurer que les boutons sont bien récupérés (au cas où cette fonction serait appelée avant DOMContentLoaded, bien que peu probable ici)
             const btnAlertPpms = document.getElementById('btn-alert-ppms');
             const btnAlertAttentat = document.getElementById('btn-alert-attentat');
             const btnEndAlert = document.getElementById('btn-end-alert');
 
-            if (!btnAlertPpms || !btnAlertAttentat || !btnEndAlert) {
-                console.error("updateAlertButtonsUI: Un ou plusieurs boutons d'alerte sont introuvables dans le DOM.");
+            if (!statusData || !btnAlertPpms || !btnAlertAttentat || !btnEndAlert) {
+                console.warn("updateAlertButtonsUI: Données de statut ou éléments de bouton manquants.");
+                // Mettre dans un état par défaut si les éléments ne sont pas trouvés ou statusData est manquant
+                if(btnAlertPpms) btnAlertPpms.disabled = true;
+                if(btnAlertAttentat) btnAlertAttentat.disabled = true;
+                if(btnEndAlert) btnEndAlert.disabled = true;
                 return;
             }
-
-            if (!statusData) {
-                console.warn("updateAlertButtonsUI: statusData est null ou undefined. Les boutons seront mis dans un état par défaut/désactivé.");
-                // État par défaut si statusData n'est pas disponible (erreur de chargement par exemple)
-                btnAlertPpms.classList.remove('btn-danger', 'active');
-                btnAlertPpms.classList.add('btn-warning');
-                btnAlertPpms.innerHTML = '<i class="bi bi-shield-fill-exclamation me-1"></i>PPMS';
-                btnAlertPpms.title = "Double-clic pour DECLENCHER...";
-                btnAlertPpms.disabled = true; // Désactiver si pas de statut
-
-                btnAlertAttentat.classList.remove('btn-dark', 'active');
-                btnAlertAttentat.classList.add('btn-danger');
-                btnAlertAttentat.innerHTML = '<i class="bi bi-cone-striped me-1"></i>ATTENTAT';
-                btnAlertAttentat.title = "Double-clic pour DECLENCHER...";
-                btnAlertAttentat.disabled = true; // Désactiver si pas de statut
-
-                btnEndAlert.disabled = true;
-                return;
-            }
-
             if (!configSettings || !configSettings.alert_files || configSettings.alert_files.ppms === undefined || configSettings.alert_files.attentat === undefined) {
-                console.warn("updateAlertButtonsUI: configSettings.alert_files non prêt ou incomplet.", configSettings);
-                showFeedback("Configuration des noms de fichiers d'alerte manquante ou incomplète. L'état des boutons pourrait être incorrect.", "error", 7000);
-                // Mettre les boutons dans un état désactivé pour éviter les actions incorrectes.
-                btnAlertPpms.disabled = true; btnAlertPpms.title = "Configuration alerte PPMS manquante";
-                btnAlertAttentat.disabled = true; btnAlertAttentat.title = "Configuration alerte Attentat manquante";
+                console.warn("updateAlertButtonsUI: configSettings.alert_files non disponible ou incomplet. Assurez-vous que loadConfigSettings est terminé.", configSettings);
+                showFeedback("Config alerte incomplète. Boutons désactivés.", "error", 7000);
+                btnAlertPpms.disabled = true; btnAlertPpms.title = "Config PPMS manquante";
+                btnAlertAttentat.disabled = true; btnAlertAttentat.title = "Config Attentat manquante";
                 btnEndAlert.disabled = true;
                 return;
             }
 
-            const ppmsFileName = configSettings.alert_files.ppms;
-            const attentatFileName = configSettings.alert_files.attentat;
+            const ppmsFile = configSettings.alert_files.ppms;
+            const attentatFile = configSettings.alert_files.attentat;
 
-            // Déterminer si une alerte spécifique est active
-            const isPpmsAlertActive = statusData.alert_active && statusData.alert_type === ppmsFileName;
-            const isAttentatAlertActive = statusData.alert_active && statusData.alert_type === attentatFileName;
+            let isPpmsCurrentlyActive = (statusData.alert_active && statusData.alert_type === ppmsFile);
+            let isAttentatCurrentlyActive = (statusData.alert_active && statusData.alert_type === attentatFile);
 
-            // Mise à jour du bouton PPMS
-            if (isPpmsAlertActive) {
-                btnAlertPpms.classList.remove('btn-warning');
+            // Réinitialiser les classes et états des boutons PPMS
+            btnAlertPpms.classList.remove('btn-danger', 'active', 'btn-warning');
+            btnAlertPpms.disabled = false; // Activer par défaut, puis désactiver si nécessaire
+
+            if (isPpmsCurrentlyActive) {
                 btnAlertPpms.classList.add('btn-danger', 'active');
                 btnAlertPpms.innerHTML = '<i class="bi bi-shield-fill-exclamation me-1"></i>PPMS ACTIVE';
                 btnAlertPpms.title = "Double-clic pour ARRETER l'alerte PPMS";
+                btnAlertAttentat.disabled = true; // Désactiver l'autre bouton d'alerte
             } else {
-                btnAlertPpms.classList.remove('btn-danger', 'active');
-                btnAlertPpms.classList.add('btn-warning');
+                btnAlertPpms.classList.add('btn-warning'); // Couleur par défaut
                 btnAlertPpms.innerHTML = '<i class="bi bi-shield-fill-exclamation me-1"></i>PPMS';
                 btnAlertPpms.title = "Double-clic pour DECLENCHER l'alerte PPMS";
+                if (isAttentatCurrentlyActive) { // Si l'alerte attentat est active, PPMS doit aussi être désactivé
+                    btnAlertPpms.disabled = true;
+                }
             }
 
-            // Mise à jour du bouton Attentat
-            if (isAttentatAlertActive) {
-                btnAlertAttentat.classList.remove('btn-danger');
+            // Réinitialiser les classes et états des boutons Attentat
+            btnAlertAttentat.classList.remove('btn-dark', 'active', 'btn-danger');
+            btnAlertAttentat.disabled = false; // Activer par défaut
+
+            if (isAttentatCurrentlyActive) {
                 btnAlertAttentat.classList.add('btn-dark', 'active');
                 btnAlertAttentat.innerHTML = '<i class="bi bi-cone-striped me-1"></i>ATTENTAT ACTIF';
                 btnAlertAttentat.title = "Double-clic pour ARRETER l'alerte Attentat";
+                btnAlertPpms.disabled = true; // Désactiver l'autre bouton d'alerte (peut être redondant mais assure la logique)
             } else {
-                btnAlertAttentat.classList.remove('btn-dark', 'active');
-                btnAlertAttentat.classList.add('btn-danger');
+                btnAlertAttentat.classList.add('btn-danger'); // Couleur par défaut
                 btnAlertAttentat.innerHTML = '<i class="bi bi-cone-striped me-1"></i>ATTENTAT';
                 btnAlertAttentat.title = "Double-clic pour DECLENCHER l'alerte Attentat";
+                if (isPpmsCurrentlyActive) { // Si l'alerte PPMS est active, Attentat doit aussi être désactivé
+                    btnAlertAttentat.disabled = true;
+                }
             }
 
-            // Activer/Désactiver le bouton "Sonnerie Fin d'Alerte"
+            // État du bouton Sonnerie Fin d'Alerte
             btnEndAlert.disabled = !statusData.alert_active;
 
-            // Désactiver les boutons d'alerte en fonction de l'état
-            // Si une alerte PPMS est active, on ne peut pas déclencher Attentat (et PPMS est déjà "active" pour arrêt)
-            // Si une alerte Attentat est active, on ne peut pas déclencher PPMS
-            // Si aucune alerte n'est active, les deux sont activables (pour déclenchement)
-            if (statusData.alert_active) {
-                if (isPpmsAlertActive) {
-                    btnAlertPpms.disabled = false; // Permettre l'arrêt de PPMS
-                    btnAlertAttentat.disabled = true; // Désactiver Attentat car PPMS est active
-                } else if (isAttentatAlertActive) {
-                    btnAlertAttentat.disabled = false; // Permettre l'arrêt d'Attentat
-                    btnAlertPpms.disabled = true; // Désactiver PPMS car Attentat est active
-                } else {
-                    // Une alerte est active, mais ce n'est ni PPMS ni Attentat (cas étrange, ex: son de fin en cours?)
-                    // Par sécurité, désactiver les deux boutons de déclenchement.
-                    btnAlertPpms.disabled = true;
-                    btnAlertAttentat.disabled = true;
-                    console.warn("Une alerte est active mais ni PPMS ni Attentat. Boutons désactivés.");
-                }
-            } else {
-                // Aucune alerte active, les deux boutons sont disponibles pour déclencher.
-                btnAlertPpms.disabled = false;
-                btnAlertAttentat.disabled = false;
+            // Cas où une alerte est active mais n'est ni PPMS ni Attentat (par ex. fin d'alerte sonore en cours)
+            // Dans ce cas, les deux boutons PPMS et Attentat devraient être désactivés pour éviter de déclencher une nouvelle alerte par-dessus.
+            if (statusData.alert_active && !isPpmsCurrentlyActive && !isAttentatCurrentlyActive) {
+                console.warn("Une alerte générique est active (probablement fin d'alerte). Désactivation des boutons PPMS et Attentat.");
+                btnAlertPpms.disabled = true;
+                btnAlertAttentat.disabled = true;
             }
-             // Log final de l'état des boutons
-            console.debug(`UI Boutons MàJ: PPMS Actif=${isPpmsAlertActive}, Attentat Actif=${isAttentatAlertActive}, Fin Alerte Disabled=${btnEndAlert.disabled}, PPMS Disabled=${btnAlertPpms.disabled}, Attentat Disabled=${btnAlertAttentat.disabled}`);
+
+            console.debug(`UI Boutons MàJ: PPMS Actif=${isPpmsCurrentlyActive}, Attentat Actif=${isAttentatCurrentlyActive}, Fin Alerte Disabled=${btnEndAlert.disabled}, PPMS Disabled=${btnAlertPpms.disabled}, Attentat Disabled=${btnAlertAttentat.disabled}`);
         }
 
         // La fonction localUpdateStatusUI n'est plus nécessaire,
@@ -562,29 +537,31 @@
         if (btnAlertPpmsElem) {
             btnAlertPpmsElem.addEventListener('click', function() {
                 if (this.disabled) return; // Ne rien faire si le bouton est désactivé
+
                 if (ppmsClickTimer === null) {
-                    ppmsClickTimer = setTimeout(function() {
-                        ppmsClickTimer = null;
-                        // console.log("Simple clic PPMS (action si nécessaire, ici ignoré pour double-clic)");
-                    }, DBL_CLICK_DELAY);
+                    ppmsClickTimer = setTimeout(() => { ppmsClickTimer = null; }, DBL_CLICK_DELAY);
                 } else { // Double-clic
                     clearTimeout(ppmsClickTimer);
                     ppmsClickTimer = null;
-                    console.log("Double-clic PPMS détecté.");
-                    // Vérifier l'état actuel basé sur currentStatus et configSettings
-                    if (currentStatus && configSettings && configSettings.alert_files) {
-                        const isPpmsCurrentlyActive = currentStatus.alert_active && currentStatus.alert_type === configSettings.alert_files.ppms;
-                        if (isPpmsCurrentlyActive) {
-                            console.log("PPMS active, tentative d'arrêt...");
-                            callStopAlertAPI();
-                        } else if (!currentStatus.alert_active) { // Ne déclencher que si AUCUNE alerte n'est active
-                            console.log("Aucune alerte active, tentative de déclenchement PPMS...");
-                            callTriggerAlertAPI('PPMS');
-                        } else {
-                             console.warn("Double-clic PPMS alors qu'une autre alerte est active. Action ignorée (normalement bouton désactivé).");
-                        }
+
+                    const ppmsFile = configSettings.alert_files ? configSettings.alert_files.ppms : null;
+                    const isPpmsCurrentlyActive = (currentStatus && currentStatus.alert_active && currentStatus.alert_type === ppmsFile);
+
+                    console.log("Double-clic PPMS. Alerte PPMS active ? : ", isPpmsCurrentlyActive);
+
+                    if (isPpmsCurrentlyActive) {
+                        callStopAlertAPI(); // Si PPMS est active, on l'arrête (urgence)
+                    } else if (currentStatus && !currentStatus.alert_active) {
+                        // Si aucune alerte n'est active, on la déclenche
+                        callTriggerAlertAPI('PPMS');
+                    } else if (currentStatus && currentStatus.alert_active && !isPpmsCurrentlyActive) {
+                        // Une autre alerte est active, on ne fait rien pour PPMS
+                        showFeedback("L'alerte PPMS ne peut pas être déclenchée car une autre alerte est déjà active.", "warning");
                     } else {
-                        showFeedback("Impossible de déterminer l'état de l'alerte (statut ou config manquant).", "error");
+                        // Cas non prévu ou currentStatus non disponible
+                        console.warn("Action PPMS double-clic bloquée: statut inconnu, config manquante ou une autre alerte est active.");
+                        if (!currentStatus) showFeedback("Statut actuel inconnu, action PPMS bloquée.", "error");
+                        else if (!configSettings || !configSettings.alert_files) showFeedback("Configuration des alertes manquante, action PPMS bloquée.", "error");
                     }
                 }
             });
@@ -593,28 +570,31 @@
         if (btnAlertAttentatElem) {
             btnAlertAttentatElem.addEventListener('click', function() {
                 if (this.disabled) return; // Ne rien faire si le bouton est désactivé
+
                 if (attentatClickTimer === null) {
-                    attentatClickTimer = setTimeout(function() {
-                        attentatClickTimer = null;
-                        // console.log("Simple clic Attentat (action si nécessaire, ici ignoré pour double-clic)");
-                    }, DBL_CLICK_DELAY);
+                    attentatClickTimer = setTimeout(() => { attentatClickTimer = null; }, DBL_CLICK_DELAY);
                 } else { // Double-clic
                     clearTimeout(attentatClickTimer);
                     attentatClickTimer = null;
-                    console.log("Double-clic Attentat détecté.");
-                    if (currentStatus && configSettings && configSettings.alert_files) {
-                        const isAttentatCurrentlyActive = currentStatus.alert_active && currentStatus.alert_type === configSettings.alert_files.attentat;
-                        if (isAttentatCurrentlyActive) {
-                            console.log("Attentat actif, tentative d'arrêt...");
-                            callStopAlertAPI();
-                        } else if (!currentStatus.alert_active) { // Ne déclencher que si AUCUNE alerte n'est active
-                            console.log("Aucune alerte active, tentative de déclenchement Attentat...");
-                            callTriggerAlertAPI('Attentat');
-                        } else {
-                            console.warn("Double-clic Attentat alors qu'une autre alerte est active. Action ignorée (normalement bouton désactivé).");
-                        }
+
+                    const attentatFile = configSettings.alert_files ? configSettings.alert_files.attentat : null;
+                    const isAttentatCurrentlyActive = (currentStatus && currentStatus.alert_active && currentStatus.alert_type === attentatFile);
+
+                    console.log("Double-clic Attentat. Alerte Attentat active ? : ", isAttentatCurrentlyActive);
+
+                    if (isAttentatCurrentlyActive) {
+                        callStopAlertAPI(); // Si Attentat est active, on l'arrête (urgence)
+                    } else if (currentStatus && !currentStatus.alert_active) {
+                        // Si aucune alerte n'est active, on la déclenche
+                        callTriggerAlertAPI('Attentat');
+                    } else if (currentStatus && currentStatus.alert_active && !isAttentatCurrentlyActive) {
+                        // Une autre alerte est active, on ne fait rien pour Attentat
+                        showFeedback("L'alerte Attentat ne peut pas être déclenchée car une autre alerte est déjà active.", "warning");
                     } else {
-                        showFeedback("Impossible de déterminer l'état de l'alerte (statut ou config manquant).", "error");
+                        // Cas non prévu ou currentStatus non disponible
+                        console.warn("Action Attentat double-clic bloquée: statut inconnu, config manquante ou une autre alerte est active.");
+                        if (!currentStatus) showFeedback("Statut actuel inconnu, action Attentat bloquée.", "error");
+                        else if (!configSettings || !configSettings.alert_files) showFeedback("Configuration des alertes manquante, action Attentat bloquée.", "error");
                     }
                 }
             });
