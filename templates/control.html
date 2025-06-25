@@ -46,7 +46,7 @@
 
             {% if user_has_permission('control:view_calendar') %}
             <div id="calendar-selector" class="ms-3 d-flex align-items-center"> {# d-flex et align-items-center pour le label et select #}
-                <label for="academic-year-select" class="form-label mb-0 me-2">Année scolaire :</label> {# mb-0 car c'est un form-label dans un flex #}
+                <label for="academic-year-select" class="form-label mb-0 me-2" style="white-space: nowrap;">Année scolaire :</label> {# mb-0 car c'est un form-label dans un flex #}
                 <select id="academic-year-select" class="form-select form-select-sm" style="min-width: 120px;" onchange="changeAcademicYear()">
                     <!-- Options ajoutées par JS -->
                 </select>
