@@ -39,23 +39,28 @@
     <!-- Zone pour afficher les messages de feedback des contrôles (doit être conservée) -->
     <div id="control-message" class="feedback-message" style="display: none; margin-top: 15px;"></div>
 
-    <!-- Section Calendrier (reste inchangée pour l'instant) -->
-    <div id="calendar-section" class="mt-4">
-        <h2>Calendrier <span id="calendar-title-year">Annuel</span></h2>
-        {% if user_has_permission('control:view_calendar') %}
-        <div id="calendar-selector"> <!-- Sélecteur année scolaire -->
-            <label for="academic-year-select">Afficher l'année scolaire :</label>
-            <select id="academic-year-select" onchange="changeAcademicYear()">
-                <!-- Options ajoutées par JS -->
-            </select>
-        </div>
-        <div id="calendar-container">
-            <p>Chargement du calendrier...</p>
-        </div>
-        {% else %}
-        <p><em>Vous n'avez pas la permission de voir le calendrier.</em></p>
-        {% endif %}
-    </div>
+ <!-- Section Calendrier -->
+ <div id="calendar-section" class="mt-4">
+     <div class="d-flex justify-content-between align-items-center mb-3"> {# NOUVEAU conteneur Flex #}
+         <h2 class="mb-0">Calendrier <span id="calendar-title-year">Annuel</span></h2> {# mb-0 pour enlever la marge du h2 #}
+         {% if user_has_permission('control:view_calendar') %}
+         <div id="calendar-selector" class="ms-3"> {# ms-3 pour un peu d'espace à gauche, mb-0 implicite car plus de bloc séparé #}
+             <label for="academic-year-select" class="form-label me-2">Afficher l'année scolaire :</label> {# form-label pour un style Bootstrap standard #}
+             <select id="academic-year-select" class="form-select form-select-sm" onchange="changeAcademicYear()"> {# form-select et form-select-sm pour style Bootstrap #}
+                 <!-- Options ajoutées par JS -->
+             </select>
+         </div>
+         {% endif %}
+     </div>
+
+     {% if user_has_permission('control:view_calendar') %}
+     <div id="calendar-container">
+         <p>Chargement du calendrier...</p>
+     </div>
+     {% else %}
+     <p><em>Vous n'avez pas la permission de voir le calendrier.</em></p>
+     {% endif %}
+ </div>
 
     <!-- Fenêtre Modale (initialement cachée) -->
     <div id="modal-overlay" class="modal-overlay" onclick="if (event.target === this) { closeModal(); }">

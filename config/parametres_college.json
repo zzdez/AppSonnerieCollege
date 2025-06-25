@@ -7,5 +7,7 @@
   "sonnerie_ppms": "pacman_sms.mp3",
   "sonnerie_attentat": "tes-137215.mp3",
   "sonnerie_fin_alerte": "ringtone-283510.mp3",
-  "nom_peripherique_audio_sonneries": "Haut-parleurs (USB Audio Device)"
+  "nom_peripherique_audio_sonneries": "Haut-parleurs (USB Audio Device)",
+  "alert_click_mode": "double",
+  "status_refresh_interval_seconds": 10
 }
