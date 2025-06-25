@@ -71,695 +71,393 @@
 {% block scripts %}
     {{ super() }} {# Important si base.html a des scripts dans son bloc scripts #}
     <script>
-        // --- Variables Globales ---
-        let currentStatus = null;
-        let configSettings = { alert_files: { ppms: null, attentat: null } };
-        let selectedAcademicYear = getDefaultAcademicYear();
+// --- Variables Globales pour control.html ---
+let currentStatus = { alert_active: false, alert_type: null };
+let configSettings = { alert_files: { ppms: null, attentat: null } };
+let selectedAcademicYear; // Sera initialisée par getDefaultAcademicYear dans DOMContentLoaded
 
-        // --- Fonctions Utilitaires ---
+// Variables pour la logique d'alerte
+let ppmsClickTimer = null;
+let attentatClickTimer = null;
+const DBL_CLICK_DELAY = 300;
+let btnAlertPpms, btnAlertAttentat, btnEndAlert; // Seront initialisées dans DOMContentLoaded
 
-        function getDefaultAcademicYear() {
-            const now = new Date(); const currentYear = now.getFullYear(); const currentMonth = now.getMonth();
-            const startYear = (currentMonth < 8) ? currentYear - 1 : currentYear;
-            return `${startYear}-${startYear + 1}`;
-        }
-        function populateAcademicYearSelector() {
-            const selectElement = document.getElementById('academic-year-select'); if (!selectElement) return; selectElement.innerHTML = '';
-            const currentStartYear = parseInt(selectedAcademicYear.split('-')[0]); const yearsToShow = 3;
-            for (let i = -yearsToShow; i <= yearsToShow; i++) {
-                const startYear = currentStartYear + i; const yearString = `${startYear}-${startYear + 1}`;
-                const option = document.createElement('option'); option.value = yearString; option.textContent = yearString; selectElement.appendChild(option);
-            } selectElement.value = selectedAcademicYear;
-        }
-        function changeAcademicYear() {
-             const selectElement = document.getElementById('academic-year-select'); if (selectElement) { selectedAcademicYear = selectElement.value; console.log(`Changement année scolaire: ${selectedAcademicYear}`); showCalendar(); }
-         }
-        function closeModal() {
-            const modalOverlay = document.getElementById('modal-overlay'); if (modalOverlay) { modalOverlay.classList.remove('visible'); setTimeout(() => { const mc = document.getElementById('modal-content'); if (mc) mc.innerHTML = '<p>Chargement...</p>'; }, 300); }
-        }
+// --- Fonctions Utilitaires Existantes (Calendrier, Modale, Feedback - CONSERVER CELLES-CI) ---
+function getDefaultAcademicYear() {
+    const now = new Date(); const currentYear = now.getFullYear(); const currentMonth = now.getMonth();
+    const startYear = (currentMonth < 8) ? currentYear - 1 : currentYear;
+    return `${startYear}-${startYear + 1}`;
+}
 
-        // --- Fonctions Principales ( API, Calendrier) ---
-        function loadConfigSettings() {
-            console.log("Chargement settings via /api/config/settings...");
-            return fetch('/api/config/settings') // Retourner la promesse
-                .then(response => {
-                    console.log("Réponse /api/config/settings, statut:", response.status);
-                    if (!response.ok) {
-                        throw new Error(`Erreur HTTP settings: ${response.status} ${response.statusText}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    console.log("Settings reçus:", data);
-                    if (data && data.alert_files) {
-                        configSettings.alert_files = data.alert_files;
-                        console.log("Noms fichiers alerte stockés:", configSettings.alert_files);
-                    } else {
-                        console.warn("Aucun fichier alerte (ou données invalides) dans settings API.");
-                        configSettings.alert_files = { ppms: null, attentat: null }; // Fallback
-                    }
-                    // La promesse résout sans valeur spécifique, l'important est que configSettings soit peuplé.
-                })
-                .catch(error => {
-                    console.error("Erreur critique chargement settings:", error);
-                    configSettings.alert_files = { ppms: null, attentat: null }; // Fallback crucial
-                    showFeedback("Erreur critique: Impossible de charger la configuration des alertes. Les fonctionnalités d'alerte peuvent être compromises.", "error", 10000);
-                    return Promise.reject(error); // Renvoyer une promesse rejetée pour que la chaîne .then échoue aussi
-                });
-        }
+function populateAcademicYearSelector() {
+    const selectElement = document.getElementById('academic-year-select'); if (!selectElement) return; selectElement.innerHTML = '';
+    const currentStartYear = parseInt(selectedAcademicYear.split('-')[0]); const yearsToShow = 3;
+    for (let i = -yearsToShow; i <= yearsToShow; i++) {
+        const startYear = currentStartYear + i; const yearString = `${startYear}-${startYear + 1}`;
+        const option = document.createElement('option'); option.value = yearString; option.textContent = yearString; selectElement.appendChild(option);
+    } selectElement.value = selectedAcademicYear;
+}
+function changeAcademicYear() {
+     const selectElement = document.getElementById('academic-year-select'); if (selectElement) { selectedAcademicYear = selectElement.value; console.log(`Changement année scolaire: ${selectedAcademicYear}`); showCalendar(); }
+ }
+function closeModal() {
+    const modalOverlay = document.getElementById('modal-overlay'); if (modalOverlay) { modalOverlay.classList.remove('visible'); setTimeout(() => { const mc = document.getElementById('modal-content'); if (mc) mc.innerHTML = '<p>Chargement...</p>'; }, 300); }
+}
 
-        // Les fonctions updateStatusUI() et updateStatus() sont maintenant dans global_status.js
+function showFeedback(message, type = 'info', duration = 4000) {
+    const feedbackDiv = document.getElementById('control-message');
+    if (!feedbackDiv) {
+        console.error("Élément #control-message introuvable pour le feedback.");
+        return;
+    }
+    feedbackDiv.textContent = message;
+    feedbackDiv.classList.remove('success', 'error', 'info', 'show'); // Nettoyer anciennes classes
+    feedbackDiv.classList.add(type); // Ajouter le type de message (success, error, info)
+    feedbackDiv.style.display = 'block'; // Assurer la visibilité
+    void feedbackDiv.offsetWidth; // Forcer un reflow pour que l'animation CSS prenne effet
+    feedbackDiv.classList.add('show'); // Ajouter la classe 'show' pour l'animation d'apparition
 
-        function showFeedback(message, type = 'info', duration = 4000) {
-            const feedbackDiv = document.getElementById('control-message');
-            if (!feedbackDiv) {
-                console.error("Élément #control-message introuvable pour le feedback.");
-                return;
+    setTimeout(() => {
+        feedbackDiv.classList.remove('show'); // Retirer 'show' pour l'animation de disparition
+        setTimeout(() => {
+            // S'assurer que le display:none n'est appliqué que si 'show' n'a pas été rajouté entre-temps
+            if (!feedbackDiv.classList.contains('show')) {
+               feedbackDiv.style.display = 'none';
             }
-            feedbackDiv.textContent = message;
-            feedbackDiv.classList.remove('success', 'error', 'info', 'show');
-            feedbackDiv.classList.add(type);
-            feedbackDiv.style.display = 'block';
-            void feedbackDiv.offsetWidth;
-            feedbackDiv.classList.add('show');
-            setTimeout(() => {
-                feedbackDiv.classList.remove('show');
-                setTimeout(() => {
-                    if (!feedbackDiv.classList.contains('show')) {
-                       feedbackDiv.style.display = 'none';
-                    }
-                }, 500);
-            }, duration);
+        }, 500); // Laisser le temps à l'animation de disparition de se terminer (doit correspondre à la durée de transition CSS)
+    }, duration);
+}
+
+
+// --- Fonctions Calendrier Existantes - CONSERVER CELLES-CI ---
+function showCalendar() {
+     console.log(`Début showCalendar pour année scolaire: ${selectedAcademicYear}`); const titleElement = document.getElementById('calendar-title-year'); if (titleElement) titleElement.textContent = `Scolaire ${selectedAcademicYear}`;
+     const calendarContainer = document.getElementById('calendar-container'); if (calendarContainer) calendarContainer.innerHTML = '<p>Chargement calendrier...</p>';
+     const apiUrl = `/api/calendar_view?year=${selectedAcademicYear}`; console.log(`Appel API calendrier: ${apiUrl}`);
+     fetch(apiUrl)
+         .then(response => { console.log(`Réponse ${apiUrl}, statut: ${response.status}`); if (!response.ok) { return response.json().then(err => {throw new Error(`Erreur HTTP ${response.status}: ${err.error||response.statusText}`)}).catch(() => {throw new Error(`Erreur HTTP ${response.status}`)}); } return response.json(); })
+         .then(data => { console.log("[Calendar] Données API:", data); if (data.error) { throw new Error(`Erreur API calendrier: ${data.error}`); } console.log("Appel generateCalendar:", data); generateCalendar(data, selectedAcademicYear); console.log("generateCalendar exécuté."); })
+         .catch(error => { console.error("Erreur showCalendar:", error); if (calendarContainer) calendarContainer.innerHTML = `<p>Erreur chargement: ${error.message}</p>`; });
+     console.log("Fin showCalendar (fetch lancé)");
+ }
+
+function generateCalendar(apiData, academicYear) {
+    console.log(`Entrée generateCalendar pour année: ${academicYear}`);
+    const calendarContainer = document.getElementById('calendar-container');
+    if (!calendarContainer) { console.error("Conteneur #calendar-container introuvable !"); return; }
+    calendarContainer.innerHTML = '';
+    const today = new Date();
+    const currentDay = today.getDate(); const currentMonth = today.getMonth() + 1; const currentYearToday = today.getFullYear();
+    const todayStr = `${currentYearToday}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
+    console.log(`Date actuelle: ${todayStr}`);
+    if (!apiData || typeof apiData !== 'object' || !apiData.days || typeof apiData.days !== 'object') { console.error("Données calendrier invalides:", apiData); calendarContainer.innerHTML = "<p>Erreur: Données calendrier invalides.</p>"; return; }
+    const daysData = apiData.days;
+    const [startYear, endYear] = academicYear.split('-').map(Number);
+    console.log(`Affichage de Sept ${startYear} à Août ${endYear}`);
+    for (let m = 0; m < 12; m++) {
+        let month, year;
+        if (m < 4) { month = m + 9; year = startYear; }
+        else { month = m - 3; year = endYear; }
+        const monthDiv = document.createElement('div'); monthDiv.classList.add('calendar-month');
+        const monthDate = new Date(year, month - 1, 1);
+        const monthName = monthDate.toLocaleString('fr-FR', { month: 'long' });
+        monthDiv.innerHTML = `<h3>${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}</h3>`;
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const firstDayWeekday = (monthDate.getDay() + 6) % 7;
+        const daysContainer = document.createElement('div'); daysContainer.classList.add('calendar-days');
+        const weekDays = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+        weekDays.forEach(wd => { const d = document.createElement('div'); d.classList.add('calendar-weekday'); d.textContent = wd; daysContainer.appendChild(d); });
+        for (let i = 0; i < firstDayWeekday; i++) { const emptyCell = document.createElement('div'); emptyCell.classList.add('calendar-day', 'empty'); daysContainer.appendChild(emptyCell); }
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dayCell = document.createElement('div'); dayCell.classList.add('calendar-day'); dayCell.textContent = day;
+            const monthStrPad = String(month).padStart(2, '0'); const dayStrPad = String(day).padStart(2, '0');
+            const dateKey = `${year}-${monthStrPad}-${dayStrPad}`;
+            const dayData = daysData[dateKey];
+            if (dateKey === todayStr) { dayCell.classList.add('today'); }
+            if (dayData) {
+                let cssClass = ''; let tooltipText = dayData.description || dayData.type || '';
+                const typeValue = dayData.type || 'ERREUR'; const typeLower = typeValue.toLowerCase().trim();
+                if (typeLower.startsWith('exception (silence)')) { cssClass = 'exception-silence'; tooltipText = dayData.description || "Journée Silence (Exception)"; }
+                else if (typeLower.startsWith('exception (utiliser_jt')) { cssClass = 'exception-jt'; tooltipText = dayData.description || "Exception : Journée Type Spécifique"; }
+                else if (typeLower === 'férié') { cssClass = 'ferie'; }
+                else if (typeLower === 'vacances') { cssClass = 'vacances'; }
+                else if (typeLower === 'weekend') { cssClass = 'weekend'; }
+                else if (typeLower.startsWith('classe')) { cssClass = 'classe'; tooltipText = dayData.description || typeValue; }
+                else if (typeLower === 'autre' || typeLower === 'erreur') { console.warn(`Type jour 'Autre' ou 'Erreur' reçu: '${typeValue}' pour ${dateKey}`); tooltipText = dayData.description || typeValue; }
+                else { console.error(`!!! Type jour INCONNU: '${typeValue}' (lower: '${typeLower}') pour ${dateKey} !!!`); cssClass = 'erreur-donnees'; tooltipText = `Type Inconnu: ${typeValue}`; }
+                console.log(`[Cal Apply] ${dateKey}: Type='${typeValue}' -> CSS Class='${cssClass || 'aucune'}'`);
+                if (cssClass) { dayCell.classList.add(cssClass); }
+                if (tooltipText) { dayCell.title = tooltipText; }
+                dayCell.style.cursor = 'pointer'; dayCell.onclick = () => showDailySchedule(year, month, day);
+            } else { console.warn(`Aucune donnée API pour ${dateKey}`); dayCell.classList.add('erreur-donnees'); dayCell.title = "Données manquantes"; }
+            daysContainer.appendChild(dayCell);
         }
+        monthDiv.appendChild(daysContainer); calendarContainer.appendChild(monthDiv);
+    }
+    console.log("Fin de generateCalendar");
+}
 
-        function sendCommand(action) {
-             let apiUrl = '';
-             let method = 'POST';
-             let actionText = action;
-             switch(action) {
-                case 'activate': apiUrl = '/api/planning/activate'; actionText = 'Activation Planning'; break;
-                case 'deactivate': apiUrl = '/api/planning/deactivate'; actionText = 'Désactivation Planning'; break;
-                case 'reload': apiUrl = '/api/config/reload'; actionText = 'Rechargement Config'; break;
-                default: console.error("Action inconnue pour sendCommand:", action); showFeedback(`Erreur: Action inconnue '${action}'`, 'error'); return;
-             }
-             if (!apiUrl) { console.error(`Bug: apiUrl non défini pour action reconnue '${action}'`); return; }
-             console.log(`Envoi cmd: ${action} -> ${apiUrl}`);
-             fetch(apiUrl, { method: method })
-                 .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
-                 .then(({ ok, status, data }) => {
-                      console.log(`Cmd ${action} ${ok ? 'OK' : 'Erreur '+status}:`, data);
-                      const message = data.message || (ok ? `${actionText} réussie.` : `Erreur ${status}`);
-                      if (ok) {
-                          showFeedback(message, 'success');
-                          if (typeof fetchGlobalStatus === 'function') { fetchGlobalStatus(); }
-                          if (action === 'reload') { showCalendar(); } // Recharger calendrier si config rechargée
-                      } else {
-                           const errorDetail = data.error || data.message || message;
-                          showFeedback(`Erreur ${actionText}: ${errorDetail}`, 'error');
-                      }
-                  })
-                 .catch(error => {
-                     console.error(`Erreur cmd ${action}:`, error);
-                     showFeedback(`Erreur réseau/serveur (${actionText}): ${error.message}`, 'error');
-                 });
-        }
+function showDailySchedule(year, month, day) {
+     console.log(`>>> Début showDailySchedule ${year}-${month}-${day}`);
+     const monthStr = month.toString().padStart(2, '0'); const dayStr = day.toString().padStart(2, '0');
+     const dateStr = `${year}-${monthStr}-${dayStr}`; console.log(`   Date: ${dateStr}`);
+     const modalOverlay = document.getElementById('modal-overlay'); const modalContent = document.getElementById('modal-content');
+     if (!modalOverlay || !modalContent) { console.error("   Elts modale manquants !"); return; }
+	 modalContent.innerHTML = `<p>Chargement des horaires pour ${dayStr}/${monthStr}/${year}...</p>`; modalOverlay.classList.add('visible');
+     const apiUrl = `/api/daily_schedule?date=${dateStr}`; console.log(`   Fetch: ${apiUrl}`);
+     try {
+         fetch(apiUrl)
+             .then(response => {
+                 console.log(`   Réponse ${apiUrl}, statut: ${response.status}`);
+                 if (!response.ok) { return response.json().then(err => { throw new Error(`Erreur ${response.status}: ${err.error || err.message || response.statusText}`) }).catch(() => { throw new Error(`Erreur HTTP ${response.status}`) }); }
+                 return response.json();
+             })
+             .then(data => {
+                  console.log("   Détails reçus:", data);
+                  let htmlModalContent = `<h4>Détails du ${dayStr}/${monthStr}/${year}</h4>`;
+                  let dayInfoText = data.message || data.day_type || "Information indisponible";
+                  htmlModalContent += `<span class="day-type-info">${dayInfoText}</span>`;
+                  if (data.error) { htmlModalContent += `<p style="color: red;">Erreur: ${data.error}</p>`; }
+                  else if (data.schedule && Array.isArray(data.schedule) && data.schedule.length > 0) {
+                      htmlModalContent += `<table><thead><tr><th>Heure</th><th>Événement</th><th>Sonnerie</th></tr></thead><tbody>`;
+                      data.schedule.forEach(item => { const timeFormatted = item.time.substring(0, 5); htmlModalContent += `<tr><td>${timeFormatted}</td><td>${item.event||'N/A'}</td><td><em>${item.sonnerie||'Silence'}</em></td></tr>`; });
+                      htmlModalContent += `</tbody></table>`;
+                  } else { htmlModalContent += `<p><em>Aucune sonnerie planifiée.</em></p>`; }
+                  modalContent.innerHTML = htmlModalContent; console.log("   Affichage détails OK (modale).");
+             })
+             .catch(error => { console.error(`   Erreur dans showDailySchedule pour ${dateStr}:`, error); modalContent.innerHTML = `<p style="color: red;">Impossible de charger les détails.<br>${error.message}</p>`; });
+     } catch (fetchError) { console.error(`   Erreur synchrone showDailySchedule:`, fetchError); modalContent.innerHTML = `<p style="color: red;">Erreur JS.<br>${fetchError.message}</p>`; }
+     console.log(`<<< Fin appel synchrone showDailySchedule pour ${dateStr}`);
+}
 
-		function showCalendar() {
-             console.log(`Début showCalendar pour année scolaire: ${selectedAcademicYear}`); const titleElement = document.getElementById('calendar-title-year'); if (titleElement) titleElement.textContent = `Scolaire ${selectedAcademicYear}`;
-             const calendarContainer = document.getElementById('calendar-container'); if (calendarContainer) calendarContainer.innerHTML = '<p>Chargement calendrier...</p>';
-             const apiUrl = `/api/calendar_view?year=${selectedAcademicYear}`; console.log(`Appel API calendrier: ${apiUrl}`);
-             fetch(apiUrl)
-                 .then(response => { console.log(`Réponse ${apiUrl}, statut: ${response.status}`); if (!response.ok) { return response.json().then(err => {throw new Error(`Erreur HTTP ${response.status}: ${err.error||response.statusText}`)}).catch(() => {throw new Error(`Erreur HTTP ${response.status}`)}); } return response.json(); })
-                 .then(data => { console.log("[Calendar] Données API:", data); if (data.error) { throw new Error(`Erreur API calendrier: ${data.error}`); } console.log("Appel generateCalendar:", data); generateCalendar(data, selectedAcademicYear); console.log("generateCalendar exécuté."); })
-                 .catch(error => { console.error("Erreur showCalendar:", error); if (calendarContainer) calendarContainer.innerHTML = `<p>Erreur chargement: ${error.message}</p>`; });
-             console.log("Fin showCalendar (fetch lancé)");
-         }
+// --- NOUVELLE LOGIQUE POUR LES ALERTES ---
 
-        function generateCalendar(apiData, academicYear) {
-            console.log(`Entrée generateCalendar pour année: ${academicYear}`);
-            const calendarContainer = document.getElementById('calendar-container');
-            if (!calendarContainer) { console.error("Conteneur #calendar-container introuvable !"); return; }
-            calendarContainer.innerHTML = '';
-            const today = new Date();
-            const currentDay = today.getDate(); const currentMonth = today.getMonth() + 1; const currentYearToday = today.getFullYear();
-            const todayStr = `${currentYearToday}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
-            console.log(`Date actuelle: ${todayStr}`);
-            if (!apiData || typeof apiData !== 'object' || !apiData.days || typeof apiData.days !== 'object') { console.error("Données calendrier invalides:", apiData); calendarContainer.innerHTML = "<p>Erreur: Données calendrier invalides.</p>"; return; }
-            const daysData = apiData.days;
-            const [startYear, endYear] = academicYear.split('-').map(Number);
-            console.log(`Affichage de Sept ${startYear} à Août ${endYear}`);
-            for (let m = 0; m < 12; m++) {
-                let month, year;
-                if (m < 4) { month = m + 9; year = startYear; }
-                else { month = m - 3; year = endYear; }
-                const monthDiv = document.createElement('div'); monthDiv.classList.add('calendar-month');
-                const monthDate = new Date(year, month - 1, 1);
-                const monthName = monthDate.toLocaleString('fr-FR', { month: 'long' });
-                monthDiv.innerHTML = `<h3>${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}</h3>`;
-                const daysInMonth = new Date(year, month, 0).getDate();
-                const firstDayWeekday = (monthDate.getDay() + 6) % 7;
-                const daysContainer = document.createElement('div'); daysContainer.classList.add('calendar-days');
-                const weekDays = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-                weekDays.forEach(wd => { const d = document.createElement('div'); d.classList.add('calendar-weekday'); d.textContent = wd; daysContainer.appendChild(d); });
-                for (let i = 0; i < firstDayWeekday; i++) { const emptyCell = document.createElement('div'); emptyCell.classList.add('calendar-day', 'empty'); daysContainer.appendChild(emptyCell); }
-                for (let day = 1; day <= daysInMonth; day++) {
-                    const dayCell = document.createElement('div'); dayCell.classList.add('calendar-day'); dayCell.textContent = day;
-                    const monthStrPad = String(month).padStart(2, '0'); const dayStrPad = String(day).padStart(2, '0');
-                    const dateKey = `${year}-${monthStrPad}-${dayStrPad}`;
-                    const dayData = daysData[dateKey];
-                    if (dateKey === todayStr) { dayCell.classList.add('today'); }
-                    if (dayData) {
-                        let cssClass = ''; let tooltipText = dayData.description || dayData.type || '';
-                        const typeValue = dayData.type || 'ERREUR'; const typeLower = typeValue.toLowerCase().trim();
-                        if (typeLower.startsWith('exception (silence)')) { cssClass = 'exception-silence'; tooltipText = dayData.description || "Journée Silence (Exception)"; }
-                        else if (typeLower.startsWith('exception (utiliser_jt')) { cssClass = 'exception-jt'; tooltipText = dayData.description || "Exception : Journée Type Spécifique"; }
-                        else if (typeLower === 'férié') { cssClass = 'ferie'; }
-                        else if (typeLower === 'vacances') { cssClass = 'vacances'; }
-                        else if (typeLower === 'weekend') { cssClass = 'weekend'; }
-                        else if (typeLower.startsWith('classe')) { cssClass = 'classe'; tooltipText = dayData.description || typeValue; }
-                        else if (typeLower === 'autre' || typeLower === 'erreur') { console.warn(`Type jour 'Autre' ou 'Erreur' reçu: '${typeValue}' pour ${dateKey}`); tooltipText = dayData.description || typeValue; }
-                        else { console.error(`!!! Type jour INCONNU: '${typeValue}' (lower: '${typeLower}') pour ${dateKey} !!!`); cssClass = 'erreur-donnees'; tooltipText = `Type Inconnu: ${typeValue}`; }
-                        console.log(`[Cal Apply] ${dateKey}: Type='${typeValue}' -> CSS Class='${cssClass || 'aucune'}'`);
-                        if (cssClass) { dayCell.classList.add(cssClass); }
-                        if (tooltipText) { dayCell.title = tooltipText; }
-                        dayCell.style.cursor = 'pointer'; dayCell.onclick = () => showDailySchedule(year, month, day);
-                    } else { console.warn(`Aucune donnée API pour ${dateKey}`); dayCell.classList.add('erreur-donnees'); dayCell.title = "Données manquantes"; }
-                    daysContainer.appendChild(dayCell);
-                }
-                monthDiv.appendChild(daysContainer); calendarContainer.appendChild(monthDiv);
-            }
-            console.log("Fin de generateCalendar");
-        }
-
-        function showDailySchedule(year, month, day) {
-             console.log(`>>> Début showDailySchedule ${year}-${month}-${day}`);
-             const monthStr = month.toString().padStart(2, '0'); const dayStr = day.toString().padStart(2, '0');
-             const dateStr = `${year}-${monthStr}-${dayStr}`; console.log(`   Date: ${dateStr}`);
-             const modalOverlay = document.getElementById('modal-overlay'); const modalContent = document.getElementById('modal-content');
-             if (!modalOverlay || !modalContent) { console.error("   Elts modale manquants !"); return; }
-			 modalContent.innerHTML = `<p>Chargement des horaires pour ${dayStr}/${monthStr}/${year}...</p>`; modalOverlay.classList.add('visible');
-             const apiUrl = `/api/daily_schedule?date=${dateStr}`; console.log(`   Fetch: ${apiUrl}`);
-             try {
-                 fetch(apiUrl)
-                     .then(response => {
-                         console.log(`   Réponse ${apiUrl}, statut: ${response.status}`);
-                         if (!response.ok) { return response.json().then(err => { throw new Error(`Erreur ${response.status}: ${err.error || err.message || response.statusText}`) }).catch(() => { throw new Error(`Erreur HTTP ${response.status}`) }); }
-                         return response.json();
-                     })
-                     .then(data => {
-                          console.log("   Détails reçus:", data);
-                          let htmlModalContent = `<h4>Détails du ${dayStr}/${monthStr}/${year}</h4>`;
-                          let dayInfoText = data.message || data.day_type || "Information indisponible";
-                          htmlModalContent += `<span class="day-type-info">${dayInfoText}</span>`;
-                          if (data.error) { htmlModalContent += `<p style="color: red;">Erreur: ${data.error}</p>`; }
-                          else if (data.schedule && Array.isArray(data.schedule) && data.schedule.length > 0) {
-                              htmlModalContent += `<table><thead><tr><th>Heure</th><th>Événement</th><th>Sonnerie</th></tr></thead><tbody>`;
-                              data.schedule.forEach(item => { const timeFormatted = item.time.substring(0, 5); htmlModalContent += `<tr><td>${timeFormatted}</td><td>${item.event||'N/A'}</td><td><em>${item.sonnerie||'Silence'}</em></td></tr>`; });
-                              htmlModalContent += `</tbody></table>`;
-                          } else { htmlModalContent += `<p><em>Aucune sonnerie planifiée.</em></p>`; }
-                          modalContent.innerHTML = htmlModalContent; console.log("   Affichage détails OK (modale).");
-                     })
-                     .catch(error => { console.error(`   Erreur dans showDailySchedule pour ${dateStr}:`, error); modalContent.innerHTML = `<p style="color: red;">Impossible de charger les détails.<br>${error.message}</p>`; });
-             } catch (fetchError) { console.error(`   Erreur synchrone showDailySchedule:`, fetchError); modalContent.innerHTML = `<p style="color: red;">Erreur JS.<br>${fetchError.message}</p>`; }
-             console.log(`<<< Fin appel synchrone showDailySchedule pour ${dateStr}`);
-        }
-
-        function initialLoad() {
-            console.log("Appel initialLoad() sur page control.html (utilisateur loggué via Flask-Login)...");
-            populateAcademicYearSelector();
-            loadConfigSettings();
-            // updateStatus(); // Appel initial au statut global géré par global_status.js
-            showCalendar();
-            console.log("initialLoad: Appels de chargement de données lancés.");
-            const ctrlSect = document.getElementById('control-section');
-            if (ctrlSect) ctrlSect.style.display = 'block'; else console.error("#control-section non trouvé !");
-        }
-        document.addEventListener('DOMContentLoaded', initialLoad);
-
-        // --- NOUVELLE LOGIQUE POUR LES ALERTES ---
-        // Les variables globales ppmsAlertActive et attentatAlertActive ne sont plus nécessaires ici,
-        // l'état est déterminé dans updateAlertButtonsUI à partir de currentStatus.
-
-        // Timers pour gérer le double-clic
-        let ppmsClickTimer = null;
-        let attentatClickTimer = null;
-        const DBL_CLICK_DELAY = 300; // ms
-
-        // Les constantes globales pour les éléments boutons ne sont plus nécessaires ici,
-        // car les éléments sont récupérés directement dans updateAlertButtonsUI et les listeners.
-
-        // Fonction pour mettre à jour l'état visuel des boutons d'alerte
-        function updateAlertButtonsUI(statusData) {
-            const btnAlertPpms = document.getElementById('btn-alert-ppms');
-            const btnAlertAttentat = document.getElementById('btn-alert-attentat');
-            const btnEndAlert = document.getElementById('btn-end-alert');
-
-            if (!statusData || !btnAlertPpms || !btnAlertAttentat || !btnEndAlert) {
-                console.warn("updateAlertButtonsUI: Données de statut ou éléments de bouton manquants.");
-                // Mettre dans un état par défaut si les éléments ne sont pas trouvés ou statusData est manquant
-                if(btnAlertPpms) btnAlertPpms.disabled = true;
-                if(btnAlertAttentat) btnAlertAttentat.disabled = true;
-                if(btnEndAlert) btnEndAlert.disabled = true;
-                return;
-            }
-            if (!configSettings || !configSettings.alert_files || configSettings.alert_files.ppms === undefined || configSettings.alert_files.attentat === undefined) {
-                console.warn("updateAlertButtonsUI: configSettings.alert_files non disponible ou incomplet. Assurez-vous que loadConfigSettings est terminé.", configSettings);
-                showFeedback("Config alerte incomplète. Boutons désactivés.", "error", 7000);
-                btnAlertPpms.disabled = true; btnAlertPpms.title = "Config PPMS manquante";
-                btnAlertAttentat.disabled = true; btnAlertAttentat.title = "Config Attentat manquante";
-                btnEndAlert.disabled = true;
-                return;
-            }
-
-            const ppmsFile = configSettings.alert_files.ppms;
-            const attentatFile = configSettings.alert_files.attentat;
-
-            let isPpmsCurrentlyActive = (statusData.alert_active && statusData.alert_type === ppmsFile);
-            let isAttentatCurrentlyActive = (statusData.alert_active && statusData.alert_type === attentatFile);
-
-            // Réinitialiser les classes et états des boutons PPMS
-            btnAlertPpms.classList.remove('btn-danger', 'active', 'btn-warning');
-            btnAlertPpms.disabled = false; // Activer par défaut, puis désactiver si nécessaire
-
-            if (isPpmsCurrentlyActive) {
-                btnAlertPpms.classList.add('btn-danger', 'active');
-                btnAlertPpms.innerHTML = '<i class="bi bi-shield-fill-exclamation me-1"></i>PPMS ACTIVE';
-                btnAlertPpms.title = "Double-clic pour ARRETER l'alerte PPMS";
-                btnAlertAttentat.disabled = true; // Désactiver l'autre bouton d'alerte
+function loadConfigSettings() {
+    console.log("[control.html] Chargement settings via /api/config/settings...");
+    return fetch('/api/config/settings')
+        .then(response => {
+            if (!response.ok) throw new Error(`Erreur HTTP settings: ${response.status} ${response.statusText}`);
+            return response.json();
+        })
+        .then(data => {
+            console.log("[control.html] Settings reçus:", data);
+            if (data && data.alert_files) {
+                configSettings.alert_files = data.alert_files;
             } else {
-                btnAlertPpms.classList.add('btn-warning'); // Couleur par défaut
-                btnAlertPpms.innerHTML = '<i class="bi bi-shield-fill-exclamation me-1"></i>PPMS';
-                btnAlertPpms.title = "Double-clic pour DECLENCHER l'alerte PPMS";
-                if (isAttentatCurrentlyActive) { // Si l'alerte attentat est active, PPMS doit aussi être désactivé
-                    btnAlertPpms.disabled = true;
+                console.warn("[control.html] Aucun fichier alerte dans settings API ou data est null.");
+                configSettings.alert_files = { ppms: null, attentat: null };
+            }
+        })
+        .catch(error => {
+            console.error("[control.html] Erreur critique chargement settings:", error);
+            configSettings.alert_files = { ppms: null, attentat: null };
+            if (typeof showFeedback === 'function') showFeedback("Erreur chargement configuration des alertes. Fonctionnalité d'alerte affectée.", "error");
+            throw error;
+        });
+}
+
+function updateAlertButtonsUI(statusData) {
+    if (!statusData) {
+        console.warn("[control.html] updateAlertButtonsUI: statusData est null.");
+        if(btnAlertPpms) btnAlertPpms.disabled = true;
+        if(btnAlertAttentat) btnAlertAttentat.disabled = true;
+        if(btnEndAlert) btnEndAlert.disabled = true;
+        return;
+    }
+    if (!btnAlertPpms || !btnAlertAttentat || !btnEndAlert) {
+        console.warn("[control.html] updateAlertButtonsUI: Un ou plusieurs éléments de bouton ne sont pas encore initialisés.");
+        return;
+    }
+    if (!configSettings || !configSettings.alert_files || configSettings.alert_files.ppms === undefined || configSettings.alert_files.attentat === undefined) {
+        console.warn("[control.html] updateAlertButtonsUI: configSettings.alert_files non disponible ou incomplet.", configSettings);
+        if (typeof showFeedback === 'function') showFeedback("Config alerte incomplète. Boutons désactivés.", "error", 7000);
+        btnAlertPpms.disabled = true; btnAlertPpms.title = "Config PPMS manquante";
+        btnAlertAttentat.disabled = true; btnAlertAttentat.title = "Config Attentat manquante";
+        btnEndAlert.disabled = true;
+        return;
+    }
+
+    const ppmsFile = configSettings.alert_files.ppms;
+    const attentatFile = configSettings.alert_files.attentat;
+
+    let isPpmsActiveBackend = (statusData.alert_active && statusData.alert_type === ppmsFile);
+    let isAttentatActiveBackend = (statusData.alert_active && statusData.alert_type === attentatFile);
+
+    console.log(`[control.html] updateAlertButtonsUI: PPMS Active? ${isPpmsActiveBackend}, Attentat Actif? ${isAttentatActiveBackend}, Alerte Active Générique? ${statusData.alert_active}, Type: ${statusData.alert_type}`);
+
+    btnAlertPpms.classList.remove('btn-danger', 'active', 'btn-warning');
+    btnAlertPpms.disabled = false;
+    if (isPpmsActiveBackend) {
+        btnAlertPpms.classList.add('btn-danger', 'active');
+        btnAlertPpms.innerHTML = '<i class="bi bi-shield-fill-exclamation me-1"></i>PPMS ACTIVE';
+        btnAlertPpms.title = "Double-clic pour ARRETER l'alerte PPMS";
+        btnAlertAttentat.disabled = true;
+    } else {
+        btnAlertPpms.classList.add('btn-warning');
+        btnAlertPpms.innerHTML = '<i class="bi bi-shield-fill-exclamation me-1"></i>PPMS';
+        btnAlertPpms.title = "Double-clic pour DECLENCHER l'alerte PPMS";
+        if (isAttentatActiveBackend) btnAlertPpms.disabled = true;
+    }
+
+    btnAlertAttentat.classList.remove('btn-dark', 'active', 'btn-danger');
+    btnAlertAttentat.disabled = false;
+    if (isAttentatActiveBackend) {
+        btnAlertAttentat.classList.add('btn-dark', 'active');
+        btnAlertAttentat.innerHTML = '<i class="bi bi-cone-striped me-1"></i>ATTENTAT ACTIF';
+        btnAlertAttentat.title = "Double-clic pour ARRETER l'alerte Attentat";
+        btnAlertPpms.disabled = true;
+    } else {
+        btnAlertAttentat.classList.add('btn-danger');
+        btnAlertAttentat.innerHTML = '<i class="bi bi-cone-striped me-1"></i>ATTENTAT';
+        btnAlertAttentat.title = "Double-clic pour DECLENCHER l'alerte Attentat";
+        if (isPpmsActiveBackend) btnAlertAttentat.disabled = true;
+    }
+
+    if (statusData.alert_active && !isPpmsActiveBackend && !isAttentatActiveBackend) {
+        btnAlertPpms.disabled = true;
+        btnAlertAttentat.disabled = true;
+    }
+
+    btnEndAlert.disabled = !statusData.alert_active;
+}
+
+function fetchPageStatusAndUpdateAlertUI() {
+    console.log("[control.html] fetchPageStatusAndUpdateAlertUI: Récupération du statut...");
+    return fetch('/api/status')
+        .then(response => {
+            if (!response.ok) {
+                return response.json().catch(() => null).then(errData => {
+                    const errorMsg = errData && errData.error ? errData.error : `Erreur HTTP status: ${response.status} ${response.statusText}`;
+                    throw new Error(errorMsg);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            currentStatus = data;
+            console.log("[control.html] Statut local mis à jour:", currentStatus);
+            updateAlertButtonsUI(currentStatus);
+            if (typeof fetchGlobalStatus === 'function') fetchGlobalStatus();
+        })
+        .catch(error => {
+            console.error("[control.html] Erreur fetchPageStatusAndUpdateAlertUI:", error);
+            if (typeof showFeedback === 'function') showFeedback(`Erreur statut: ${error.message}`, 'error');
+            updateAlertButtonsUI({ alert_active: false, alert_type: null });
+        });
+}
+
+function callApiAndRefresh(apiUrl, method = 'POST', actionText = 'Action') {
+    console.log(`[control.html] Appel API: ${actionText} -> ${apiUrl}`);
+    if(btnAlertPpms) btnAlertPpms.disabled = true;
+    if(btnAlertAttentat) btnAlertAttentat.disabled = true;
+    if(btnEndAlert) btnEndAlert.disabled = true;
+
+    return fetch(apiUrl, { method: method })
+        .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
+        .then(({ ok, status, data }) => {
+            const message = data.message || (ok ? `${actionText} réussie.` : `Erreur ${actionText} (${status})`);
+            if (typeof showFeedback === 'function') showFeedback(message, ok ? 'success' : 'error');
+            if (!ok && data.error) console.error(`[control.html] Erreur API ${actionText}: ${data.error}`);
+        })
+        .catch(error => {
+            console.error(`[control.html] Erreur réseau/serveur (${actionText}): ${error.message}`);
+            if (typeof showFeedback === 'function') showFeedback(`Erreur réseau (${actionText}): ${error.message}`, 'error');
+        })
+        .finally(() => {
+            if (typeof fetchPageStatusAndUpdateAlertUI === 'function') {
+                fetchPageStatusAndUpdateAlertUI();
+            }
+        });
+}
+
+function callTriggerAlertAPI(alertType) {
+    if (!configSettings || !configSettings.alert_files) { showFeedback("Erreur: Config alertes non chargée.", 'error'); return Promise.reject("Config non chargée"); }
+    let key = alertType.toLowerCase();
+    let file = configSettings.alert_files[key];
+    if (!file) { showFeedback(`Sonnerie pour ${alertType} non configurée!`, 'error'); return Promise.reject("Fichier non configuré"); }
+    return callApiAndRefresh(`/api/alert/trigger/${encodeURIComponent(file)}`, 'POST', `Déclenchement ${alertType}`);
+}
+
+function callStopAlertAPI() { return callApiAndRefresh('/api/alert/stop', 'POST', "Arrêt Urgence Alerte"); }
+function callEndAlertAPI() { return callApiAndRefresh('/api/alert/end', 'POST', "Fin d'Alerte Programmée"); }
+
+// --- Initialisation ---
+document.addEventListener('DOMContentLoaded', function() {
+    console.log("[control.html] DOMContentLoaded: Initialisation de la page de contrôle...");
+
+    selectedAcademicYear = getDefaultAcademicYear(); // Initialisation pour le calendrier
+
+    btnAlertPpms = document.getElementById('btn-alert-ppms');
+    btnAlertAttentat = document.getElementById('btn-alert-attentat');
+    btnEndAlert = document.getElementById('btn-end-alert');
+
+    if (typeof populateAcademicYearSelector === 'function') populateAcademicYearSelector();
+
+    if (typeof loadConfigSettings === 'function') {
+        loadConfigSettings()
+            .then(() => {
+                console.log("[control.html] DOMContentLoaded: Config settings chargées.");
+                if (typeof fetchPageStatusAndUpdateAlertUI === 'function') {
+                    return fetchPageStatusAndUpdateAlertUI();
+                } else {
+                     console.error("[control.html] fetchPageStatusAndUpdateAlertUI non définie !");
                 }
-            }
-
-            // Réinitialiser les classes et états des boutons Attentat
-            btnAlertAttentat.classList.remove('btn-dark', 'active', 'btn-danger');
-            btnAlertAttentat.disabled = false; // Activer par défaut
-
-            if (isAttentatCurrentlyActive) {
-                btnAlertAttentat.classList.add('btn-dark', 'active');
-                btnAlertAttentat.innerHTML = '<i class="bi bi-cone-striped me-1"></i>ATTENTAT ACTIF';
-                btnAlertAttentat.title = "Double-clic pour ARRETER l'alerte Attentat";
-                btnAlertPpms.disabled = true; // Désactiver l'autre bouton d'alerte (peut être redondant mais assure la logique)
-            } else {
-                btnAlertAttentat.classList.add('btn-danger'); // Couleur par défaut
-                btnAlertAttentat.innerHTML = '<i class="bi bi-cone-striped me-1"></i>ATTENTAT';
-                btnAlertAttentat.title = "Double-clic pour DECLENCHER l'alerte Attentat";
-                if (isPpmsCurrentlyActive) { // Si l'alerte PPMS est active, Attentat doit aussi être désactivé
-                    btnAlertAttentat.disabled = true;
-                }
-            }
-
-            // État du bouton Sonnerie Fin d'Alerte
-            btnEndAlert.disabled = !statusData.alert_active;
-
-            // Cas où une alerte est active mais n'est ni PPMS ni Attentat (par ex. fin d'alerte sonore en cours)
-            // Dans ce cas, les deux boutons PPMS et Attentat devraient être désactivés pour éviter de déclencher une nouvelle alerte par-dessus.
-            if (statusData.alert_active && !isPpmsCurrentlyActive && !isAttentatCurrentlyActive) {
-                console.warn("Une alerte générique est active (probablement fin d'alerte). Désactivation des boutons PPMS et Attentat.");
-                btnAlertPpms.disabled = true;
-                btnAlertAttentat.disabled = true;
-            }
-
-            console.debug(`UI Boutons MàJ: PPMS Actif=${isPpmsCurrentlyActive}, Attentat Actif=${isAttentatCurrentlyActive}, Fin Alerte Disabled=${btnEndAlert.disabled}, PPMS Disabled=${btnAlertPpms.disabled}, Attentat Disabled=${btnAlertAttentat.disabled}`);
-        }
-
-        // La fonction localUpdateStatusUI n'est plus nécessaire,
-        // fetchPageStatusAndUpdateAlertUI s'en chargera.
-
-        function fetchPageStatusAndUpdateAlertUI() {
-            console.log("fetchPageStatusAndUpdateAlertUI: Récupération du statut pour la page de contrôle...");
-            return fetch('/api/status') // Retourner la promesse pour chaînage optionnel
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Erreur HTTP status: ${response.status} ${response.statusText}`);
-                    }
-                    return response.json();
-                })
-                .then(statusData => {
-                    console.log("fetchPageStatusAndUpdateAlertUI: Statut reçu:", statusData);
-                    currentStatus = statusData; // Mettre à jour la variable globale de la page
-                    updateAlertButtonsUI(currentStatus); // Mettre à jour l'UI des boutons d'alerte
-
-                    if (typeof fetchGlobalStatus === 'function') {
-                        console.log("fetchPageStatusAndUpdateAlertUI: Appel de fetchGlobalStatus pour synchroniser le sidebar.");
-                        fetchGlobalStatus(); // Synchroniser le statut global du sidebar
-                    } else {
-                        console.warn("fetchPageStatusAndUpdateAlertUI: fetchGlobalStatus() n'est pas défini. Le sidebar ne sera peut-être pas synchronisé.");
-                    }
-                })
-                .catch(error => {
-                    console.error("fetchPageStatusAndUpdateAlertUI: Erreur lors de la récupération du statut:", error);
-                    showFeedback("Erreur récupération du statut des alertes. L'affichage peut être incorrect.", "error", 7000);
-                    // En cas d'erreur, mettre à jour l'UI avec un statut vide pour refléter l'incertitude
-                    currentStatus = { alert_active: false, alert_type: null, scheduler_running: 'Erreur' }; // Statut d'erreur minimal
-                    updateAlertButtonsUI(currentStatus);
-                    // Il faut aussi propager l'erreur si cette fonction est chaînée
-                    return Promise.reject(error);
-                });
-        }
-
-        // Modification de initialLoad pour s'assurer que tout est prêt
-        // La fonction initialLoad originale :
-        // function initialLoad() {
-        //     console.log("Appel initialLoad() sur page control.html (utilisateur loggué via Flask-Login)...");
-        //     populateAcademicYearSelector();
-        //     loadConfigSettings(); // Déjà présent
-        //     showCalendar();
-        //     console.log("initialLoad: Appels de chargement de données lancés.");
-        //     const ctrlSect = document.getElementById('control-section'); // Ancienne section
-        //     // if (ctrlSect) ctrlSect.style.display = 'block'; else console.error("#control-section non trouvé !");
-        // }
-        // Nous devons nous assurer que loadConfigSettings est appelé, puis que le statut est récupéré pour appeler updateAlertButtonsUI.
-        // global_status.js appelle fetchGlobalStatus() et met à jour son UI.
-        // Pour que control.html mette à jour SES boutons, il faut que `currentStatus` soit mis à jour et que `updateAlertButtonsUI` soit appelée.
-
-        // Solution: on surcharge fetchGlobalStatus pour que control.html puisse aussi utiliser les données.
-        // Ou bien, on écoute un événement personnalisé que global_status.js pourrait émettre.
-        // Option plus simple pour l'instant: `initialLoad` fait son propre fetch pour `currentStatus`
-        // et `global_status.js` gère le sidebar indépendamment.
-        // On va modifier initialLoad pour cela.
-
-        // --- Fonctions d'appel API pour les alertes ---
-        function callTriggerAlertAPI(alertType) {
-            // alertType sera 'PPMS' ou 'Attentat'
-            if (!configSettings || !configSettings.alert_files) {
-                showFeedback("Erreur: Configuration des alertes non chargée.", 'error');
-                return Promise.reject("Config non chargée");
-            }
-            const alertFileNameKey = alertType.toLowerCase(); // 'ppms' ou 'attentat'
-            const alertFileName = configSettings.alert_files[alertFileNameKey];
-
-            if (!alertFileName) {
-                showFeedback(`Sonnerie pour alerte '${alertType}' non configurée! Vérifiez la configuration générale.`, 'error', 7000);
-                return Promise.reject("Nom de fichier pour alerte non configuré");
-            }
-
-            const apiUrlTrigger = `/api/alert/trigger/${encodeURIComponent(alertFileName)}`;
-            console.log(`Déclenchement alerte ${alertType} (${alertFileName}) via ${apiUrlTrigger}`);
-            showFeedback(`Déclenchement alerte ${alertType}...`, 'info', 2000);
-
-            return fetch(apiUrlTrigger, { method: 'POST' })
-                .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
-                .then(({ ok, status, data }) => {
-                    const message = data.message || (ok ? `Alerte ${alertType} déclenchée.` : `Erreur ${status} déclenchement: ${data.error || 'Erreur inconnue'}`);
-                    showFeedback(message, ok ? 'success' : 'error');
-                    if (!ok) console.error(`Erreur API Trigger Alert: ${status}`, data);
-                })
-                .catch(error => {
-                    console.error(`Erreur réseau (Déclenchement ${alertType}):`, error);
-                    showFeedback(`Erreur réseau/serveur (Déclenchement ${alertType}): ${error.message}`, 'error');
-                })
-                .finally(() => {
-                    if (typeof fetchPageStatusAndUpdateAlertUI === 'function') {
-                        fetchPageStatusAndUpdateAlertUI();
-                    }
-                });
-        }
-
-        function callStopAlertAPI() { // Arrêt d'urgence de TOUTE alerte
-            console.log("Arrêt urgence alerte via /api/alert/stop");
-            showFeedback("Arrêt d'urgence de l'alerte en cours...", 'info', 2000);
-
-            return fetch('/api/alert/stop', { method: 'POST' })
-                .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
-                .then(({ ok, status, data }) => {
-                    const message = data.message || (ok ? `Alerte arrêtée (urgence).` : `Erreur ${status} arrêt urgence: ${data.error || 'Erreur inconnue'}`);
-                    showFeedback(message, ok ? 'success' : 'error');
-                    if (!ok) console.error(`Erreur API Stop Alert: ${status}`, data);
-                })
-                .catch(error => {
-                    console.error("Erreur réseau (Arrêt Urgence):", error);
-                    showFeedback(`Erreur réseau/serveur (Arrêt Urgence): ${error.message}`, 'error');
-                })
-                .finally(() => {
-                    if (typeof fetchPageStatusAndUpdateAlertUI === 'function') {
-                        fetchPageStatusAndUpdateAlertUI();
-                    }
-                });
-        }
-
-        function callEndAlertAPI() { // Fin d'alerte programmée (avec son de fin spécifique)
-            console.log("Fin d'alerte programmée via /api/alert/end");
-            showFeedback("Lancement sonnerie de fin d'alerte...", 'info', 2000);
-
-            return fetch('/api/alert/end', { method: 'POST' })
-                .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
-                .then(({ ok, status, data }) => {
-                    const message = data.message || (ok ? `Fin d'alerte programmée effectuée.` : `Erreur ${status} fin d'alerte: ${data.error || 'Erreur inconnue'}`);
-                    showFeedback(message, ok ? 'success' : 'error');
-                    if (!ok) console.error(`Erreur API End Alert: ${status}`, data);
-                })
-                .catch(error => {
-                    console.error("Erreur réseau (Fin Alerte):", error);
-                    showFeedback(`Erreur réseau/serveur (Fin Alerte): ${error.message}`, 'error');
-                })
-                .finally(() => {
-                    if (typeof fetchPageStatusAndUpdateAlertUI === 'function') {
-                        fetchPageStatusAndUpdateAlertUI();
-                    }
-                });
-        }
-
-        // Attachement des Event Listeners (doit être après la définition des fonctions et la dispo des boutons)
-        // Assurer que cela est appelé APRÈS que les boutons sont disponibles dans le DOM (par ex. dans DOMContentLoaded ou après)
-        // Pour ce projet, initialLoad est appelé par DOMContentLoaded, donc les boutons devraient être prêts.
-        // On va récupérer les éléments ici à nouveau au cas où les références globales ne seraient pas fiables
-        // au moment où le code s'exécute (bien qu'elles devraient l'être).
-
-        const btnAlertPpmsElem = document.getElementById('btn-alert-ppms');
-        const btnAlertAttentatElem = document.getElementById('btn-alert-attentat');
-        const btnEndAlertElem = document.getElementById('btn-end-alert');
-
-        if (btnAlertPpmsElem) {
-            btnAlertPpmsElem.addEventListener('click', function() {
-                if (this.disabled) return; // Ne rien faire si le bouton est désactivé
-
-                if (ppmsClickTimer === null) {
-                    ppmsClickTimer = setTimeout(() => { ppmsClickTimer = null; }, DBL_CLICK_DELAY);
-                } else { // Double-clic
-                    clearTimeout(ppmsClickTimer);
-                    ppmsClickTimer = null;
-
-                    const ppmsFile = configSettings.alert_files ? configSettings.alert_files.ppms : null;
-                    const isPpmsCurrentlyActive = (currentStatus && currentStatus.alert_active && currentStatus.alert_type === ppmsFile);
-
-                    console.log("Double-clic PPMS. Alerte PPMS active ? : ", isPpmsCurrentlyActive);
-
-                    if (isPpmsCurrentlyActive) {
-                        callStopAlertAPI(); // Si PPMS est active, on l'arrête (urgence)
-                    } else if (currentStatus && !currentStatus.alert_active) {
-                        // Si aucune alerte n'est active, on la déclenche
-                        callTriggerAlertAPI('PPMS');
-                    } else if (currentStatus && currentStatus.alert_active && !isPpmsCurrentlyActive) {
-                        // Une autre alerte est active, on ne fait rien pour PPMS
-                        showFeedback("L'alerte PPMS ne peut pas être déclenchée car une autre alerte est déjà active.", "warning");
-                    } else {
-                        // Cas non prévu ou currentStatus non disponible
-                        console.warn("Action PPMS double-clic bloquée: statut inconnu, config manquante ou une autre alerte est active.");
-                        if (!currentStatus) showFeedback("Statut actuel inconnu, action PPMS bloquée.", "error");
-                        else if (!configSettings || !configSettings.alert_files) showFeedback("Configuration des alertes manquante, action PPMS bloquée.", "error");
-                    }
-                }
+            })
+            .then(() => {
+                console.log("[control.html] DOMContentLoaded: Statut initial chargé et UI alertes mise à jour.");
+                if (typeof showCalendar === 'function') showCalendar();
+            })
+            .catch(error => {
+                console.error("[control.html] DOMContentLoaded: Erreur dans la séquence d'initialisation.", error);
+                updateAlertButtonsUI({ alert_active: false, alert_type: null });
             });
-        } else { console.error("Bouton #btn-alert-ppms non trouvé pour attacher listener."); }
+    } else {
+        console.error("[control.html] loadConfigSettings n'est pas définie! Initialisation incomplète.");
+        updateAlertButtonsUI({ alert_active: false, alert_type: null });
+    }
 
-        if (btnAlertAttentatElem) {
-            btnAlertAttentatElem.addEventListener('click', function() {
-                if (this.disabled) return; // Ne rien faire si le bouton est désactivé
-
-                if (attentatClickTimer === null) {
-                    attentatClickTimer = setTimeout(() => { attentatClickTimer = null; }, DBL_CLICK_DELAY);
-                } else { // Double-clic
-                    clearTimeout(attentatClickTimer);
-                    attentatClickTimer = null;
-
-                    const attentatFile = configSettings.alert_files ? configSettings.alert_files.attentat : null;
-                    const isAttentatCurrentlyActive = (currentStatus && currentStatus.alert_active && currentStatus.alert_type === attentatFile);
-
-                    console.log("Double-clic Attentat. Alerte Attentat active ? : ", isAttentatCurrentlyActive);
-
-                    if (isAttentatCurrentlyActive) {
-                        callStopAlertAPI(); // Si Attentat est active, on l'arrête (urgence)
-                    } else if (currentStatus && !currentStatus.alert_active) {
-                        // Si aucune alerte n'est active, on la déclenche
-                        callTriggerAlertAPI('Attentat');
-                    } else if (currentStatus && currentStatus.alert_active && !isAttentatCurrentlyActive) {
-                        // Une autre alerte est active, on ne fait rien pour Attentat
-                        showFeedback("L'alerte Attentat ne peut pas être déclenchée car une autre alerte est déjà active.", "warning");
-                    } else {
-                        // Cas non prévu ou currentStatus non disponible
-                        console.warn("Action Attentat double-clic bloquée: statut inconnu, config manquante ou une autre alerte est active.");
-                        if (!currentStatus) showFeedback("Statut actuel inconnu, action Attentat bloquée.", "error");
-                        else if (!configSettings || !configSettings.alert_files) showFeedback("Configuration des alertes manquante, action Attentat bloquée.", "error");
-                    }
-                }
-            });
-        } else { console.error("Bouton #btn-alert-attentat non trouvé pour attacher listener."); }
-
-        if (btnEndAlertElem) {
-            btnEndAlertElem.addEventListener('click', function() {
-                if (this.disabled) return; // Ne rien faire si le bouton est désactivé
-                console.log("Clic sur Fin d'Alerte Programmée.");
-                callEndAlertAPI();
-            });
-        } else { console.error("Bouton #btn-end-alert non trouvé pour attacher listener."); }
-
-        // S'assurer que la fonction initialLoad est adaptée
-        // La fonction initialLoad doit être redéfinie ou modifiée pour prendre en compte la nouvelle logique
-        // en s'assurant que loadConfigSettings est appelé et que le statut initial est récupéré
-        // pour appeler updateAlertButtonsUI.
-
-        // On va surcharger la fonction initialLoad existante si elle est déjà définie globalement,
-        // ou la redéfinir ici. Pour l'instant, on va la patcher.
-        // L'ancien initialLoad est appelé par DOMContentLoaded.
-        // Il faut que notre updateAlertButtonsUI soit appelée après que configSettings et currentStatus sont prêts.
-
-        // Solution: On modifie `global_status.js` pour qu'il appelle `localUpdateStatusUI` s'il existe.
-        // Dans `global_status.js`, dans `updateGlobalStatusUI(data)`:
-        // ... (code existant)
-        // if (typeof localUpdateStatusUI === 'function') { // Vérifie si la page actuelle a défini cette fonction
-        //     localUpdateStatusUI(data);
-        // }
-        // Et dans `fetchGlobalStatus()` après avoir reçu les données:
-        // .then(data => {
-        //     if (data) {
-        //         updateGlobalStatusUI(data); // Ceci mettra à jour le sidebar
-        //         // ET SI localUpdateStatusUI existe (via la modif ci-dessus dans updateGlobalStatusUI), mettra à jour control.html
-        //     }
-        // })
-        // Cela semble être la solution la plus propre pour que `control.html` réagisse aux mises à jour de statut de `global_status.js`.
-        // Pour l'instant, je vais supposer que `fetchGlobalStatus` dans `global_status.js` va, d'une manière ou d'une autre,
-        // provoquer l'appel de `localUpdateStatusUI(data)` avec les données fraîches.
-        // L'appel initial dans `initialLoad` de `control.html` reste important pour le premier chargement.
-
-        // Redéfinition/Amélioration de initialLoad pour control.html
-        const originalInitialLoad = typeof initialLoad === 'function' ? initialLoad : function() {
-            console.log("initialLoad par défaut (control.html) - fonctions de base.");
-            if (typeof populateAcademicYearSelector === 'function') populateAcademicYearSelector();
-            if (typeof showCalendar === 'function') showCalendar();
-        };
-
-        function extendedInitialLoad() {
-            console.log("Appel extendedInitialLoad() sur page control.html...");
-            originalInitialLoad(); // Exécute le contenu de l'initialLoad de base (calendrier, etc.)
-
-            // 1. Charger la configuration des alertes (essentiel pour updateAlertButtonsUI)
-            if (typeof loadConfigSettings === 'function') {
-                loadConfigSettings(); // Cette fonction est asynchrone.
-                                      // Il faudrait chaîner la récupération du statut APRES que loadConfigSettings a terminé.
+    if (btnAlertPpms) {
+        btnAlertPpms.addEventListener('click', function() {
+            if (this.disabled) return;
+            if (ppmsClickTimer === null) {
+                ppmsClickTimer = setTimeout(() => { ppmsClickTimer = null; }, DBL_CLICK_DELAY);
             } else {
-                console.error("loadConfigSettings n'est pas défini!");
-                // Sans config, les boutons d'alerte ne fonctionneront pas correctement.
-                // On peut appeler updateAlertButtonsUI avec des données vides pour désactiver les boutons.
-                updateAlertButtonsUI(null);
+                clearTimeout(ppmsClickTimer); ppmsClickTimer = null;
+                const ppmsFile = configSettings.alert_files ? configSettings.alert_files.ppms : null;
+                const isActive = (currentStatus && currentStatus.alert_active && currentStatus.alert_type === ppmsFile);
+                if (isActive) callStopAlertAPI();
+                else if (currentStatus && !currentStatus.alert_active) callTriggerAlertAPI('PPMS');
+                else if (typeof showFeedback === 'function') showFeedback("Action PPMS impossible: autre alerte active ou statut inconnu.", "warning");
             }
+        });
+    } else { console.error("Bouton #btn-alert-ppms non trouvé."); }
 
-            // Idéalement, loadConfigSettings devrait retourner une promesse.
-            // Supposons pour l'instant qu'elle peuple configSettings de manière synchrone ou que le délai est acceptable.
-            // Ou mieux:
-            // if (typeof loadConfigSettings === 'function') {
-            //     fetch('/api/config/settings') // Refait ici pour avoir la promesse
-            //         .then(response => response.json())
-            //         .then(settingsData => {
-            //             if (settingsData.alert_files) { configSettings.alert_files = settingsData.alert_files; }
-            //             // Maintenant que configSettings est là, on peut charger le statut
-            //             return fetch('/api/status');
-            //         })
-            //         .then(response => response.json())
-            //         .then(statusData => {
-            //             localUpdateStatusUI(statusData); // Met à jour currentStatus et les boutons
-            //         })
-            //         .catch(error => {
-            //             console.error("Erreur dans la séquence de chargement initial (config/status):", error);
-            //             updateAlertButtonsUI(null); // Met les boutons dans un état d'erreur/désactivé
-            //         });
-            // }
-
-            // L'appel à fetchGlobalStatus() est déjà dans global_status.js et devrait mettre à jour le sidebar.
-            // Si global_status.js est modifié comme suggéré pour appeler localUpdateStatusUI,
-            // alors les boutons de control.html seront aussi mis à jour par cet appel périodique.
-
-            // Pour le tout premier affichage, il faut s'assurer que localUpdateStatusUI est appelée.
-            // `global_status.js` fait un `fetchGlobalStatus()` au `DOMContentLoaded`.
-            // Si `localUpdateStatusUI` est définie AVANT cet appel, elle sera prise en compte.
-            // On doit donc s'assurer que ce script s'exécute et définit localUpdateStatusUI tôt.
-            // Le `DOMContentLoaded` de `global_status.js` devrait appeler `fetchGlobalStatus` qui ensuite
-            // appellera `updateGlobalStatusUI` qui (si modifiée) appellera `localUpdateStatusUI`.
-
-            // Pour s'assurer que `updateAlertButtonsUI` est appelée au moins une fois avec les config chargées:
-            // Cela suppose que loadConfigSettings est synchrone ou rapide.
-            // Une meilleure approche est de chaîner les promesses comme dans le bloc commenté ci-dessus.
-            // Pour l'instant, on va compter sur l'appel initial de fetchGlobalStatus() dans global_status.js
-            // et la modification proposée pour qu'il appelle localUpdateStatusUI.
-            // On s'assure juste que localUpdateStatusUI est définie.
-            console.log("extendedInitialLoad: localUpdateStatusUI est définie. En attente de l'appel par global_status.js ou un fetch local.");
-        }
-
-        // Remplacer l'ancien listener DOMContentLoaded par le nouveau si initialLoad est redéfini
-        // Ou s'assurer que l'original initialLoad appelle ce qu'il faut.
-        // Si `initialLoad` est déjà utilisé par `DOMContentLoaded` :
-        // Il faut s'assurer que l'appel à `loadConfigSettings` et la logique pour `localUpdateStatusUI`
-        // sont bien intégrés.
-        // Pour l'instant, le `DOMContentLoaded` existant appelle `initialLoad`.
-        // On va patcher `initialLoad` à la fin du script.
-
-        // Patch de la fonction initialLoad existante pour y ajouter nos besoins spécifiques à control.html
-        // Cela est risqué si l'ordre d'exécution des scripts n'est pas garanti.
-        // Une meilleure approche serait de mettre toute la logique de control.html dans son propre DOMContentLoaded
-        // ou d'utiliser un système d'événements plus robuste.
-
-        // Pour l'instant, on va juste s'assurer que `localUpdateStatusUI` est définie.
-        // Et on va compter sur le `fetchGlobalStatus` de `global_status.js` pour l'appeler.
-        // On doit aussi s'assurer que `configSettings` est chargé. `loadConfigSettings()` est déjà dans l'ancien `initialLoad`.
-
-        // Redéfinissons `initialLoad` pour `control.html` pour mieux contrôler le flux
-        function initialLoad() { // Cette fonction sera appelée par DOMContentLoaded
-            console.log("Appel initialLoad() sur page control.html (Logique Alertes UX)...");
-            if (typeof populateAcademicYearSelector === 'function') {
-                populateAcademicYearSelector();
-            }
-            if (typeof showCalendar === 'function') {
-                showCalendar(); // Peut être appelé en parallèle ou après, selon les dépendances. Ici, parallèle.
-            }
-
-            // Charger la configuration, puis le statut et mettre à jour l'UI des alertes
-            if (typeof loadConfigSettings === 'function') {
-                loadConfigSettings()
-                    .then(() => {
-                        console.log("loadConfigSettings a terminé avec succès dans initialLoad.");
-                        if (typeof fetchPageStatusAndUpdateAlertUI === 'function') {
-                            fetchPageStatusAndUpdateAlertUI(); // Appel réel de la fonction
-                        } else {
-                            // Ce cas ne devrait plus arriver si le script est correctement structuré.
-                            console.error("fetchPageStatusAndUpdateAlertUI n'est pas définie au moment de l'appel dans initialLoad !");
-                            showFeedback("Erreur critique: Initialisation de l'état des alertes impossible.", "error", 10000);
-                        }
-                    })
-                    .catch(error => {
-                        console.error("Erreur lors de loadConfigSettings dans initialLoad. Impossible de charger le statut des alertes initial.", error);
-                        // On pourrait vouloir afficher un message d'erreur plus permanent ici ou désactiver les boutons d'alerte.
-                        // updateAlertButtonsUI sera appelée avec un currentStatus vide ou un configSettings fallback
-                        // si fetchPageStatusAndUpdateAlertUI est appelée, ou si localUpdateStatusUI est appelée.
-                        // Pour l'instant, showFeedback dans loadConfigSettings gère l'erreur.
-                        // On peut s'assurer que l'UI des boutons reflète un état d'erreur.
-                        if (typeof updateAlertButtonsUI === 'function') {
-                             updateAlertButtonsUI({ alert_active: false, alert_type: null }); // Appeler avec un statut vide pour forcer désactivation/état initial
-                        }
-                    });
+    if (btnAlertAttentat) {
+        btnAlertAttentat.addEventListener('click', function() {
+            // ... (logique similaire à btnAlertPpms, adaptée pour Attentat)
+            if (this.disabled) return;
+            if (attentatClickTimer === null) {
+                attentatClickTimer = setTimeout(() => { attentatClickTimer = null; }, DBL_CLICK_DELAY);
             } else {
-                console.error("Fonction loadConfigSettings non trouvée! L'UI des alertes ne sera pas initialisée correctement.");
-                showFeedback("Erreur critique: Fonction de chargement de configuration manquante.", "error", 10000);
-                if (typeof updateAlertButtonsUI === 'function') {
-                    updateAlertButtonsUI({ alert_active: false, alert_type: null });
-                }
+                clearTimeout(attentatClickTimer); attentatClickTimer = null;
+                const attentatFile = configSettings.alert_files ? configSettings.alert_files.attentat : null;
+                const isActive = (currentStatus && currentStatus.alert_active && currentStatus.alert_type === attentatFile);
+                if (isActive) callStopAlertAPI();
+                else if (currentStatus && !currentStatus.alert_active) callTriggerAlertAPI('Attentat');
+                else if (typeof showFeedback === 'function') showFeedback("Action Attentat impossible: autre alerte active ou statut inconnu.", "warning");
             }
-            console.log("initialLoad (control.html - Logique Alertes UX): Appels de chargement de données lancés.");
-        }
-        // Le DOMContentLoaded existant appellera cette nouvelle version de initialLoad.
+        });
+    } else { console.error("Bouton #btn-alert-attentat non trouvé."); }
+
+    if (btnEndAlert) {
+        btnEndAlert.addEventListener('click', function() {
+            if (this.disabled) return;
+            callEndAlertAPI();
+        });
+    } else { console.error("Bouton #btn-end-alert non trouvé."); }
+
+    console.log("[control.html] DOMContentLoaded: Fin de l'initialisation.");
+});
 
     </script>
 {% endblock %}
