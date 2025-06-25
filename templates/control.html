@@ -392,8 +392,9 @@ function generateMonthCalendar(apiResponseData, academicYearString, monthNumber)
             let tooltipText = dayData.description || dayData.type || '';
             const typeValue = dayData.type || 'ERREUR';
             const typeLower = typeValue.toLowerCase().trim();
+            tooltipText = dayData.description || typeValue; // Utiliser typeValue comme fallback pour tooltip si description est vide
 
-            // Ordre de priorité pour les classes :
+            // Nouvel ordre de priorité pour les classes :
             if (typeLower.startsWith('exception (silence)')) {
                 cssClass = 'exception-silence';
             } else if (typeLower.startsWith('exception (utiliser_jt')) {
@@ -402,38 +403,46 @@ function generateMonthCalendar(apiResponseData, academicYearString, monthNumber)
                 cssClass = 'ferie';
             } else if (typeLower === 'vacances') {
                 cssClass = 'vacances';
-            } else if (typeLower === 'weekend') {
-                if (dayOfWeek === 6) { // Dimanche
-                    cssClass = 'weekend-dimanche';
-                } else if (dayOfWeek === 5) { // Samedi
-                    cssClass = 'weekend-samedi';
-                } else {
-                    cssClass = 'weekend'; // Fallback pour autres jours si backend dit 'weekend'
-                }
+            } else if (dayOfWeek === 6) { // Dimanche (prioritaire sur 'classe' ou 'weekend' du backend pour la couleur)
+                cssClass = 'weekend-dimanche';
+            } else if (dayOfWeek === 5) { // Samedi (prioritaire sur 'classe' ou 'weekend' du backend pour la couleur)
+                cssClass = 'weekend-samedi';
             } else if (typeLower.startsWith('classe')) {
                 cssClass = 'classe';
+            } else if (typeLower === 'weekend') {
+                // Si le backend spécifie 'weekend' mais que ce n'est ni Sam/Dim (ce qui serait étrange)
+                cssClass = 'weekend'; // Classe weekend générique
+                console.warn(`Jour marqué 'weekend' par backend mais pas Sam/Dim: ${dateKey}, type: ${typeValue}`);
             } else if (typeLower === 'autre' || typeLower === 'erreur' || typeLower === 'erreurhm') {
-                console.warn(`Type jour 'Autre' ou 'Erreur' non stylé spécifiquement: '${typeValue}' pour ${dateKey}`);
+                console.warn(`Type jour 'Autre' ou 'Erreur': '${typeValue}' pour ${dateKey}`);
                 if (typeLower === 'erreur' || typeLower === 'erreurhm') cssClass = 'erreur-donnees';
-            } else { // Type inconnu
-                console.error(`!!! Type jour INCONNU non géré pour style: '${typeValue}' pour ${dateKey} !!!`);
+                // Si 'autre', cssClass reste '', style par défaut.
+            } else { // Type inconnu du backend
+                console.error(`Type jour INCONNU: '${typeValue}' pour ${dateKey}`);
                 cssClass = 'erreur-donnees';
             }
+            console.log(`Debug DayData: dateKey=${dateKey}, type='${typeValue}', dayOfWeek=${dayOfWeek}, finalCssClass='${cssClass}'`);
 
-            // Nettoyer les anciennes classes de couleur spécifiques avant d'ajouter la nouvelle
-            dayCell.classList.remove('exception-silence', 'exception-jt', 'ferie', 'vacances', 'weekend-dimanche', 'weekend-samedi', 'weekend', 'classe', 'erreur-donnees');
-            if (cssClass) {
-                dayCell.classList.add(cssClass);
+        } else { // Pas de dayData du backend pour ce jour
+            if (dayOfWeek === 6) { // Dimanche
+                cssClass = 'weekend-dimanche';
+                tooltipText = "Dimanche";
+            } else if (dayOfWeek === 5) { // Samedi
+                cssClass = 'weekend-samedi';
+                tooltipText = "Samedi";
+            } else { // Jour de semaine normal sans info spécifique
+                cssClass = 'classe';
+                tooltipText = "Jour de classe";
             }
-            dayCell.title = tooltipText;
-            dayCell.style.cursor = 'pointer';
-            dayCell.onclick = () => showDailySchedule(dayObject.getFullYear(), dayObject.getMonth() + 1, day);
-        } else {
-            console.warn(`Aucune donnée API pour ${dateKey} (jour ${day} du mois ${monthNumber}/${targetYear}). Application style erreur.`);
-            dayCell.classList.remove('exception-silence', 'exception-jt', 'ferie', 'vacances', 'weekend-dimanche', 'weekend-samedi', 'weekend', 'classe', 'erreur-donnees');
-            dayCell.classList.add('erreur-donnees');
-            dayCell.title = "Données manquantes pour ce jour";
+            console.log(`Debug NoDayData: dateKey=${dateKey}, dayOfWeek=${dayOfWeek}, finalCssClass='${cssClass}'`);
         }
+
+        if (cssClass) {
+            dayCell.classList.add(cssClass);
+        }
+        dayCell.title = tooltipText;
+        dayCell.style.cursor = 'pointer';
+        dayCell.onclick = () => showDailySchedule(dayObject.getFullYear(), dayObject.getMonth() + 1, day);
         daysGridContainer.appendChild(dayCell);
     }
     calendarContainer.appendChild(daysGridContainer);
@@ -482,8 +491,9 @@ function generateCalendar(apiData, academicYear) {
                 let tooltipText = dayData.description || dayData.type || '';
                 const typeValue = dayData.type || 'ERREUR';
                 const typeLower = typeValue.toLowerCase().trim();
+                tooltipText = dayData.description || typeValue;
 
-                // Ordre de priorité pour les classes :
+                // Nouvel ordre de priorité pour les classes :
                 if (typeLower.startsWith('exception (silence)')) {
                     cssClass = 'exception-silence';
                 } else if (typeLower.startsWith('exception (utiliser_jt')) {
@@ -492,37 +502,44 @@ function generateCalendar(apiData, academicYear) {
                     cssClass = 'ferie';
                 } else if (typeLower === 'vacances') {
                     cssClass = 'vacances';
-                } else if (typeLower === 'weekend') {
-                    if (dayOfWeek === 6) { // Dimanche
-                        cssClass = 'weekend-dimanche';
-                    } else if (dayOfWeek === 5) { // Samedi
-                        cssClass = 'weekend-samedi';
-                    } else {
-                        cssClass = 'weekend'; // Fallback
-                    }
+                } else if (dayOfWeek === 6) { // Dimanche (prioritaire sur 'classe' ou 'weekend' du backend pour la couleur)
+                    cssClass = 'weekend-dimanche';
+                } else if (dayOfWeek === 5) { // Samedi (prioritaire sur 'classe' ou 'weekend' du backend pour la couleur)
+                    cssClass = 'weekend-samedi';
                 } else if (typeLower.startsWith('classe')) {
                     cssClass = 'classe';
+                } else if (typeLower === 'weekend') {
+                    cssClass = 'weekend';
+                    console.warn(`Jour marqué 'weekend' par backend mais pas Sam/Dim: ${dateKey}, type: ${typeValue}`);
                 } else if (typeLower === 'autre' || typeLower === 'erreur' || typeLower === 'erreurhm') {
-                    console.warn(`Type jour 'Autre' ou 'Erreur' non stylé spécifiquement: '${typeValue}' pour ${dateKey}`);
+                    console.warn(`Type jour 'Autre' ou 'Erreur': '${typeValue}' pour ${dateKey}`);
                     if (typeLower === 'erreur' || typeLower === 'erreurhm') cssClass = 'erreur-donnees';
-                } else { // Type inconnu
-                    console.error(`!!! Type jour INCONNU non géré pour style: '${typeValue}' pour ${dateKey} !!!`);
+                } else {
+                    console.error(`Type jour INCONNU: '${typeValue}' pour ${dateKey}`);
                     cssClass = 'erreur-donnees';
                 }
+                console.log(`Debug DayData: dateKey=${dateKey}, type='${typeValue}', dayOfWeek=${dayOfWeek}, finalCssClass='${cssClass}'`);
 
-                dayCell.classList.remove('exception-silence', 'exception-jt', 'ferie', 'vacances', 'weekend-dimanche', 'weekend-samedi', 'weekend', 'classe', 'erreur-donnees');
-                if (cssClass) {
-                    dayCell.classList.add(cssClass);
+            } else { // Pas de dayData du backend pour ce jour
+                if (dayOfWeek === 6) { // Dimanche
+                    cssClass = 'weekend-dimanche';
+                    tooltipText = "Dimanche";
+                } else if (dayOfWeek === 5) { // Samedi
+                    cssClass = 'weekend-samedi';
+                    tooltipText = "Samedi";
+                } else { // Jour de semaine normal sans info spécifique
+                    cssClass = 'classe';
+                    tooltipText = "Jour de classe";
                 }
-                dayCell.title = tooltipText;
-                dayCell.style.cursor = 'pointer';
-                dayCell.onclick = () => showDailySchedule(dayObject.getFullYear(), dayObject.getMonth() + 1, day);
-            } else {
-                console.warn(`Aucune donnée API pour ${dateKey}`);
-                dayCell.classList.remove('exception-silence', 'exception-jt', 'ferie', 'vacances', 'weekend-dimanche', 'weekend-samedi', 'weekend', 'classe', 'erreur-donnees');
-                dayCell.classList.add('erreur-donnees');
-                dayCell.title = "Données manquantes";
+                console.log(`Debug NoDayData: dateKey=${dateKey}, dayOfWeek=${dayOfWeek}, finalCssClass='${cssClass}'`);
             }
+
+            if (cssClass) {
+                dayCell.classList.add(cssClass);
+            }
+            dayCell.title = tooltipText;
+            dayCell.style.cursor = 'pointer';
+            dayCell.onclick = () => showDailySchedule(dayObject.getFullYear(), dayObject.getMonth() + 1, day);
             daysContainer.appendChild(dayCell);
         }
         monthDiv.appendChild(daysContainer); calendarContainer.appendChild(monthDiv);
