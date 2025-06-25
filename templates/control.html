@@ -307,8 +307,7 @@ function showSelectedCalendarView() {
             })
             .then(data => {
                 if (data.error) throw new Error(`Erreur API calendrier (mois): ${data.error}`);
-                // generateMonthCalendar(data, selectedAcademicYear, selectedMonth); // FUTURE FONCTION DE RENDU
-                calendarContainer.innerHTML = `<p>Données pour la vue mensuelle reçues. Rendu à implémenter. Mois: ${selectedMonth}</p><pre>${JSON.stringify(data, null, 2)}</pre>`; // Affichage temporaire des données
+                generateMonthCalendar(data, selectedAcademicYear, selectedMonth);
             })
             .catch(error => {
                 console.error("Erreur showSelectedCalendarView (month):", error);
@@ -323,6 +322,114 @@ function showSelectedCalendarView() {
 
 // --- Fonctions Calendrier Existantes (celles qui restent) ---
 // La fonction showCalendar() a été supprimée car sa logique est maintenant dans showSelectedCalendarView() et changeCalendarView().
+
+function generateMonthCalendar(apiResponseData, academicYearString, monthNumber) {
+    const calendarContainer = document.getElementById('calendar-container');
+    if (!calendarContainer) { console.error("Conteneur #calendar-container introuvable !"); return; }
+    calendarContainer.innerHTML = ''; // Vider le conteneur
+
+    const [startAcademicYear, endAcademicYear] = academicYearString.split('-').map(Number);
+    // Déterminer l'année civile correcte pour le mois donné
+    const targetYear = (monthNumber >= 9 && monthNumber <= 12) ? startAcademicYear : endAcademicYear;
+
+    const monthDate = new Date(targetYear, monthNumber - 1, 1); // monthNumber est 1-12, le constructeur Date attend 0-11 pour les mois
+    const monthName = monthDate.toLocaleString('fr-FR', { month: 'long' });
+
+    // Le titre principal du calendrier est déjà géré par changeCalendarView.
+    // Si un sous-titre spécifique au mois affiché était nécessaire, on l'ajouterait ici.
+    // Exemple:
+    // const monthTitleDiv = document.createElement('h4'); // Un h4 pour un sous-titre
+    // monthTitleDiv.textContent = `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${targetYear}`;
+    // monthTitleDiv.classList.add('text-center', 'mb-3'); // Classes Bootstrap pour style
+    // calendarContainer.appendChild(monthTitleDiv);
+
+    const daysInMonth = new Date(targetYear, monthNumber, 0).getDate(); // Obtenir le nombre de jours dans le mois
+    const firstDayWeekday = (monthDate.getDay() + 6) % 7; // 0 pour Lundi, 1 pour Mardi, ..., 6 pour Dimanche
+
+    const daysGridContainer = document.createElement('div');
+    // Utiliser une classe spécifique pour permettre un style différent de la vue annuelle si besoin
+    // et réutiliser .calendar-days pour les aspects communs de la grille.
+    daysGridContainer.classList.add('calendar-days', 'month-view-grid');
+
+    // En-têtes des jours de la semaine
+    const weekDays = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+    weekDays.forEach(wd => {
+        const weekdayCell = document.createElement('div');
+        weekdayCell.classList.add('calendar-weekday');
+        weekdayCell.textContent = wd;
+        daysGridContainer.appendChild(weekdayCell);
+    });
+
+    // Cellules vides pour les jours avant le début du mois
+    for (let i = 0; i < firstDayWeekday; i++) {
+        const emptyCell = document.createElement('div');
+        emptyCell.classList.add('calendar-day', 'empty');
+        daysGridContainer.appendChild(emptyCell);
+    }
+
+    // Cellules des jours du mois
+    const daysDataFromApi = apiResponseData.days;
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dayCell = document.createElement('div');
+        dayCell.classList.add('calendar-day');
+        dayCell.textContent = day;
+
+        const dateKey = `${targetYear}-${String(monthNumber).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayData = daysDataFromApi[dateKey]; // Les données sont déjà filtrées pour le mois par le backend
+
+        if (dateKey === todayStr) {
+            dayCell.classList.add('today');
+        }
+
+        if (dayData) {
+            let cssClass = '';
+            let tooltipText = dayData.description || dayData.type || '';
+            const typeValue = dayData.type || 'ERREUR'; // Fallback si type est manquant
+            const typeLower = typeValue.toLowerCase().trim();
+
+            // Logique de classes CSS similaire à generateCalendar
+            if (typeLower.startsWith('exception (silence)')) { cssClass = 'exception-silence'; tooltipText = dayData.description || "Journée Silence (Exception)"; }
+            else if (typeLower.startsWith('exception (utiliser_jt')) { cssClass = 'exception-jt'; tooltipText = dayData.description || "Exception : Journée Type Spécifique"; }
+            else if (typeLower === 'férié') { cssClass = 'ferie'; }
+            else if (typeLower === 'vacances') { cssClass = 'vacances'; }
+            else if (typeLower === 'weekend') { cssClass = 'weekend'; }
+            else if (typeLower.startsWith('classe')) { cssClass = 'classe'; tooltipText = dayData.description || typeValue; }
+            else if (typeLower === 'autre' || typeLower === 'erreur' || typeLower === 'erreurhm') { // Inclure ErreurHM
+                 console.warn(`Type jour '${typeValue}' reçu pour ${dateKey}`);
+                 // Pas de classe spécifique pour 'autre', mais 'erreur-donnees' si c'est une erreur explicite
+                 if (typeLower === 'erreur' || typeLower === 'erreurhm') cssClass = 'erreur-donnees';
+            }
+            else { // Type inconnu
+                console.error(`Type de jour INCONNU: '${typeValue}' (lower: '${typeLower}') pour ${dateKey}`);
+                cssClass = 'erreur-donnees'; tooltipText = `Type Inconnu: ${typeValue}`;
+            }
+
+            if (cssClass) dayCell.classList.add(cssClass);
+            dayCell.title = tooltipText; // Appliquer le tooltip
+            dayCell.style.cursor = 'pointer';
+            // Assurer que monthNumber et day sont passés correctement à showDailySchedule
+            dayCell.onclick = () => showDailySchedule(targetYear, monthNumber, day);
+        } else {
+            // Ce cas ne devrait pas se produire si le backend fournit des données pour tous les jours du mois demandé.
+            // Si le backend ne fournit une entrée que pour les jours "spéciaux", alors les jours normaux (classe sans exception) n'auront pas de dayData.
+            // Il faut clarifier ce que fait le backend. Si les jours "normaux" sans exception ne sont pas dans `daysDataFromApi`,
+            // il faudrait leur appliquer un style par défaut (ex: 'classe' ou rien de spécifique).
+            // Pour l'instant, on assume que si dayData est undefined, c'est un jour "normal" ou "classe".
+            // On peut ajouter une classe 'default-day' ou 'classe' par défaut.
+            // Ou, si l'absence de données est une erreur, marquer comme 'erreur-donnees'.
+            // Basé sur la logique de generateCalendar, l'absence de dayData est une erreur de données.
+            console.warn(`Aucune donnée API pour ${dateKey} (jour ${day} du mois ${monthNumber}/${targetYear}). Application style erreur.`);
+            dayCell.classList.add('erreur-donnees');
+            dayCell.title = "Données manquantes pour ce jour";
+        }
+        daysGridContainer.appendChild(dayCell);
+    }
+    calendarContainer.appendChild(daysGridContainer);
+    console.log(`[control.html] Vue mensuelle pour ${monthName} ${targetYear} générée.`);
+}
 
 function generateCalendar(apiData, academicYear) {
     console.log(`Entrée generateCalendar pour année: ${academicYear}`);
