@@ -41,15 +41,30 @@
 
     <!-- Section Calendrier -->
     <div id="calendar-section" class="mt-4">
-        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap"> {# flex-wrap pour les petits écrans #}
-            <h2 class="mb-0 me-auto">Calendrier <span id="calendar-title-year">Annuel</span></h2> {# me-auto pour pousser le sélecteur à droite si besoin #}
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+            <h2 class="mb-0 me-auto">Calendrier <span id="calendar-title-year">Annuel</span></h2>
 
             {% if user_has_permission('control:view_calendar') %}
-            <div id="calendar-selector" class="ms-3 d-flex align-items-center"> {# d-flex et align-items-center pour le label et select #}
-                <label for="academic-year-select" class="form-label mb-0 me-2" style="white-space: nowrap; flex-shrink: 0;">Année scolaire :</label> {# mb-0 car c'est un form-label dans un flex #}
-                <select id="academic-year-select" class="form-select form-select-sm" style="min-width: 120px;" onchange="changeAcademicYear()">
-                    <!-- Options ajoutées par JS -->
-                </select>
+            <div class="d-flex align-items-center ms-3"> {# Conteneur pour les deux sélecteurs #}
+                <div id="calendar-view-selector" class="me-3 d-flex align-items-center"> {# Sélecteur de Vue #}
+                    <label for="calendar-view-type-select" class="form-label mb-0 me-2">Vue :</label>
+                    <select id="calendar-view-type-select" class="form-select form-select-sm" style="min-width: 100px;" onchange="changeCalendarView()">
+                        <option value="year" selected>Annuelle</option>
+                        <option value="month">Mensuelle</option>
+                        <!-- <option value="semester">Semestrielle</option> -->
+                        <!-- <option value="week">Hebdomadaire</option> -->
+                        <!-- <option value="day">Journalière</option> -->
+                    </select>
+                </div>
+
+                <div id="calendar-controls-year" class="d-flex align-items-center"> {# Sélecteur d'Année (et futur mois/semaine) #}
+                    <label for="academic-year-select" class="form-label mb-0 me-2">Année scolaire :</label>
+                    <select id="academic-year-select" class="form-select form-select-sm" style="min-width: 120px;" onchange="changeCalendarView()"> {# Appelle la même fonction pour l'instant #}
+                        <!-- Options ajoutées par JS -->
+                    </select>
+                    {# Ici, on pourrait ajouter un sélecteur de mois si la vue "Mensuelle" est active #}
+                    {# <select id="month-select" class="form-select form-select-sm ms-2" style="min-width: 120px; display: none;" onchange="changeCalendarView()"></select> #}
+                </div>
             </div>
             {% endif %}
         </div>
@@ -81,6 +96,7 @@
 let currentStatus = { alert_active: false, alert_type: null };
 let configSettings = { alert_files: { ppms: null, attentat: null } };
 let selectedAcademicYear; // Sera initialisée par getDefaultAcademicYear dans DOMContentLoaded
+let selectedCalendarView = 'year'; // Valeur par défaut
 
 // Variables pour la logique d'alerte
 let ppmsClickTimer = null;
@@ -104,9 +120,7 @@ function populateAcademicYearSelector() {
         const option = document.createElement('option'); option.value = yearString; option.textContent = yearString; selectElement.appendChild(option);
     } selectElement.value = selectedAcademicYear;
 }
-function changeAcademicYear() {
-     const selectElement = document.getElementById('academic-year-select'); if (selectElement) { selectedAcademicYear = selectElement.value; console.log(`Changement année scolaire: ${selectedAcademicYear}`); showCalendar(); }
- }
+
 function closeModal() {
     const modalOverlay = document.getElementById('modal-overlay'); if (modalOverlay) { modalOverlay.classList.remove('visible'); setTimeout(() => { const mc = document.getElementById('modal-content'); if (mc) mc.innerHTML = '<p>Chargement...</p>'; }, 300); }
 }
@@ -135,18 +149,94 @@ function showFeedback(message, type = 'info', duration = 4000) {
     }, duration);
 }
 
+// --- NOUVELLES Fonctions Calendrier ---
+function changeCalendarView() {
+    const viewSelect = document.getElementById('calendar-view-type-select');
+    const yearSelect = document.getElementById('academic-year-select');
+    // const monthSelect = document.getElementById('month-select'); // Pour plus tard
 
-// --- Fonctions Calendrier Existantes - CONSERVER CELLES-CI ---
-function showCalendar() {
-     console.log(`Début showCalendar pour année scolaire: ${selectedAcademicYear}`); const titleElement = document.getElementById('calendar-title-year'); if (titleElement) titleElement.textContent = `Scolaire ${selectedAcademicYear}`;
-     const calendarContainer = document.getElementById('calendar-container'); if (calendarContainer) calendarContainer.innerHTML = '<p>Chargement calendrier...</p>';
-     const apiUrl = `/api/calendar_view?year=${selectedAcademicYear}`; console.log(`Appel API calendrier: ${apiUrl}`);
-     fetch(apiUrl)
-         .then(response => { console.log(`Réponse ${apiUrl}, statut: ${response.status}`); if (!response.ok) { return response.json().then(err => {throw new Error(`Erreur HTTP ${response.status}: ${err.error||response.statusText}`)}).catch(() => {throw new Error(`Erreur HTTP ${response.status}`)}); } return response.json(); })
-         .then(data => { console.log("[Calendar] Données API:", data); if (data.error) { throw new Error(`Erreur API calendrier: ${data.error}`); } console.log("Appel generateCalendar:", data); generateCalendar(data, selectedAcademicYear); console.log("generateCalendar exécuté."); })
-         .catch(error => { console.error("Erreur showCalendar:", error); if (calendarContainer) calendarContainer.innerHTML = `<p>Erreur chargement: ${error.message}</p>`; });
-     console.log("Fin showCalendar (fetch lancé)");
- }
+    if (viewSelect) selectedCalendarView = viewSelect.value;
+    if (yearSelect) selectedAcademicYear = yearSelect.value; // selectedAcademicYear est déjà globale
+    // if (monthSelect && selectedCalendarView === 'month') selectedMonth = monthSelect.value; // Pour plus tard
+
+    console.log(`Changement vue/période calendrier: Vue=${selectedCalendarView}, Année Scolaire=${selectedAcademicYear}`);
+
+    // Gérer la visibilité des contrôles spécifiques à la vue (pour plus tard)
+    // const monthSelectorContainer = document.getElementById('month-select'); // Si on met le select dans un conteneur
+    // if (monthSelectorContainer) {
+    //     monthSelectorContainer.style.display = (selectedCalendarView === 'month') ? 'block' : 'none';
+    // }
+    // if (selectedCalendarView === 'month' && !monthSelect.options.length) {
+    //     populateMonthSelector(); // À créer si on active la vue mensuelle
+    // }
+
+    // Mettre à jour le titre du calendrier
+    const calendarTitleSpan = document.getElementById('calendar-title-year');
+    if (calendarTitleSpan) {
+        if (selectedCalendarView === 'year') {
+            calendarTitleSpan.textContent = `Scolaire ${selectedAcademicYear}`;
+        } else if (selectedCalendarView === 'month') {
+            // Pour l'instant, on affiche l'année, on affinera avec le mois sélectionné
+            // const monthName = monthSelect ? monthSelect.options[monthSelect.selectedIndex].text : '';
+            // calendarTitleSpan.textContent = `${monthName} ${selectedAcademicYear.substring(0,4) ou (5,9)}`; // A affiner
+            calendarTitleSpan.textContent = `Mensuel (Année ${selectedAcademicYear})`;
+        } else {
+            calendarTitleSpan.textContent = selectedAcademicYear; // Fallback
+        }
+    }
+    showSelectedCalendarView(); // Nouvelle fonction pour afficher la vue choisie
+}
+
+function showSelectedCalendarView() {
+    console.log(`Affichage calendrier pour vue: ${selectedCalendarView}, année: ${selectedAcademicYear}`);
+    const calendarContainer = document.getElementById('calendar-container');
+    if (!calendarContainer) return;
+
+    calendarContainer.innerHTML = '<p>Chargement de la vue du calendrier...</p>';
+    let apiUrl = '';
+
+    if (selectedCalendarView === 'year') {
+        // Utiliser l'API et la fonction de génération existantes pour la vue annuelle
+        apiUrl = `/api/calendar_view?year=${selectedAcademicYear}`; // API existante
+        console.log(`Appel API calendrier (year view): ${apiUrl}`);
+        fetch(apiUrl)
+            .then(response => {
+                console.log(`Réponse ${apiUrl}, statut: ${response.status}`);
+                if (!response.ok) {
+                    return response.json().then(err => {throw new Error(`Erreur HTTP ${response.status}: ${err.error||response.statusText}`)}).catch(() => {throw new Error(`Erreur HTTP ${response.status}`)});
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("[Calendar Year View] Données API:", data);
+                if (data.error) {
+                    throw new Error(`Erreur API calendrier: ${data.error}`);
+                }
+                console.log("Appel generateCalendar:", data);
+                generateCalendar(data, selectedAcademicYear); // Fonction existante pour la vue annuelle
+                console.log("generateCalendar exécuté pour la vue annuelle.");
+            })
+            .catch(error => {
+                console.error("Erreur showSelectedCalendarView (year):", error);
+                if (calendarContainer) calendarContainer.innerHTML = `<p>Erreur chargement vue annuelle: ${error.message}</p>`;
+            });
+    } else if (selectedCalendarView === 'month') {
+        // Logique pour la vue mensuelle (à implémenter plus tard)
+        calendarContainer.innerHTML = `<p>Vue Mensuelle pour ${selectedAcademicYear} - Implémentation à venir.</p>`;
+        console.log("Vue Mensuelle sélectionnée. API et rendu à développer.");
+        // Exemple d'appel API future:
+        // const currentMonthForView = document.getElementById('month-select') ? document.getElementById('month-select').value : new Date().getMonth() + 1;
+        // apiUrl = `/api/calendar_view?year=${selectedAcademicYear}&month=${currentMonthForView}&view_type=month;
+        // fetch(apiUrl)... then(data => generateMonthView(data)); ...
+    }
+    // Ajouter ici d'autres 'else if' pour les vues 'week', 'day' etc.
+    else {
+        calendarContainer.innerHTML = `<p>Type de vue '${selectedCalendarView}' non supporté pour le moment.</p>`;
+    }
+}
+
+// --- Fonctions Calendrier Existantes (celles qui restent) ---
+// La fonction showCalendar() a été supprimée car sa logique est maintenant dans showSelectedCalendarView() et changeCalendarView().
 
 function generateCalendar(apiData, academicYear) {
     console.log(`Entrée generateCalendar pour année: ${academicYear}`);
@@ -429,7 +519,10 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(() => {
                 console.log("[control.html] DOMContentLoaded: Statut initial chargé et UI alertes mise à jour.");
-                if (typeof showCalendar === 'function') showCalendar();
+                // if (typeof showCalendar === 'function') showCalendar(); // ANCIEN APPEL
+                if (typeof changeCalendarView === 'function') { // NOUVEL APPEL
+                    changeCalendarView();
+                }
             })
             .catch(error => {
                 console.error("[control.html] DOMContentLoaded: Erreur dans la séquence d'initialisation.", error);
