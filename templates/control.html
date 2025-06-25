@@ -384,44 +384,53 @@ function generateMonthCalendar(apiResponseData, academicYearString, monthNumber)
             dayCell.classList.add('today');
         }
 
+        const dayObject = new Date(targetYear, monthNumber - 1, day); // mois est 0-indexé pour Date
+        const dayOfWeek = (dayObject.getDay() + 6) % 7; // 0:Lundi, ..., 5:Samedi, 6:Dimanche
+
         if (dayData) {
             let cssClass = '';
             let tooltipText = dayData.description || dayData.type || '';
-            const typeValue = dayData.type || 'ERREUR'; // Fallback si type est manquant
+            const typeValue = dayData.type || 'ERREUR';
             const typeLower = typeValue.toLowerCase().trim();
 
-            // Logique de classes CSS similaire à generateCalendar
-            if (typeLower.startsWith('exception (silence)')) { cssClass = 'exception-silence'; tooltipText = dayData.description || "Journée Silence (Exception)"; }
-            else if (typeLower.startsWith('exception (utiliser_jt')) { cssClass = 'exception-jt'; tooltipText = dayData.description || "Exception : Journée Type Spécifique"; }
-            else if (typeLower === 'férié') { cssClass = 'ferie'; }
-            else if (typeLower === 'vacances') { cssClass = 'vacances'; }
-            else if (typeLower === 'weekend') { cssClass = 'weekend'; }
-            else if (typeLower.startsWith('classe')) { cssClass = 'classe'; tooltipText = dayData.description || typeValue; }
-            else if (typeLower === 'autre' || typeLower === 'erreur' || typeLower === 'erreurhm') { // Inclure ErreurHM
-                 console.warn(`Type jour '${typeValue}' reçu pour ${dateKey}`);
-                 // Pas de classe spécifique pour 'autre', mais 'erreur-donnees' si c'est une erreur explicite
-                 if (typeLower === 'erreur' || typeLower === 'erreurhm') cssClass = 'erreur-donnees';
-            }
-            else { // Type inconnu
-                console.error(`Type de jour INCONNU: '${typeValue}' (lower: '${typeLower}') pour ${dateKey}`);
-                cssClass = 'erreur-donnees'; tooltipText = `Type Inconnu: ${typeValue}`;
+            // Ordre de priorité pour les classes :
+            if (typeLower.startsWith('exception (silence)')) {
+                cssClass = 'exception-silence';
+            } else if (typeLower.startsWith('exception (utiliser_jt')) {
+                cssClass = 'exception-jt';
+            } else if (typeLower === 'férié') {
+                cssClass = 'ferie';
+            } else if (typeLower === 'vacances') {
+                cssClass = 'vacances';
+            } else if (typeLower === 'weekend') {
+                if (dayOfWeek === 6) { // Dimanche
+                    cssClass = 'weekend-dimanche';
+                } else if (dayOfWeek === 5) { // Samedi
+                    cssClass = 'weekend-samedi';
+                } else {
+                    cssClass = 'weekend'; // Fallback pour autres jours si backend dit 'weekend'
+                }
+            } else if (typeLower.startsWith('classe')) {
+                cssClass = 'classe';
+            } else if (typeLower === 'autre' || typeLower === 'erreur' || typeLower === 'erreurhm') {
+                console.warn(`Type jour 'Autre' ou 'Erreur' non stylé spécifiquement: '${typeValue}' pour ${dateKey}`);
+                if (typeLower === 'erreur' || typeLower === 'erreurhm') cssClass = 'erreur-donnees';
+            } else { // Type inconnu
+                console.error(`!!! Type jour INCONNU non géré pour style: '${typeValue}' pour ${dateKey} !!!`);
+                cssClass = 'erreur-donnees';
             }
 
-            if (cssClass) dayCell.classList.add(cssClass);
-            dayCell.title = tooltipText; // Appliquer le tooltip
+            // Nettoyer les anciennes classes de couleur spécifiques avant d'ajouter la nouvelle
+            dayCell.classList.remove('exception-silence', 'exception-jt', 'ferie', 'vacances', 'weekend-dimanche', 'weekend-samedi', 'weekend', 'classe', 'erreur-donnees');
+            if (cssClass) {
+                dayCell.classList.add(cssClass);
+            }
+            dayCell.title = tooltipText;
             dayCell.style.cursor = 'pointer';
-            // Assurer que monthNumber et day sont passés correctement à showDailySchedule
-            dayCell.onclick = () => showDailySchedule(targetYear, monthNumber, day);
+            dayCell.onclick = () => showDailySchedule(dayObject.getFullYear(), dayObject.getMonth() + 1, day);
         } else {
-            // Ce cas ne devrait pas se produire si le backend fournit des données pour tous les jours du mois demandé.
-            // Si le backend ne fournit une entrée que pour les jours "spéciaux", alors les jours normaux (classe sans exception) n'auront pas de dayData.
-            // Il faut clarifier ce que fait le backend. Si les jours "normaux" sans exception ne sont pas dans `daysDataFromApi`,
-            // il faudrait leur appliquer un style par défaut (ex: 'classe' ou rien de spécifique).
-            // Pour l'instant, on assume que si dayData est undefined, c'est un jour "normal" ou "classe".
-            // On peut ajouter une classe 'default-day' ou 'classe' par défaut.
-            // Ou, si l'absence de données est une erreur, marquer comme 'erreur-donnees'.
-            // Basé sur la logique de generateCalendar, l'absence de dayData est une erreur de données.
             console.warn(`Aucune donnée API pour ${dateKey} (jour ${day} du mois ${monthNumber}/${targetYear}). Application style erreur.`);
+            dayCell.classList.remove('exception-silence', 'exception-jt', 'ferie', 'vacances', 'weekend-dimanche', 'weekend-samedi', 'weekend', 'classe', 'erreur-donnees');
             dayCell.classList.add('erreur-donnees');
             dayCell.title = "Données manquantes pour ce jour";
         }
@@ -464,22 +473,56 @@ function generateCalendar(apiData, academicYear) {
             const dateKey = `${year}-${monthStrPad}-${dayStrPad}`;
             const dayData = daysData[dateKey];
             if (dateKey === todayStr) { dayCell.classList.add('today'); }
+
+            const dayObject = new Date(year, month - 1, day); // month est 1-indexé, Date attend 0-indexé
+            const dayOfWeek = (dayObject.getDay() + 6) % 7; // 0:Lundi, ..., 5:Samedi, 6:Dimanche
+
             if (dayData) {
-                let cssClass = ''; let tooltipText = dayData.description || dayData.type || '';
-                const typeValue = dayData.type || 'ERREUR'; const typeLower = typeValue.toLowerCase().trim();
-                if (typeLower.startsWith('exception (silence)')) { cssClass = 'exception-silence'; tooltipText = dayData.description || "Journée Silence (Exception)"; }
-                else if (typeLower.startsWith('exception (utiliser_jt')) { cssClass = 'exception-jt'; tooltipText = dayData.description || "Exception : Journée Type Spécifique"; }
-                else if (typeLower === 'férié') { cssClass = 'ferie'; }
-                else if (typeLower === 'vacances') { cssClass = 'vacances'; }
-                else if (typeLower === 'weekend') { cssClass = 'weekend'; }
-                else if (typeLower.startsWith('classe')) { cssClass = 'classe'; tooltipText = dayData.description || typeValue; }
-                else if (typeLower === 'autre' || typeLower === 'erreur') { console.warn(`Type jour 'Autre' ou 'Erreur' reçu: '${typeValue}' pour ${dateKey}`); tooltipText = dayData.description || typeValue; }
-                else { console.error(`!!! Type jour INCONNU: '${typeValue}' (lower: '${typeLower}') pour ${dateKey} !!!`); cssClass = 'erreur-donnees'; tooltipText = `Type Inconnu: ${typeValue}`; }
-                console.log(`[Cal Apply] ${dateKey}: Type='${typeValue}' -> CSS Class='${cssClass || 'aucune'}'`);
-                if (cssClass) { dayCell.classList.add(cssClass); }
-                if (tooltipText) { dayCell.title = tooltipText; }
-                dayCell.style.cursor = 'pointer'; dayCell.onclick = () => showDailySchedule(year, month, day);
-            } else { console.warn(`Aucune donnée API pour ${dateKey}`); dayCell.classList.add('erreur-donnees'); dayCell.title = "Données manquantes"; }
+                let cssClass = '';
+                let tooltipText = dayData.description || dayData.type || '';
+                const typeValue = dayData.type || 'ERREUR';
+                const typeLower = typeValue.toLowerCase().trim();
+
+                // Ordre de priorité pour les classes :
+                if (typeLower.startsWith('exception (silence)')) {
+                    cssClass = 'exception-silence';
+                } else if (typeLower.startsWith('exception (utiliser_jt')) {
+                    cssClass = 'exception-jt';
+                } else if (typeLower === 'férié') {
+                    cssClass = 'ferie';
+                } else if (typeLower === 'vacances') {
+                    cssClass = 'vacances';
+                } else if (typeLower === 'weekend') {
+                    if (dayOfWeek === 6) { // Dimanche
+                        cssClass = 'weekend-dimanche';
+                    } else if (dayOfWeek === 5) { // Samedi
+                        cssClass = 'weekend-samedi';
+                    } else {
+                        cssClass = 'weekend'; // Fallback
+                    }
+                } else if (typeLower.startsWith('classe')) {
+                    cssClass = 'classe';
+                } else if (typeLower === 'autre' || typeLower === 'erreur' || typeLower === 'erreurhm') {
+                    console.warn(`Type jour 'Autre' ou 'Erreur' non stylé spécifiquement: '${typeValue}' pour ${dateKey}`);
+                    if (typeLower === 'erreur' || typeLower === 'erreurhm') cssClass = 'erreur-donnees';
+                } else { // Type inconnu
+                    console.error(`!!! Type jour INCONNU non géré pour style: '${typeValue}' pour ${dateKey} !!!`);
+                    cssClass = 'erreur-donnees';
+                }
+
+                dayCell.classList.remove('exception-silence', 'exception-jt', 'ferie', 'vacances', 'weekend-dimanche', 'weekend-samedi', 'weekend', 'classe', 'erreur-donnees');
+                if (cssClass) {
+                    dayCell.classList.add(cssClass);
+                }
+                dayCell.title = tooltipText;
+                dayCell.style.cursor = 'pointer';
+                dayCell.onclick = () => showDailySchedule(dayObject.getFullYear(), dayObject.getMonth() + 1, day);
+            } else {
+                console.warn(`Aucune donnée API pour ${dateKey}`);
+                dayCell.classList.remove('exception-silence', 'exception-jt', 'ferie', 'vacances', 'weekend-dimanche', 'weekend-samedi', 'weekend', 'classe', 'erreur-donnees');
+                dayCell.classList.add('erreur-donnees');
+                dayCell.title = "Données manquantes";
+            }
             daysContainer.appendChild(dayCell);
         }
         monthDiv.appendChild(daysContainer); calendarContainer.appendChild(monthDiv);
