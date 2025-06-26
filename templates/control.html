@@ -1830,7 +1830,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 headers: {
                     'Content-Type': 'application/json',
                     // Ajouter le header CSRF si Flask-WTF avec CSRFProtect est utilisé pour les POST AJAX
-                    // 'X-CSRFToken': '{{ csrf_token() }}' // Nécessite que le token soit dans le template via Jinja
+                    // Exemple: 'X-CSRFToken': csrfTokenVariable // Nécessite que csrfTokenVariable soit défini dans le scope JS
                 },
                 body: JSON.stringify(preferencePayload)
             })
