@@ -102,9 +102,19 @@
                         <span id="week-info-display" class="align-middle small"></span> {# Pour afficher "Semaine X (du ... au ...)" #}
                     </div>
 
-                    <div id="day-selector-container" class="d-flex align-items-center mb-2" style="display: none;">
+                    <div id="day-selector-container" class="d-flex align-items-center mb-2" style="display: none;"> {# style="display: none;" est géré par JS #}
                         <label for="day-date-select" class="form-label mb-0 me-2 text-nowrap">Jour :</label>
-                        <input type="date" id="day-date-select" class="form-control form-control-sm" style="min-width: 150px;" onchange="changeCalendarView()">
+                        <input type="date" id="day-date-select" class="form-control form-control-sm me-2" style="min-width: 150px;" onchange="changeCalendarView()">
+
+                        {# NOUVEAU BLOC DE BOUTONS À AJOUTER ICI #}
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Navigation journalière">
+                            <button type="button" class="btn btn-outline-secondary" id="prev-day-btn" title="Jour précédent">
+                                <i class="bi bi-chevron-left"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="next-day-btn" title="Jour suivant">
+                                <i class="bi bi-chevron-right"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -535,9 +545,27 @@ function showSelectedCalendarView() {
         }
         const dateStr = selectedSpecificDay.toISOString().split('T')[0]; // YYYY-MM-DD
         apiUrl = `/api/daily_schedule?date=${dateStr}`;
+
         console.log(`API call for Daily view: ${apiUrl}`);
-        calendarContainer.innerHTML = `<p>Vue Journalière pour le ${selectedSpecificDay.toLocaleDateString('fr-FR')} - Implémentation à venir. API: ${apiUrl}</p>`;
-        // fetch(apiUrl)... then(data => generateDayView(data)); ...
+        calendarContainer.innerHTML = `<p>Chargement de la vue journalière pour le ${selectedSpecificDay.toLocaleDateString('fr-FR')}...</p>`;
+
+        fetch(apiUrl)
+            .then(response => {
+                if (!response.ok) {
+                    // Essayer de lire le corps de l'erreur JSON si possible
+                    return response.json().catch(() => null).then(err => {throw new Error(`Erreur HTTP ${response.status}: ${err.error || err.message || response.statusText}`)}).catch(() => {throw new Error(`Erreur HTTP ${response.status}`)});
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) throw new Error(`Erreur API calendrier (jour): ${data.error}`);
+                console.log("[control.html] Données pour vue journalière reçues:", data);
+                generateDayView(data, selectedSpecificDay); // APPEL À LA NOUVELLE FONCTION
+            })
+            .catch(error => {
+                console.error("Erreur showSelectedCalendarView (day):", error);
+                calendarContainer.innerHTML = `<p>Erreur chargement vue journalière: ${error.message}</p>`;
+            });
     } else {
         calendarContainer.innerHTML = `<p>Type de vue '${selectedCalendarView}' non supporté pour le moment.</p>`;
     }
@@ -545,6 +573,140 @@ function showSelectedCalendarView() {
 
 // --- Fonctions Calendrier Existantes (celles qui restent) ---
 // La fonction showCalendar() a été supprimée car sa logique est maintenant dans showSelectedCalendarView() et changeCalendarView().
+
+function generateDayView(dayApiData, dateObject) {
+     console.log(`[control.html] generateDayView pour:`, dateObject.toLocaleDateString('fr-FR'), "avec données:", dayApiData);
+     const calendarContainer = document.getElementById('calendar-container');
+     if (!calendarContainer) { console.error("Conteneur #calendar-container introuvable !"); return; }
+     calendarContainer.innerHTML = ''; // Vider le conteneur
+     calendarContainer.className = 'calendar-day-view-container'; // Classe pour ciblage CSS optionnel
+
+     if (!dayApiData) {
+         calendarContainer.innerHTML = "<p>Aucune donnée reçue pour la vue journalière.</p>";
+         console.error("generateDayView: Données API manquantes.", dayApiData);
+         return;
+     }
+
+     // Créer la structure d'affichage pour un seul jour
+     const dayViewDiv = document.createElement('div');
+     dayViewDiv.className = 'card'; // Utiliser une carte pour un look cohérent
+
+     const cardHeader = document.createElement('div');
+     cardHeader.className = 'card-header text-center fs-5 fw-bold'; // fs-5 pour une police un peu plus grande
+     // Formater la date : Jour de la semaine, JJ Mois AAAA
+     const formattedDate = dateObject.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+     cardHeader.textContent = formattedDate;
+     dayViewDiv.appendChild(cardHeader);
+
+     const cardBody = document.createElement('div');
+     cardBody.className = 'card-body';
+     dayViewDiv.appendChild(cardBody);
+
+     // Appliquer une couleur de fond basée sur dayApiData.day_type (similaire à generateWeekView)
+     const typeLower = (dayApiData.day_type || '').toLowerCase().trim();
+     let bgColorClass = '';
+     if (typeLower.startsWith('exception (silence)')) { bgColorClass = 'bg-light text-muted'; }
+     else if (typeLower.startsWith('exception (utiliser_jt')) { bgColorClass = 'bg-info-subtle'; }
+     else if (typeLower === 'férié') { bgColorClass = 'bg-warning-subtle'; }
+     else if (typeLower === 'vacances') { bgColorClass = 'bg-success-subtle'; }
+     else if (dateObject.getDay() === 0) { bgColorClass = 'bg-danger-subtle'; } // Dimanche
+     else if (dateObject.getDay() === 6) { bgColorClass = 'bg-secondary-subtle'; } // Samedi
+     else if (typeLower.startsWith('classe')) { bgColorClass = 'bg-white';}
+     else { bgColorClass = 'bg-light';}
+     dayViewDiv.classList.add(bgColorClass); // Appliquer sur la carte entière
+
+     // Afficher le type de jour / description
+     const dayTypeInfo = document.createElement('p');
+     dayTypeInfo.className = 'text-center fst-italic mb-3';
+     dayTypeInfo.textContent = dayApiData.message || dayApiData.day_type || "Type de jour non spécifié";
+     cardBody.appendChild(dayTypeInfo);
+
+     // Afficher le planning des sonneries
+     if (dayApiData.schedule && Array.isArray(dayApiData.schedule) && dayApiData.schedule.length > 0) {
+         const scheduleTable = document.createElement('table');
+         scheduleTable.className = 'table table-sm table-striped table-bordered'; // Table Bootstrap
+         const thead = document.createElement('thead');
+         thead.innerHTML = `<tr>
+                              <th scope="col">Période</th>
+                              <th scope="col">Début</th>
+                              <th scope="col">Fin</th>
+                              <th scope="col">Son. Début</th>
+                              <th scope="col">Son. Fin</th>
+                            </tr>`;
+         scheduleTable.appendChild(thead);
+
+         const tbody = document.createElement('tbody');
+         const schedule = dayApiData.schedule;
+
+         for (let i = 0; i < schedule.length; i += 2) {
+             const periodStart = schedule[i];
+             const periodEnd = (i + 1 < schedule.length) ? schedule[i+1] : null;
+
+             const tr = document.createElement('tr');
+
+             let periodName = "N/A";
+             if (periodStart && periodStart.event) {
+                 periodName = periodStart.event.replace(/^Début\s*/i, '').trim();
+             }
+
+             const heureDebutDisplay = (periodStart && periodStart.time && typeof periodStart.time === 'string')
+                                     ? periodStart.time.substring(0,5)
+                                     : '-';
+
+             const heureFinDisplay = (periodEnd && periodEnd.time && typeof periodEnd.time === 'string')
+                                   ? periodEnd.time.substring(0,5)
+                                   : '-';
+
+             let sonnerieDebutDisplay = '-';
+             if (periodStart && periodStart.sonnerie && typeof periodStart.sonnerie === 'string' && periodStart.sonnerie.toLowerCase() !== 'aucune' && periodStart.sonnerie.toLowerCase() !== 'silence' && periodStart.sonnerie.trim() !== '') {
+                 sonnerieDebutDisplay = periodStart.sonnerie.replace('.mp3', '');
+             } else if (periodStart && periodStart.sonnerie && (periodStart.sonnerie.toLowerCase() === 'aucune' || periodStart.sonnerie.toLowerCase() === 'silence')) {
+                 sonnerieDebutDisplay = '-'; // Explicitly set to '-' for "Aucune" or "Silence"
+             }
+
+             let sonnerieFinDisplay = '-';
+             if (periodEnd && periodEnd.sonnerie && typeof periodEnd.sonnerie === 'string' && periodEnd.sonnerie.toLowerCase() !== 'aucune' && periodEnd.sonnerie.toLowerCase() !== 'silence' && periodEnd.sonnerie.trim() !== '') {
+                 sonnerieFinDisplay = periodEnd.sonnerie.replace('.mp3', '');
+             } else if (periodEnd && periodEnd.sonnerie && (periodEnd.sonnerie.toLowerCase() === 'aucune' || periodEnd.sonnerie.toLowerCase() === 'silence')) {
+                 sonnerieFinDisplay = '-'; // Explicitly set to '-' for "Aucune" or "Silence"
+             }
+
+             // Basic check for pair consistency (optional, but good for robustness)
+             // This is a simple check, could be made more robust
+             if (periodEnd && periodStart.event && periodEnd.event) {
+                 const startEventName = periodStart.event.replace(/^Début\s*/i, '').trim();
+                 const endEventName = periodEnd.event.replace(/^Fin\s*/i, '').trim();
+                 if (startEventName !== endEventName) {
+                     console.warn(`Possible mismatch between Start/End events: ${periodStart.event} and ${periodEnd.event}`);
+                     // Potentially alter display or add a visual cue if mismatched
+                 }
+             } else if (periodStart && !periodEnd && schedule.length % 2 !== 0 && i === schedule.length -1 ) {
+                 // This is the last event and it's an odd one out (likely a start without an end)
+                 console.warn(`Orphaned start event found: ${periodStart.event}`);
+                 // heureFinDisplay, sonnerieFinDisplay will remain '-'
+             }
+
+
+             tr.innerHTML = `
+                 <td>${periodName}</td>
+                 <td>${heureDebutDisplay}</td>
+                 <td>${heureFinDisplay}</td>
+                 <td>${sonnerieDebutDisplay}</td>
+                 <td>${sonnerieFinDisplay}</td>
+             `;
+             tbody.appendChild(tr);
+         }
+         scheduleTable.appendChild(tbody);
+         cardBody.appendChild(scheduleTable);
+     } else {
+         const noScheduleMsg = document.createElement('p');
+         noScheduleMsg.className = 'text-center text-muted';
+         noScheduleMsg.textContent = "Aucun planning de sonneries pour ce jour.";
+         cardBody.appendChild(noScheduleMsg);
+     }
+     calendarContainer.appendChild(dayViewDiv);
+     console.log("[control.html] Fin de generateDayView");
+ }
 
 function generateSemesterView(apiResponseData, academicYearString, semesterNumber) {
     console.log(`generateSemesterView pour Année: ${academicYearString}, Semestre: ${semesterNumber}`);
@@ -1537,6 +1699,69 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.warn("selectedWeekStartDate non initialisée pour next-week-btn");
             }
         });
+    }
+
+    // Gestionnaires pour les boutons de navigation JOUR
+    const prevDayBtn = document.getElementById('prev-day-btn');
+    const nextDayBtn = document.getElementById('next-day-btn');
+    const dayDateSelectInputForNav = document.getElementById('day-date-select'); // Pour mettre à jour l'input
+
+    if (prevDayBtn && dayDateSelectInputForNav) {
+        prevDayBtn.addEventListener('click', function() {
+            if (!selectedSpecificDay) { // S'assurer que la date est initialisée
+                console.warn("prevDayBtn: selectedSpecificDay non initialisée.");
+                // Tenter de lire l'input ou prendre aujourd'hui. valueAsDate retourne un objet Date ou null.
+                const dateFromInput = dayDateSelectInputForNav.valueAsDate;
+                selectedSpecificDay = dateFromInput ? new Date(dateFromInput.valueOf()) : new Date(); // Cloner si non null, sinon aujourd'hui
+                // Si valueAsDate a donné null (ex: input vide ou invalide), selectedSpecificDay est maintenant 'aujourd'hui'.
+                // Il faut s'assurer que l'input reflète cela s'il était vide, pour que l'opération -1 jour soit correcte.
+                if (!dateFromInput) {
+                    dayDateSelectInputForNav.value = selectedSpecificDay.toISOString().split('T')[0];
+                }
+            }
+            const newDate = new Date(selectedSpecificDay); // Cloner pour éviter de modifier directement la référence si elle est partagée
+            newDate.setDate(newDate.getDate() - 1);
+            selectedSpecificDay = newDate; // Mettre à jour la variable globale
+
+            // Mettre à jour l'input date
+            dayDateSelectInputForNav.value = selectedSpecificDay.toISOString().split('T')[0];
+
+            if (typeof changeCalendarView === 'function') {
+                changeCalendarView({target: {id: 'prev-day-btn'}}); // Déclencher la mise à jour de la vue
+            } else {
+                console.error("La fonction changeCalendarView n'est pas définie.");
+            }
+        });
+    } else {
+        if (!prevDayBtn) console.warn("Élément #prev-day-btn non trouvé.");
+        if (!dayDateSelectInputForNav) console.warn("Élément #day-date-select non trouvé pour la navigation journalière.");
+    }
+
+    if (nextDayBtn && dayDateSelectInputForNav) {
+        nextDayBtn.addEventListener('click', function() {
+            if (!selectedSpecificDay) {
+                console.warn("nextDayBtn: selectedSpecificDay non initialisée.");
+                const dateFromInput = dayDateSelectInputForNav.valueAsDate;
+                selectedSpecificDay = dateFromInput ? new Date(dateFromInput.valueOf()) : new Date();
+                if (!dateFromInput) {
+                    dayDateSelectInputForNav.value = selectedSpecificDay.toISOString().split('T')[0];
+                }
+            }
+            const newDate = new Date(selectedSpecificDay);
+            newDate.setDate(newDate.getDate() + 1);
+            selectedSpecificDay = newDate;
+
+            dayDateSelectInputForNav.value = selectedSpecificDay.toISOString().split('T')[0];
+
+            if (typeof changeCalendarView === 'function') {
+                changeCalendarView({target: {id: 'next-day-btn'}});
+            } else {
+                console.error("La fonction changeCalendarView n'est pas définie.");
+            }
+        });
+    } else {
+        if (!nextDayBtn) console.warn("Élément #next-day-btn non trouvé.");
+        // dayDateSelectInputForNav déjà vérifié avec prevDayBtn
     }
 
     console.log("[control.html] DOMContentLoaded: Fin de l'initialisation.");
