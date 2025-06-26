@@ -1115,11 +1115,13 @@ def api_calendar_view():
     academic_year_str = request.args.get('year')
     view_type = request.args.get('view_type', default='year').lower()
     target_month_num = request.args.get('month', default=None, type=int)
+    target_trimester_num = request.args.get('trimester', default=None, type=int)
+    target_semester_num = request.args.get('semester', default=None, type=int) # Nouveau paramètre pour semestre
 
-    logger.debug(f"User '{user}' requête /api/calendar_view with params: year='{academic_year_str}', view_type='{view_type}', month='{target_month_num}'")
+    logger.debug(f"User '{user}' requête /api/calendar_view with params: year='{academic_year_str}', view_type='{view_type}', month='{target_month_num}', trimester='{target_trimester_num}', semester='{target_semester_num}'")
 
     if not academic_year_str:
-        logger.warning("API /api/calendar_view: Paramètre 'year' manquant.")
+        logger.warning("API /api/calendar_view: Paramètre 'year' (année scolaire YYYY-YYYY) manquant.")
         return jsonify({"error": "Paramètre 'year' (année scolaire YYYY-YYYY) manquant."}), 400
 
     try:
@@ -1131,7 +1133,9 @@ def api_calendar_view():
         logger.warning(f"API /api/calendar_view: Format année scolaire 'year' invalide: {academic_year_str}. Erreur: {e}")
         return jsonify({"error": f"Format année scolaire 'year' invalide. Attendu YYYY-YYYY. Détail: {e}"}), 400
 
-    start_date, end_date = None, None
+    # Initialiser calendar_data pour s'assurer qu'elle est toujours définie
+    calendar_data = {}
+    start_date, end_date = None, None # Pour les vues qui utilisent get_calendar_view_data_range
 
     if view_type == 'month':
         if target_month_num is None or not (1 <= target_month_num <= 12):
@@ -1150,32 +1154,161 @@ def api_calendar_view():
              logger.error(f"Erreur création date pour mois {target_month_num}, année {current_calendar_year_for_month}: {e_date}", exc_info=True)
              return jsonify({"error": "Erreur interne lors de la détermination des dates du mois."}), 500
 
+        # Appel de la fonction existante qui génère les données pour une plage de dates
+        calendar_data = get_calendar_view_data_range(start_date, end_date)
+        if 'error' in calendar_data:
+            logger.error(f"Erreur lors de la génération des données calendrier (month view): {calendar_data['error']}")
+            return jsonify({"error": f"Erreur génération calendrier: {calendar_data['error']}"}), 500
+
+    elif view_type == 'semester':
+        if target_semester_num is None or not (1 <= target_semester_num <= 2):
+            logger.warning(f"API /api/calendar_view (semester view): Paramètre 'semester' invalide ou manquant: {target_semester_num}")
+            return jsonify({"error": "Paramètre 'semester' invalide ou manquant pour la vue semestrielle."}), 400
+
+        semester_months_config = {
+            1: [ # S1: Sept, Oct, Nov, Déc (start_acad_year), Jan, Fev (end_acad_year)
+                (9, start_acad_year), (10, start_acad_year), (11, start_acad_year), (12, start_acad_year),
+                (1, end_acad_year), (2, end_acad_year) # CHANGEMENT ICI
+            ],
+            2: [ # S2: Mar, Avr, Mai, Jui, Jul, Aoû (end_acad_year)
+                (3, end_acad_year), (4, end_acad_year), (5, end_acad_year), (6, end_acad_year),
+                (7, end_acad_year), (8, end_acad_year) # CHANGEMENT ICI
+            ]
+        }
+        if target_semester_num not in semester_months_config: # Double check, ne devrait pas être atteint
+             logger.error(f"Numéro de semestre '{target_semester_num}' non valide.")
+             return jsonify({"error": f"Numéro de semestre '{target_semester_num}' non valide."}), 400
+
+        months_in_semester = semester_months_config[target_semester_num]
+
+        days_data_semester = {}
+        import calendar # Assurer l'import localement
+        from datetime import datetime # Assurer l'import localement
+
+        for month_num, year_for_month in months_in_semester:
+            num_days_in_month = calendar.monthrange(year_for_month, month_num)[1]
+            for day_num in range(1, num_days_in_month + 1):
+                current_date_obj = datetime(year_for_month, month_num, day_num).date()
+                date_str_key = current_date_obj.strftime('%Y-%m-%d')
+
+                if holiday_manager:
+                    # Utilisation de get_day_type_and_desc comme pour trimester et get_calendar_view_data_range
+                    day_info = holiday_manager.get_day_type_and_desc(current_date_obj, weekly_planning, planning_exceptions)
+                    days_data_semester[date_str_key] = {"type": day_info.get('type', 'Erreur'), "description": day_info.get('description', 'N/A')}
+                else:
+                    logger.error("HolidayManager non disponible dans api_calendar_view (semester).")
+                    days_data_semester[date_str_key] = {"type": "ErreurHM", "description": "HolidayManager non initialisé"}
+
+        calendar_data = {"days": days_data_semester}
+        logger.info(f"Calcul calendrier pour vue semestrielle: S{target_semester_num} de {academic_year_str}")
+
     elif view_type == 'year':
         # Logique pour l'année scolaire complète (Septembre à Août)
         start_date = date(start_acad_year, 9, 1)
         end_date = date(end_acad_year, 8, 31)
         logger.info(f"Calcul calendrier pour vue annuelle: {start_date} à {end_date} (Année scolaire: {academic_year_str})")
+
+        # Appel de la fonction existante qui génère les données pour une plage de dates
+        calendar_data = get_calendar_view_data_range(start_date, end_date)
+        if 'error' in calendar_data:
+            logger.error(f"Erreur lors de la génération des données calendrier (year view): {calendar_data['error']}")
+            return jsonify({"error": f"Erreur génération calendrier: {calendar_data['error']}"}), 500
+
+    elif view_type == 'trimester':
+        if target_trimester_num is None or not (1 <= target_trimester_num <= 3):
+            logger.warning(f"API /api/calendar_view (trimester view): Paramètre 'trimester' invalide ou manquant: {target_trimester_num}")
+            return jsonify({"error": "Paramètre 'trimester' invalide ou manquant pour la vue trimestrielle."}), 400
+
+        trimester_months_config = {
+            1: [(9, start_acad_year), (10, start_acad_year), (11, start_acad_year), (12, start_acad_year)], # T1: Sept-Déc
+            2: [(1, end_acad_year), (2, end_acad_year), (3, end_acad_year), (4, end_acad_year)],       # T2: Jan-Avr
+            3: [(5, end_acad_year), (6, end_acad_year), (7, end_acad_year), (8, end_acad_year)]        # T3: Mai-Août
+        }
+
+        if target_trimester_num not in trimester_months_config:
+             logger.error(f"Numéro de trimestre '{target_trimester_num}' non valide (ne devrait pas arriver si validation OK).") # Ne devrait pas être atteint
+             return jsonify({"error": f"Numéro de trimestre '{target_trimester_num}' non valide."}), 400
+
+        months_in_trimester = trimester_months_config[target_trimester_num]
+
+        days_data_trimester = {}
+        # S'assurer que calendar et datetime sont importés (normalement déjà fait en haut du fichier)
+        import calendar
+        from datetime import datetime # Bien que datetime soit global, c'est plus propre ici aussi
+
+        for month_num, calendar_year_for_month in months_in_trimester:
+            num_days_in_month = calendar.monthrange(calendar_year_for_month, month_num)[1]
+            for day_num in range(1, num_days_in_month + 1):
+                current_date_obj = datetime(calendar_year_for_month, month_num, day_num).date() # Utiliser .date() pour être consistent avec holiday_manager
+                date_str_key = current_date_obj.strftime('%Y-%m-%d')
+
+                if holiday_manager:
+                    # Utiliser la même logique que get_calendar_view_data_range
+                    day_info = holiday_manager.get_day_type_and_desc(current_date_obj, weekly_planning, planning_exceptions)
+                    days_data_trimester[date_str_key] = {"type": day_info.get('type', 'Erreur'), "description": day_info.get('description', 'N/A')}
+                else:
+                    logger.error("HolidayManager non disponible dans api_calendar_view (trimester).")
+                    days_data_trimester[date_str_key] = {"type": "ErreurHM", "description": "HolidayManager non initialisé"}
+
+        calendar_data = {"days": days_data_trimester}
+        # Pour la vue trimestrielle, on ne peuple pas 'vacations' et 'holidays' globaux pour l'instant,
+        # car get_calendar_view_data_range n'est pas appelée. Si besoin, il faudrait le faire ici.
+        logger.info(f"Calcul calendrier pour vue trimestrielle: T{target_trimester_num} de {academic_year_str}")
+
     else:
         logger.warning(f"API /api/calendar_view: Type de vue '{view_type}' non supporté.")
         return jsonify({"error": f"Type de vue '{view_type}' non supporté."}), 400
 
-    # Appel de la fonction existante qui génère les données pour une plage de dates
-    # La fonction get_calendar_view_data_range retourne déjà un dict avec une clé "days"
-    # et potentiellement "vacations", "holidays", "error"
-    calendar_data = get_calendar_view_data_range(start_date, end_date)
-
-    if 'error' in calendar_data:
-        logger.error(f"Erreur lors de la génération des données calendrier pour {start_date}-{end_date}: {calendar_data['error']}")
-        return jsonify({"error": f"Erreur génération calendrier: {calendar_data['error']}"}), 500
-
     # Ajouter les paramètres de debug au retour pour faciliter le développement frontend
-    calendar_data["debug_params"] = {
+    base_debug_params = {
         "requested_academic_year": academic_year_str,
         "requested_view_type": view_type,
-        "requested_month": target_month_num,
-        "calculated_start_date": start_date.isoformat() if start_date else None,
-        "calculated_end_date": end_date.isoformat() if end_date else None
+        "requested_month": target_month_num if view_type == 'month' else None,
+        "requested_trimester": target_trimester_num if view_type == 'trimester' else None,
+        "requested_semester": target_semester_num if view_type == 'semester' else None
     }
+
+    if view_type == 'year' or view_type == 'month':
+        # Ces vues utilisent get_calendar_view_data_range et définissent start_date, end_date
+        # calendar_data est déjà peuplé par get_calendar_view_data_range
+        if start_date:
+            base_debug_params["calculated_start_date"] = start_date.isoformat()
+        if end_date:
+            base_debug_params["calculated_end_date"] = end_date.isoformat()
+        calendar_data["debug_params"] = base_debug_params
+
+    elif view_type == 'trimester':
+        # Cette vue peuple calendar_data['days'] directement.
+        # months_in_trimester est défini dans la portée de ce bloc 'trimester'
+        if 'months_in_trimester' in locals() and months_in_trimester:
+            first_month_info = months_in_trimester[0]
+            last_month_info = months_in_trimester[-1]
+            trimester_start_d = date(first_month_info[1], first_month_info[0], 1)
+            num_days_last_m = calendar.monthrange(last_month_info[1], last_month_info[0])[1]
+            trimester_end_d = date(last_month_info[1], last_month_info[0], num_days_last_m)
+            base_debug_params["calculated_trimester_start_date"] = trimester_start_d.isoformat()
+            base_debug_params["calculated_trimester_end_date"] = trimester_end_d.isoformat()
+        calendar_data["debug_params"] = base_debug_params
+
+    elif view_type == 'semester':
+        # Cette vue peuple calendar_data['days'] directement.
+        # months_in_semester est défini dans la portée de ce bloc 'semester'
+        if 'months_in_semester' in locals() and months_in_semester:
+            first_month_info = months_in_semester[0]
+            last_month_info = months_in_semester[-1]
+            semester_start_d = date(first_month_info[1], first_month_info[0], 1)
+            # Réimporter calendar si ce n'est pas déjà fait dans cette portée (c'est fait dans le bloc semester)
+            num_days_last_m = calendar.monthrange(last_month_info[1], last_month_info[0])[1]
+            semester_end_d = date(last_month_info[1], last_month_info[0], num_days_last_m)
+            base_debug_params["calculated_semester_start_date"] = semester_start_d.isoformat()
+            base_debug_params["calculated_semester_end_date"] = semester_end_d.isoformat()
+        calendar_data["debug_params"] = base_debug_params
+
+    # else: # Cas où view_type n'est pas géré, déjà couvert plus haut, calendar_data serait vide.
+          # Mais on peut ajouter les debug_params de base même là.
+          # if not calendar_data: calendar_data = {} # S'assurer que calendar_data existe.
+          # calendar_data["debug_params"] = base_debug_params
+
     return jsonify(calendar_data)
 
 def get_calendar_view_data_range(start_date, end_date):

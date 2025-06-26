@@ -45,28 +45,56 @@
             <h2 class="mb-0 me-auto">Calendrier <span id="calendar-title-year">Annuel</span></h2>
 
             {% if user_has_permission('control:view_calendar') %}
-            <div class="d-flex align-items-center ms-3"> {# Conteneur pour les deux sélecteurs #}
-                <div id="calendar-view-selector" class="me-3 d-flex align-items-center"> {# Sélecteur de Vue #}
+            <div class="d-flex align-items-center ms-3 flex-wrap"> {# Conteneur global pour sélecteur de vue ET contrôles de période #}
+                <div id="calendar-view-selector" class="me-3 d-flex align-items-center mb-2"> {# Sélecteur de Vue, mb-2 pour espacement si wrap #}
                     <label for="calendar-view-type-select" class="form-label mb-0 me-2 text-nowrap">Vue :</label>
                     <select id="calendar-view-type-select" class="form-select form-select-sm" style="min-width: 100px;" onchange="changeCalendarView()">
                         <option value="year" selected>Annuelle</option>
+                        <option value="semester">Semestrielle</option>
+                        <option value="trimester">Trimestrielle</option>
                         <option value="month">Mensuelle</option>
-                        <!-- <option value="semester">Semestrielle</option> -->
-                        <!-- <option value="week">Hebdomadaire</option> -->
-                        <!-- <option value="day">Journalière</option> -->
+                        <option value="week">Hebdomadaire</option>
+                        <option value="day">Journalière</option>
                     </select>
                 </div>
 
-                <div id="calendar-controls-year" class="d-flex align-items-center">
-                    <label for="academic-year-select" class="form-label mb-0 me-2 text-nowrap">Année scolaire :</label>
-                    <select id="academic-year-select" class="form-select form-select-sm" style="min-width: 120px;" onchange="changeCalendarView()">
-                        <!-- Options ajoutées par JS -->
-                    </select>
+                <div id="calendar-period-controls" class="d-flex align-items-center flex-wrap"> {# Nouveau conteneur global pour TOUS les contrôles de période #}
 
-                    {# NOUVEAU Sélecteur de Mois (initialement masqué) #}
-                    <div id="month-selector-container" class="ms-2 d-flex align-items-center" style="display: none;">
+                    <div id="academic-year-selector-container" class="d-flex align-items-center me-3 mb-2" style="display: none;">
+                        <label for="academic-year-select" class="form-label mb-0 me-2 text-nowrap">Année scolaire :</label>
+                        <select id="academic-year-select" class="form-select form-select-sm" style="min-width: 120px;" onchange="changeCalendarView()"></select>
+                    </div>
+
+                    <div id="month-selector-container" class="d-flex align-items-center me-3 mb-2" style="display: none;">
                         <label for="month-select" class="form-label mb-0 me-2 text-nowrap">Mois :</label>
                         <select id="month-select" class="form-select form-select-sm" style="min-width: 130px;" onchange="changeCalendarView()"></select>
+                    </div>
+
+                    <div id="semester-selector-container" class="d-flex align-items-center me-3 mb-2" style="display: none;">
+                        <label for="semester-select" class="form-label mb-0 me-2 text-nowrap">Semestre :</label>
+                        <select id="semester-select" class="form-select form-select-sm" style="min-width: 150px;" onchange="changeCalendarView()">
+                            <option value="1">S1 (Sept-Jan)</option>
+                            <option value="2">S2 (Fev-Août)</option>
+                        </select>
+                    </div>
+
+                    <div id="trimester-selector-container" class="d-flex align-items-center me-3 mb-2" style="display: none;">
+                        <label for="trimester-select" class="form-label mb-0 me-2 text-nowrap">Trimestre :</label>
+                        <select id="trimester-select" class="form-select form-select-sm" style="min-width: 150px;" onchange="changeCalendarView()">
+                            <option value="1">T1 (Sept - Déc)</option>
+                            <option value="2">T2 (Jan - Avr)</option>
+                            <option value="3">T3 (Mai - Août)</option>
+                        </select>
+                    </div>
+
+                    <div id="week-selector-container" class="d-flex align-items-center me-3 mb-2" style="display: none;">
+                        <label for="week-date-select" class="form-label mb-0 me-2 text-nowrap">Semaine du :</label>
+                        <input type="date" id="week-date-select" class="form-control form-control-sm" style="min-width: 150px;" onchange="changeCalendarView()">
+                    </div>
+
+                    <div id="day-selector-container" class="d-flex align-items-center mb-2" style="display: none;">
+                        <label for="day-date-select" class="form-label mb-0 me-2 text-nowrap">Jour :</label>
+                        <input type="date" id="day-date-select" class="form-control form-control-sm" style="min-width: 150px;" onchange="changeCalendarView()">
                     </div>
                 </div>
             </div>
@@ -102,6 +130,10 @@ let configSettings = { alert_files: { ppms: null, attentat: null } };
 let selectedAcademicYear; // Sera initialisée par getDefaultAcademicYear dans DOMContentLoaded
 let selectedCalendarView = 'year'; // Valeur par défaut
 let selectedMonth = new Date().getMonth() + 1; // Mois actuel par défaut (1-12)
+let selectedWeekStartDate = null; // Stockera l'objet Date du début de la semaine sélectionnée
+let selectedSpecificDay = null; // Stockera l'objet Date du jour sélectionné
+let selectedSemester = 1; // 1 pour S1, 2 pour S2
+let selectedTrimester = 1; // 1, 2, ou 3
 
 // Variables pour la logique d'alerte
 let ppmsClickTimer = null;
@@ -197,53 +229,99 @@ function changeCalendarView() {
     const viewSelect = document.getElementById('calendar-view-type-select');
     const yearSelect = document.getElementById('academic-year-select');
     const monthSelect = document.getElementById('month-select');
+    const semesterSelect = document.getElementById('semester-select');
+    const trimesterSelect = document.getElementById('trimester-select');
+    const weekDateSelect = document.getElementById('week-date-select');
+    const dayDateSelect = document.getElementById('day-date-select');
+
+    // Conteneurs de sélecteurs individuels
+    const academicYearSelectorContainer = document.getElementById('academic-year-selector-container');
     const monthSelectorContainer = document.getElementById('month-selector-container');
+    const semesterSelectorContainer = document.getElementById('semester-selector-container');
+    const trimesterSelectorContainer = document.getElementById('trimester-selector-container');
+    const weekSelectorContainer = document.getElementById('week-selector-container');
+    const daySelectorContainer = document.getElementById('day-selector-container');
 
     if (viewSelect) selectedCalendarView = viewSelect.value;
 
-    // Stocker l'ancienne année scolaire pour détecter un changement
-    const previousAcademicYear = selectedAcademicYear;
+    const previousAcademicYear = selectedAcademicYear; // Utile pour savoir si on doit repeupler le mois
     if (yearSelect) selectedAcademicYear = yearSelect.value;
 
-    if (monthSelectorContainer && monthSelect) {
-        if (selectedCalendarView === 'month') {
-            monthSelectorContainer.style.display = 'flex'; // Assurer la visibilité avec flex
-            // Peupler le sélecteur de mois si ce n'est pas déjà fait ou si l'année a changé, ou si selectedMonth n'est pas encore initialisé correctement
-            if (!monthSelect.options.length || previousAcademicYear !== selectedAcademicYear || selectedMonth === undefined) {
-                populateMonthSelector(selectedAcademicYear); // populateMonthSelector met à jour selectedMonth
-            }
-            // S'assurer que selectedMonth est synchronisé avec la valeur du sélecteur après population/changement
-             selectedMonth = parseInt(monthSelect.value);
+    // Cacher tous les conteneurs de contrôle de période par défaut
+    if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'none';
+    if (monthSelectorContainer) monthSelectorContainer.style.display = 'none';
+    if (semesterSelectorContainer) semesterSelectorContainer.style.display = 'none';
+    if (trimesterSelectorContainer) trimesterSelectorContainer.style.display = 'none';
+    if (weekSelectorContainer) weekSelectorContainer.style.display = 'none';
+    if (daySelectorContainer) daySelectorContainer.style.display = 'none';
 
-        } else {
-            monthSelectorContainer.style.display = 'none';
+    // Afficher les conteneurs pertinents et mettre à jour les valeurs
+    if (selectedCalendarView === 'year') {
+        if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
+    } else if (selectedCalendarView === 'semester') {
+        if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
+        if (semesterSelectorContainer) semesterSelectorContainer.style.display = 'flex';
+        if (semesterSelect) selectedSemester = parseInt(semesterSelect.value);
+    } else if (selectedCalendarView === 'trimester') {
+        if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
+        if (trimesterSelectorContainer) trimesterSelectorContainer.style.display = 'flex';
+        if (trimesterSelect) selectedTrimester = parseInt(trimesterSelect.value);
+    } else if (selectedCalendarView === 'month') {
+        if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
+        if (monthSelectorContainer) monthSelectorContainer.style.display = 'flex';
+        if (monthSelect) {
+            if (!monthSelect.options.length || previousAcademicYear !== selectedAcademicYear || selectedMonth === undefined) {
+                populateMonthSelector(selectedAcademicYear);
+            }
+            selectedMonth = parseInt(monthSelect.value);
+        }
+    } else if (selectedCalendarView === 'week') {
+        if (weekSelectorContainer) weekSelectorContainer.style.display = 'flex';
+        if (weekDateSelect) {
+            if (!weekDateSelect.value) {
+                weekDateSelect.valueAsDate = new Date();
+            }
+            selectedWeekStartDate = new Date(weekDateSelect.value);
+        }
+    } else if (selectedCalendarView === 'day') {
+        if (daySelectorContainer) daySelectorContainer.style.display = 'flex';
+        if (dayDateSelect) {
+            if (!dayDateSelect.value) {
+                dayDateSelect.valueAsDate = new Date();
+            }
+            selectedSpecificDay = new Date(dayDateSelect.value);
         }
     }
 
-    console.log(`Changement vue/période: Vue=${selectedCalendarView}, Année=${selectedAcademicYear}, Mois=${selectedMonth}`);
+    console.log(`Vue: ${selectedCalendarView}, Année: ${selectedAcademicYear}, Semestre: ${selectedSemester}, Trimestre: ${selectedTrimester}, Mois: ${selectedMonth}, Semaine Début: ${selectedWeekStartDate ? selectedWeekStartDate.toISOString().split('T')[0] : 'null'}, Jour Spécifique: ${selectedSpecificDay ? selectedSpecificDay.toISOString().split('T')[0] : 'null'}`);
 
-    // Mettre à jour le titre du calendrier
+    // Mise à jour du titre du calendrier
     const calendarTitleSpan = document.getElementById('calendar-title-year');
     if (calendarTitleSpan) {
         if (selectedCalendarView === 'year') {
             calendarTitleSpan.textContent = `Scolaire ${selectedAcademicYear}`;
+        } else if (selectedCalendarView === 'semester' && selectedAcademicYear) {
+            calendarTitleSpan.textContent = `Semestre ${selectedSemester} (${selectedAcademicYear})`;
+        } else if (selectedCalendarView === 'trimester' && selectedAcademicYear) {
+            calendarTitleSpan.textContent = `Trimestre ${selectedTrimester} (${selectedAcademicYear})`;
         } else if (selectedCalendarView === 'month') {
-            if (monthSelect && monthSelect.options.length > 0 && monthSelect.selectedIndex !== -1) {
-                 // Utiliser le texte de l'option sélectionnée qui contient déjà "Mois Annee"
-                calendarTitleSpan.textContent = monthSelect.options[monthSelect.selectedIndex].text;
-            } else {
-                // Fallback si le sélecteur de mois n'est pas prêt (ne devrait pas arriver souvent)
-                calendarTitleSpan.textContent = `Mensuel (Année ${selectedAcademicYear})`;
-            }
+            const monthName = monthSelect && monthSelect.options.length > 0 && monthSelect.selectedIndex !== -1 ? monthSelect.options[monthSelect.selectedIndex].text : `Mois ${selectedMonth}`;
+            calendarTitleSpan.textContent = `${monthName}`;
+        } else if (selectedCalendarView === 'week' && selectedWeekStartDate) {
+            const endDate = new Date(selectedWeekStartDate);
+            endDate.setDate(selectedWeekStartDate.getDate() + 6);
+            calendarTitleSpan.textContent = `Sem. du ${selectedWeekStartDate.toLocaleDateString('fr-FR')} au ${endDate.toLocaleDateString('fr-FR')}`;
+        } else if (selectedCalendarView === 'day' && selectedSpecificDay) {
+            calendarTitleSpan.textContent = `Jour du ${selectedSpecificDay.toLocaleDateString('fr-FR')}`;
         } else {
-            calendarTitleSpan.textContent = selectedAcademicYear; // Fallback pour autres vues
+            calendarTitleSpan.textContent = selectedAcademicYear || new Date().getFullYear(); // Fallback
         }
     }
-    showSelectedCalendarView(); // Nouvelle fonction pour afficher la vue choisie
+    showSelectedCalendarView();
 }
 
 function showSelectedCalendarView() {
-    console.log(`Affichage calendrier pour vue: ${selectedCalendarView}, année: ${selectedAcademicYear}`);
+    console.log(`Affichage calendrier pour vue: ${selectedCalendarView}, année: ${selectedAcademicYear}, mois: ${selectedMonth}, semaine: ${selectedWeekStartDate}, jour: ${selectedSpecificDay}`);
     const calendarContainer = document.getElementById('calendar-container');
     if (!calendarContainer) return;
 
@@ -283,15 +361,13 @@ function showSelectedCalendarView() {
                 selectedMonth = monthValue;
             } else {
                 console.error("selectedMonth n'a pas pu être déterminé à partir du sélecteur.");
-                // Utiliser le mois actuel comme fallback si selectedMonth est toujours indéfini
-                if (typeof selectedMonth !== 'number') {
+                if (typeof selectedMonth !== 'number') { // Fallback
                     selectedMonth = new Date().getMonth() + 1;
                 }
             }
         } else if (typeof selectedMonth !== 'number') {
-             // Fallback ultime si le sélecteur n'existe pas ou si selectedMonth est invalide
             console.warn("selectedMonth est indéfini et le sélecteur de mois n'est pas disponible. Utilisation du mois actuel.");
-            selectedMonth = new Date().getMonth() + 1;
+            selectedMonth = new Date().getMonth() + 1; // Fallback ultime
         }
 
         apiUrl = `/api/calendar_view?year=${selectedAcademicYear}&month=${selectedMonth}&view_type=month`;
@@ -313,15 +389,298 @@ function showSelectedCalendarView() {
                 console.error("Erreur showSelectedCalendarView (month):", error);
                 calendarContainer.innerHTML = `<p>Erreur chargement vue mensuelle: ${error.message}</p>`;
             });
-    }
-    // Ajouter ici d'autres 'else if' pour les vues 'week', 'day' etc.
-    else {
+    } else if (selectedCalendarView === 'semester') {
+        apiUrl = `/api/calendar_view?year=${selectedAcademicYear}&semester=${selectedSemester}&view_type=semester`;
+        console.log(`API call for Semester view: ${apiUrl}`);
+        calendarContainer.innerHTML = `<p>Chargement de la vue semestrielle pour ${selectedAcademicYear}, Semestre ${selectedSemester}...</p>`;
+
+        fetch(apiUrl)
+            .then(response => {
+                if (!response.ok) {
+                    // Essayer de lire le corps de l'erreur JSON si possible
+                    return response.json().then(err => {throw new Error(`Erreur HTTP ${response.status}: ${err.error || response.statusText}`)}).catch(() => {throw new Error(`Erreur HTTP ${response.status}`)});
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) throw new Error(`Erreur API calendrier (semestre): ${data.error}`);
+                generateSemesterView(data, selectedAcademicYear, selectedSemester); // APPEL À LA NOUVELLE FONCTION
+            })
+            .catch(error => {
+                console.error("Erreur showSelectedCalendarView (semester):", error);
+                calendarContainer.innerHTML = `<p>Erreur chargement vue semestrielle: ${error.message}</p>`;
+            });
+    } else if (selectedCalendarView === 'trimester') {
+        apiUrl = `/api/calendar_view?year=${selectedAcademicYear}&trimester=${selectedTrimester}&view_type=trimester`;
+        console.log(`API call for Trimester view: ${apiUrl}`);
+        calendarContainer.innerHTML = `<p>Chargement de la vue trimestrielle pour ${selectedAcademicYear}, Trimestre ${selectedTrimester}...</p>`;
+
+        fetch(apiUrl)
+            .then(response => {
+                if (!response.ok) {
+                    // Essayer de lire le corps de l'erreur JSON si possible
+                    return response.json().then(err => {throw new Error(`Erreur HTTP ${response.status}: ${err.error || response.statusText}`)}).catch(() => {throw new Error(`Erreur HTTP ${response.status}`)});
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) throw new Error(`Erreur API calendrier (trimestre): ${data.error}`);
+                generateTrimesterView(data, selectedAcademicYear, selectedTrimester); // APPEL À LA NOUVELLE FONCTION
+            })
+            .catch(error => {
+                console.error("Erreur showSelectedCalendarView (trimester):", error);
+                calendarContainer.innerHTML = `<p>Erreur chargement vue trimestrielle: ${error.message}</p>`;
+            });
+    } else if (selectedCalendarView === 'week') {
+        if (!selectedWeekStartDate) {
+            calendarContainer.innerHTML = "<p>Veuillez sélectionner une date pour la vue hebdomadaire.</p>";
+            return;
+        }
+        // Calculer le début (Lundi) et la fin (Dimanche) de la semaine
+        let dayOfWeek = selectedWeekStartDate.getDay(); // 0=Dim, 1=Lun, ..., 6=Sam
+        let diffToMonday = selectedWeekStartDate.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Ajuster pour Lundi
+        let mondayOfSelectedWeek = new Date(new Date(selectedWeekStartDate).setDate(diffToMonday)); // Crée une nouvelle instance pour ne pas modifier selectedWeekStartDate
+        let sundayOfSelectedWeek = new Date(new Date(mondayOfSelectedWeek).setDate(mondayOfSelectedWeek.getDate() + 6));
+
+        const startDateStr = mondayOfSelectedWeek.toISOString().split('T')[0]; // YYYY-MM-DD
+        apiUrl = `/api/daily_schedule_range?start_date=${startDateStr}&days=7`;
+        console.log(`API call for Weekly view: ${apiUrl}`);
+        calendarContainer.innerHTML = `<p>Vue Hebdomadaire pour la semaine du ${mondayOfSelectedWeek.toLocaleDateString('fr-FR')} au ${sundayOfSelectedWeek.toLocaleDateString('fr-FR')} - Implémentation à venir. API: ${apiUrl}</p>`;
+        // fetch(apiUrl)... then(data => generateWeekView(data)); ...
+    } else if (selectedCalendarView === 'day') {
+        if (!selectedSpecificDay) {
+            calendarContainer.innerHTML = "<p>Veuillez sélectionner une date pour la vue journalière.</p>";
+            return;
+        }
+        const dateStr = selectedSpecificDay.toISOString().split('T')[0]; // YYYY-MM-DD
+        apiUrl = `/api/daily_schedule?date=${dateStr}`;
+        console.log(`API call for Daily view: ${apiUrl}`);
+        calendarContainer.innerHTML = `<p>Vue Journalière pour le ${selectedSpecificDay.toLocaleDateString('fr-FR')} - Implémentation à venir. API: ${apiUrl}</p>`;
+        // fetch(apiUrl)... then(data => generateDayView(data)); ...
+    } else {
         calendarContainer.innerHTML = `<p>Type de vue '${selectedCalendarView}' non supporté pour le moment.</p>`;
     }
 }
 
 // --- Fonctions Calendrier Existantes (celles qui restent) ---
 // La fonction showCalendar() a été supprimée car sa logique est maintenant dans showSelectedCalendarView() et changeCalendarView().
+
+function generateSemesterView(apiResponseData, academicYearString, semesterNumber) {
+    console.log(`generateSemesterView pour Année: ${academicYearString}, Semestre: ${semesterNumber}`);
+    const calendarContainer = document.getElementById('calendar-container');
+    if (!calendarContainer) { console.error("Conteneur #calendar-container introuvable !"); return; }
+    calendarContainer.innerHTML = '';
+
+    if (!apiResponseData || !apiResponseData.days) {
+        calendarContainer.innerHTML = "<p>Aucune donnée reçue pour la vue semestrielle.</p>";
+        return;
+    }
+
+    const [startYear, endYear] = academicYearString.split('-').map(Number);
+    const daysDataFromApi = apiResponseData.days;
+
+    let monthsToDisplay = []; // Array de {month: (1-12), year: YYYY}
+    if (semesterNumber === 1) { // S1: Sept, Oct, Nov, Déc (start_year), Jan, Fev (end_year)
+        monthsToDisplay = [
+            {month: 9, year: startYear}, {month: 10, year: startYear},
+            {month: 11, year: startYear}, {month: 12, year: startYear},
+            {month: 1, year: endYear}, {month: 2, year: endYear} // CHANGEMENT ICI
+        ];
+    } else if (semesterNumber === 2) { // S2: Mar, Avr, Mai, Jui, Jul, Aoû (end_year)
+        monthsToDisplay = [
+            {month: 3, year: endYear}, {month: 4, year: endYear},
+            {month: 5, year: endYear}, {month: 6, year: endYear},
+            {month: 7, year: endYear}, {month: 8, year: endYear} // CHANGEMENT ICI
+        ];
+    } else {
+        calendarContainer.innerHTML = "<p>Numéro de semestre invalide.</p>";
+        return;
+    }
+
+    const today = new Date();
+    const currentDayNum = today.getDate();
+    const currentMonthNum = today.getMonth() + 1;
+    const currentYearToday = today.getFullYear();
+    const todayStr = `${currentYearToday}-${String(currentMonthNum).padStart(2, '0')}-${String(currentDayNum).padStart(2, '0')}`;
+
+    for (const monthInfo of monthsToDisplay) {
+        const monthForLoop = monthInfo.month;
+        const yearForLoop = monthInfo.year;
+
+        const monthDiv = document.createElement('div');
+        monthDiv.classList.add('calendar-month');
+        const monthDateObject = new Date(yearForLoop, monthForLoop - 1, 1);
+        const monthName = monthDateObject.toLocaleString('fr-FR', { month: 'long' });
+        monthDiv.innerHTML = `<h3>${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${yearForLoop}</h3>`;
+        const daysInCurrentMonth = new Date(yearForLoop, monthForLoop, 0).getDate();
+        const firstDayWeekdayOffset = (monthDateObject.getDay() + 6) % 7;
+        const daysGridContainer = document.createElement('div');
+        daysGridContainer.classList.add('calendar-days');
+        const weekDayLabels = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+        weekDayLabels.forEach(wdText => { const wdCell = document.createElement('div'); wdCell.classList.add('calendar-weekday'); wdCell.textContent = wdText; daysGridContainer.appendChild(wdCell); });
+        for (let i = 0; i < firstDayWeekdayOffset; i++) { const emptyCell = document.createElement('div'); emptyCell.classList.add('calendar-day', 'empty'); daysGridContainer.appendChild(emptyCell); }
+
+        for (let dayNum = 1; dayNum <= daysInCurrentMonth; dayNum++) {
+            const dayCell = document.createElement('div');
+            dayCell.classList.add('calendar-day');
+            dayCell.textContent = dayNum;
+            const currentDateObject = new Date(yearForLoop, monthForLoop - 1, dayNum);
+            const dateKey = `${yearForLoop}-${String(monthForLoop).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+            const dayData = daysDataFromApi[dateKey];
+            const dayOfWeek = currentDateObject.getDay();
+            let cssClass = '';
+            let tooltipText = '';
+            if (dateKey === todayStr) dayCell.classList.add('today');
+            if (dayData) {
+                const typeValue = dayData.type || 'ERREUR';
+                const typeLower = typeValue.toLowerCase().trim();
+                tooltipText = dayData.description || typeValue;
+                if (typeLower.startsWith('exception (silence)')) { cssClass = 'exception-silence'; }
+                else if (typeLower.startsWith('exception (utiliser_jt')) { cssClass = 'exception-jt'; }
+                else if (typeLower === 'férié') { cssClass = 'ferie'; }
+                else if (typeLower === 'vacances') { cssClass = 'vacances'; }
+                else if (dayOfWeek === 0) { cssClass = 'weekend-dimanche'; if (!dayData.description && !typeLower.startsWith('classe')) tooltipText = "Dimanche"; }
+                else if (dayOfWeek === 6) { cssClass = 'weekend-samedi'; if (!dayData.description && !typeLower.startsWith('classe')) tooltipText = "Samedi"; }
+                else if (typeLower.startsWith('classe')) { cssClass = 'classe'; }
+                else if (typeLower === 'weekend') { cssClass = (dayOfWeek === 0) ? 'weekend-dimanche' : (dayOfWeek === 6 ? 'weekend-samedi' : 'classe'); console.warn(`Jour ${dateKey} marqué 'weekend' par backend mais dayOfWeek=${dayOfWeek}. Appliqué: ${cssClass}`);}
+                else if (typeLower === 'autre' || typeLower.includes('erreur')) { cssClass = 'erreur-donnees'; console.warn(`Type jour 'Autre' ou 'Erreur': '${typeValue}' pour ${dateKey}`);}
+                else { cssClass = 'erreur-donnees'; console.error(`Type jour INCONNU du backend: '${typeValue}' pour ${dateKey}`);}
+            } else {
+                if (dayOfWeek === 0) { cssClass = 'weekend-dimanche'; tooltipText = "Dimanche"; }
+                else if (dayOfWeek === 6) { cssClass = 'weekend-samedi'; tooltipText = "Samedi"; }
+                else { cssClass = 'classe'; tooltipText = "Jour de classe (par défaut)"; }
+            }
+            if (cssClass) dayCell.classList.add(cssClass);
+            dayCell.title = tooltipText;
+            dayCell.style.cursor = 'pointer';
+            dayCell.onclick = () => showDailySchedule(currentDateObject.getFullYear(), currentDateObject.getMonth() + 1, dayNum);
+            daysGridContainer.appendChild(dayCell);
+        }
+        monthDiv.appendChild(daysGridContainer);
+        calendarContainer.appendChild(monthDiv);
+    }
+    console.log("Fin de generateSemesterView");
+}
+
+function generateTrimesterView(apiResponseData, academicYearString, trimesterNumber) {
+    console.log(`generateTrimesterView pour Année: ${academicYearString}, Trimestre: ${trimesterNumber}`);
+    const calendarContainer = document.getElementById('calendar-container');
+    if (!calendarContainer) { console.error("Conteneur #calendar-container introuvable !"); return; }
+    calendarContainer.innerHTML = ''; // Vider le conteneur
+
+    if (!apiResponseData || !apiResponseData.days) {
+        calendarContainer.innerHTML = "<p>Aucune donnée reçue pour la vue trimestrielle.</p>";
+        console.error("generateTrimesterView: Données API manquantes ou incorrectes.", apiResponseData);
+        return;
+    }
+
+    const [startYear, endYear] = academicYearString.split('-').map(Number);
+    const daysDataFromApi = apiResponseData.days; // Contient les jours UNIQUEMENT pour ce trimestre
+
+    let monthsToDisplay = []; // Array de {month: (1-12), year: YYYY}
+    if (trimesterNumber === 1) {
+        monthsToDisplay = [{month: 9, year: startYear}, {month: 10, year: startYear}, {month: 11, year: startYear}, {month: 12, year: startYear}];
+    } else if (trimesterNumber === 2) {
+        monthsToDisplay = [{month: 1, year: endYear}, {month: 2, year: endYear}, {month: 3, year: endYear}, {month: 4, year: endYear}];
+    } else if (trimesterNumber === 3) {
+        monthsToDisplay = [{month: 5, year: endYear}, {month: 6, year: endYear}, {month: 7, year: endYear}, {month: 8, year: endYear}];
+    } else {
+        calendarContainer.innerHTML = "<p>Numéro de trimestre invalide.</p>";
+        console.error("generateTrimesterView: Numéro de trimestre invalide:", trimesterNumber);
+        return;
+    }
+
+    const today = new Date();
+    const currentDayNum = today.getDate();
+    const currentMonthNum = today.getMonth() + 1;
+    const currentYearToday = today.getFullYear();
+    const todayStr = `${currentYearToday}-${String(currentMonthNum).padStart(2, '0')}-${String(currentDayNum).padStart(2, '0')}`;
+
+    for (const monthInfo of monthsToDisplay) {
+        const monthForLoop = monthInfo.month;
+        const yearForLoop = monthInfo.year;
+
+        const monthDiv = document.createElement('div');
+        monthDiv.classList.add('calendar-month'); // Classe existante pour le style
+
+        const monthDateObject = new Date(yearForLoop, monthForLoop - 1, 1);
+        const monthName = monthDateObject.toLocaleString('fr-FR', { month: 'long' });
+        monthDiv.innerHTML = `<h3>${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${yearForLoop}</h3>`;
+
+        const daysInCurrentMonth = new Date(yearForLoop, monthForLoop, 0).getDate();
+        const firstDayWeekdayOffset = (monthDateObject.getDay() + 6) % 7; // 0 pour Lundi
+
+        const daysGridContainer = document.createElement('div');
+        daysGridContainer.classList.add('calendar-days'); // Classe existante pour le style
+
+        const weekDayLabels = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+        weekDayLabels.forEach(wdText => {
+            const wdCell = document.createElement('div');
+            wdCell.classList.add('calendar-weekday');
+            wdCell.textContent = wdText;
+            daysGridContainer.appendChild(wdCell);
+        });
+
+        for (let i = 0; i < firstDayWeekdayOffset; i++) {
+            const emptyCell = document.createElement('div');
+            emptyCell.classList.add('calendar-day', 'empty');
+            daysGridContainer.appendChild(emptyCell);
+        }
+
+        for (let dayNum = 1; dayNum <= daysInCurrentMonth; dayNum++) {
+            const dayCell = document.createElement('div');
+            dayCell.classList.add('calendar-day');
+            dayCell.textContent = dayNum;
+
+            const currentDateObject = new Date(yearForLoop, monthForLoop - 1, dayNum);
+            const dateKey = `${yearForLoop}-${String(monthForLoop).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+            const dayData = daysDataFromApi[dateKey];
+            const dayOfWeek = currentDateObject.getDay(); // 0=Dim, 1=Lun, ..., 6=Sam
+
+            let cssClass = '';
+            let tooltipText = '';
+
+            if (dateKey === todayStr) {
+                dayCell.classList.add('today');
+            }
+
+            if (dayData) {
+                const typeValue = dayData.type || 'ERREUR';
+                const typeLower = typeValue.toLowerCase().trim();
+                tooltipText = dayData.description || typeValue;
+
+                if (typeLower.startsWith('exception (silence)')) { cssClass = 'exception-silence'; }
+                else if (typeLower.startsWith('exception (utiliser_jt')) { cssClass = 'exception-jt'; }
+                else if (typeLower === 'férié') { cssClass = 'ferie'; }
+                else if (typeLower === 'vacances') { cssClass = 'vacances'; }
+                else if (dayOfWeek === 0) { cssClass = 'weekend-dimanche'; if (!dayData.description && !typeLower.startsWith('classe')) tooltipText = "Dimanche"; }
+                else if (dayOfWeek === 6) { cssClass = 'weekend-samedi'; if (!dayData.description && !typeLower.startsWith('classe')) tooltipText = "Samedi"; }
+                else if (typeLower.startsWith('classe')) { cssClass = 'classe'; }
+                else if (typeLower === 'weekend') { // Fallback si backend envoie 'weekend' pour un jour de semaine
+                    cssClass = (dayOfWeek === 0) ? 'weekend-dimanche' : (dayOfWeek === 6 ? 'weekend-samedi' : 'classe');
+                    console.warn(`Jour ${dateKey} marqué 'weekend' par backend mais dayOfWeek=${dayOfWeek}. Appliqué: ${cssClass}`);
+                }
+                else if (typeLower === 'autre' || typeLower.includes('erreur')) { cssClass = 'erreur-donnees'; console.warn(`Type jour 'Autre' ou 'Erreur': '${typeValue}' pour ${dateKey}`); }
+                else { cssClass = 'erreur-donnees'; console.error(`Type jour INCONNU du backend: '${typeValue}' pour ${dateKey}`); }
+            } else { // Pas de données API pour ce jour (ne devrait pas arriver car le backend filtre pour le trimestre)
+                 console.warn(`generateTrimesterView: Aucune donnée API pour ${dateKey}. Application des styles par défaut.`);
+                 if (dayOfWeek === 0) { cssClass = 'weekend-dimanche'; tooltipText = "Dimanche"; }
+                 else if (dayOfWeek === 6) { cssClass = 'weekend-samedi'; tooltipText = "Samedi"; }
+                 else { cssClass = 'classe'; tooltipText = "Jour de classe (par défaut)"; }
+            }
+
+            if (cssClass) dayCell.classList.add(cssClass);
+            dayCell.title = tooltipText;
+            dayCell.style.cursor = 'pointer';
+            dayCell.setAttribute('data-date', dateKey); // Utile pour débogage
+            dayCell.onclick = () => showDailySchedule(currentDateObject.getFullYear(), currentDateObject.getMonth() + 1, dayNum);
+            daysGridContainer.appendChild(dayCell);
+        }
+        monthDiv.appendChild(daysGridContainer);
+        calendarContainer.appendChild(monthDiv);
+    }
+    console.log("Fin de generateTrimesterView");
+}
 
 function generateMonthCalendar(apiResponseData, academicYearString, monthNumber) {
     const calendarContainer = document.getElementById('calendar-container');
