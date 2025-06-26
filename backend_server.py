@@ -1190,8 +1190,8 @@ def api_calendar_view():
 
         days_data_trimester = {}
         # S'assurer que calendar et datetime sont importés (normalement déjà fait en haut du fichier)
-        # import calendar
-        # from datetime import datetime
+        import calendar
+        from datetime import datetime # Bien que datetime soit global, c'est plus propre ici aussi
 
         for month_num, calendar_year_for_month in months_in_trimester:
             num_days_in_month = calendar.monthrange(calendar_year_for_month, month_num)[1]
