@@ -638,12 +638,32 @@ function generateDayView(dayApiData, dateObject) {
          const tbody = document.createElement('tbody');
          dayApiData.schedule.forEach(period => {
              const tr = document.createElement('tr');
+
+             const periodName = period.event || period.nom || 'N/A';
+
+             const heureDebutDisplay = (period.heure_debut && typeof period.heure_debut === 'string')
+                                     ? period.heure_debut.substring(0,5)
+                                     : '-';
+             const heureFinDisplay = (period.heure_fin && typeof period.heure_fin === 'string')
+                                    ? period.heure_fin.substring(0,5)
+                                    : '-';
+
+             let sonnerieDebutDisplay = '-';
+             if (period.sonnerie_debut && typeof period.sonnerie_debut === 'string' && period.sonnerie_debut.toLowerCase() !== 'aucune' && period.sonnerie_debut.trim() !== '') {
+                 sonnerieDebutDisplay = period.sonnerie_debut.replace('.mp3', '');
+             }
+
+             let sonnerieFinDisplay = '-';
+             if (period.sonnerie_fin && typeof period.sonnerie_fin === 'string' && period.sonnerie_fin.toLowerCase() !== 'aucune' && period.sonnerie_fin.trim() !== '') {
+                 sonnerieFinDisplay = period.sonnerie_fin.replace('.mp3', '');
+             }
+
              tr.innerHTML = `
-                 <td>${period.event || period.nom || 'N/A'}</td>
-                 <td>${period.heure_debut ? period.heure_debut.substring(0,5) : '-'}</td>
-                 <td>${period.heure_fin ? period.heure_fin.substring(0,5) : '-'}</td>
-                 <td>${(period.sonnerie_debut && period.sonnerie_debut !== "Aucune") ? period.sonnerie_debut.replace('.mp3','') : '-'}</td>
-                 <td>${(period.sonnerie_fin && period.sonnerie_fin !== "Aucune") ? period.sonnerie_fin.replace('.mp3','') : '-'}</td>
+                 <td>${periodName}</td>
+                 <td>${heureDebutDisplay}</td>
+                 <td>${heureFinDisplay}</td>
+                 <td>${sonnerieDebutDisplay}</td>
+                 <td>${sonnerieFinDisplay}</td>
              `;
              tbody.appendChild(tr);
          });
