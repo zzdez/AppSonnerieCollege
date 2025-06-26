@@ -1150,7 +1150,7 @@ def api_calendar_view():
 
         current_calendar_year_for_month = start_acad_year if target_month_num >= 9 else end_acad_year
 
-        import calendar # Assurer l'import
+        # import calendar # Assurer l'import << SUPPRIMÉ
         try:
             _, num_days_in_month = calendar.monthrange(current_calendar_year_for_month, target_month_num)
             start_date = date(current_calendar_year_for_month, target_month_num, 1)
@@ -1188,8 +1188,8 @@ def api_calendar_view():
         months_in_semester = semester_months_config[target_semester_num]
 
         days_data_semester = {}
-        import calendar # Assurer l'import localement
-        from datetime import datetime # Assurer l'import localement
+        # import calendar # Assurer l'import localement << SUPPRIMÉ
+        # from datetime import datetime # Assurer l'import localement << SUPPRIMÉ
 
         for month_num, year_for_month in months_in_semester:
             num_days_in_month = calendar.monthrange(year_for_month, month_num)[1]
@@ -1276,8 +1276,8 @@ def api_calendar_view():
 
         days_data_trimester = {}
         # S'assurer que calendar et datetime sont importés (normalement déjà fait en haut du fichier)
-        import calendar
-        from datetime import datetime # Bien que datetime soit global, c'est plus propre ici aussi
+        # import calendar << SUPPRIMÉ
+        # from datetime import datetime # Bien que datetime soit global, c'est plus propre ici aussi << SUPPRIMÉ
 
         for month_num, calendar_year_for_month in months_in_trimester:
             num_days_in_month = calendar.monthrange(calendar_year_for_month, month_num)[1]
