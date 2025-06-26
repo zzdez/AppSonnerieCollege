@@ -636,27 +636,56 @@ function generateDayView(dayApiData, dateObject) {
          scheduleTable.appendChild(thead);
 
          const tbody = document.createElement('tbody');
-         dayApiData.schedule.forEach(period => {
+         const schedule = dayApiData.schedule;
+
+         for (let i = 0; i < schedule.length; i += 2) {
+             const periodStart = schedule[i];
+             const periodEnd = (i + 1 < schedule.length) ? schedule[i+1] : null;
+
              const tr = document.createElement('tr');
 
-             const periodName = period.event || period.nom || 'N/A';
+             let periodName = "N/A";
+             if (periodStart && periodStart.event) {
+                 periodName = periodStart.event.replace(/^Début\s*/i, '').trim();
+             }
 
-             const heureDebutDisplay = (period.heure_debut && typeof period.heure_debut === 'string')
-                                     ? period.heure_debut.substring(0,5)
+             const heureDebutDisplay = (periodStart && periodStart.time && typeof periodStart.time === 'string')
+                                     ? periodStart.time.substring(0,5)
                                      : '-';
-             const heureFinDisplay = (period.heure_fin && typeof period.heure_fin === 'string')
-                                    ? period.heure_fin.substring(0,5)
-                                    : '-';
+
+             const heureFinDisplay = (periodEnd && periodEnd.time && typeof periodEnd.time === 'string')
+                                   ? periodEnd.time.substring(0,5)
+                                   : '-';
 
              let sonnerieDebutDisplay = '-';
-             if (period.sonnerie_debut && typeof period.sonnerie_debut === 'string' && period.sonnerie_debut.toLowerCase() !== 'aucune' && period.sonnerie_debut.trim() !== '') {
-                 sonnerieDebutDisplay = period.sonnerie_debut.replace('.mp3', '');
+             if (periodStart && periodStart.sonnerie && typeof periodStart.sonnerie === 'string' && periodStart.sonnerie.toLowerCase() !== 'aucune' && periodStart.sonnerie.toLowerCase() !== 'silence' && periodStart.sonnerie.trim() !== '') {
+                 sonnerieDebutDisplay = periodStart.sonnerie.replace('.mp3', '');
+             } else if (periodStart && periodStart.sonnerie && (periodStart.sonnerie.toLowerCase() === 'aucune' || periodStart.sonnerie.toLowerCase() === 'silence')) {
+                 sonnerieDebutDisplay = '-'; // Explicitly set to '-' for "Aucune" or "Silence"
              }
 
              let sonnerieFinDisplay = '-';
-             if (period.sonnerie_fin && typeof period.sonnerie_fin === 'string' && period.sonnerie_fin.toLowerCase() !== 'aucune' && period.sonnerie_fin.trim() !== '') {
-                 sonnerieFinDisplay = period.sonnerie_fin.replace('.mp3', '');
+             if (periodEnd && periodEnd.sonnerie && typeof periodEnd.sonnerie === 'string' && periodEnd.sonnerie.toLowerCase() !== 'aucune' && periodEnd.sonnerie.toLowerCase() !== 'silence' && periodEnd.sonnerie.trim() !== '') {
+                 sonnerieFinDisplay = periodEnd.sonnerie.replace('.mp3', '');
+             } else if (periodEnd && periodEnd.sonnerie && (periodEnd.sonnerie.toLowerCase() === 'aucune' || periodEnd.sonnerie.toLowerCase() === 'silence')) {
+                 sonnerieFinDisplay = '-'; // Explicitly set to '-' for "Aucune" or "Silence"
              }
+
+             // Basic check for pair consistency (optional, but good for robustness)
+             // This is a simple check, could be made more robust
+             if (periodEnd && periodStart.event && periodEnd.event) {
+                 const startEventName = periodStart.event.replace(/^Début\s*/i, '').trim();
+                 const endEventName = periodEnd.event.replace(/^Fin\s*/i, '').trim();
+                 if (startEventName !== endEventName) {
+                     console.warn(`Possible mismatch between Start/End events: ${periodStart.event} and ${periodEnd.event}`);
+                     // Potentially alter display or add a visual cue if mismatched
+                 }
+             } else if (periodStart && !periodEnd && schedule.length % 2 !== 0 && i === schedule.length -1 ) {
+                 // This is the last event and it's an odd one out (likely a start without an end)
+                 console.warn(`Orphaned start event found: ${periodStart.event}`);
+                 // heureFinDisplay, sonnerieFinDisplay will remain '-'
+             }
+
 
              tr.innerHTML = `
                  <td>${periodName}</td>
@@ -666,7 +695,7 @@ function generateDayView(dayApiData, dateObject) {
                  <td>${sonnerieFinDisplay}</td>
              `;
              tbody.appendChild(tr);
-         });
+         }
          scheduleTable.appendChild(tbody);
          cardBody.appendChild(scheduleTable);
      } else {
