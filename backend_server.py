@@ -1217,33 +1217,38 @@ def api_calendar_view():
         return jsonify({"error": f"Type de vue '{view_type}' non supporté."}), 400
 
     # Ajouter les paramètres de debug au retour pour faciliter le développement frontend
-    # Cette partie est maintenant commune après les blocs if/elif pour view_type
-    if "debug_params" not in calendar_data: # Au cas où une branche ne le définirait pas
-        calendar_data["debug_params"] = {}
-
-    calendar_data["debug_params"].update({
+    base_debug_params = {
         "requested_academic_year": academic_year_str,
         "requested_view_type": view_type,
         "requested_month": target_month_num if view_type == 'month' else None,
         "requested_trimester": target_trimester_num if view_type == 'trimester' else None
-    })
+    }
 
     if view_type == 'year' or view_type == 'month':
+        # Ces vues utilisent get_calendar_view_data_range et définissent start_date, end_date
+        # calendar_data est déjà peuplé par get_calendar_view_data_range
         if start_date:
-            calendar_data["debug_params"]["calculated_start_date"] = start_date.isoformat()
+            base_debug_params["calculated_start_date"] = start_date.isoformat()
         if end_date:
-            calendar_data["debug_params"]["calculated_end_date"] = end_date.isoformat()
+            base_debug_params["calculated_end_date"] = end_date.isoformat()
+        calendar_data["debug_params"] = base_debug_params
+
     elif view_type == 'trimester':
-        # Pour la vue trimestrielle, calculons les dates de début et de fin du trimestre pour le debug
-        # Assurons-nous que months_in_trimester est défini (ce qui devrait être le cas si nous sommes ici)
-        if 'months_in_trimester' in locals() and months_in_trimester: # Vérifie si la variable existe et n'est pas vide
+        # Cette vue peuple calendar_data['days'] directement.
+        # months_in_trimester est défini dans la portée de ce bloc 'trimester'
+        if 'months_in_trimester' in locals() and months_in_trimester:
             first_month_info = months_in_trimester[0]
             last_month_info = months_in_trimester[-1]
-            trimester_start_date = date(first_month_info[1], first_month_info[0], 1)
-            num_days_last_month = calendar.monthrange(last_month_info[1], last_month_info[0])[1]
-            trimester_end_date = date(last_month_info[1], last_month_info[0], num_days_last_month)
-            calendar_data["debug_params"]["calculated_trimester_start_date"] = trimester_start_date.isoformat()
-            calendar_data["debug_params"]["calculated_trimester_end_date"] = trimester_end_date.isoformat()
+            trimester_start_d = date(first_month_info[1], first_month_info[0], 1)
+            num_days_last_m = calendar.monthrange(last_month_info[1], last_month_info[0])[1]
+            trimester_end_d = date(last_month_info[1], last_month_info[0], num_days_last_m)
+            base_debug_params["calculated_trimester_start_date"] = trimester_start_d.isoformat()
+            base_debug_params["calculated_trimester_end_date"] = trimester_end_d.isoformat()
+        calendar_data["debug_params"] = base_debug_params
+    # else: # Cas où view_type n'est pas géré, déjà couvert plus haut, calendar_data serait vide.
+          # Mais on peut ajouter les debug_params de base même là.
+          # if not calendar_data: calendar_data = {} # S'assurer que calendar_data existe.
+          # calendar_data["debug_params"] = base_debug_params
 
     return jsonify(calendar_data)
 
