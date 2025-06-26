@@ -169,6 +169,77 @@ let selectedSpecificDay = null; // Stockera l'objet Date du jour sélectionné
 let selectedSemester = 1; // 1 pour S1, 2 pour S2
 let selectedTrimester = 1; // 1, 2, ou 3
 
+// --- Fonction pour appliquer les préférences ---
+function applyCalendarPreferences(prefs) {
+    console.log("[control.html] Application des préférences calendrier:", prefs);
+
+    // Valeurs par défaut si les préférences ne sont pas définies
+    const defaultView = 'year';
+    const defaultAcademicYear = getDefaultAcademicYear(); // Utiliser la fonction existante
+
+    selectedCalendarView = prefs.calendar_default_view || defaultView;
+    selectedAcademicYear = prefs.calendar_default_academic_year || defaultAcademicYear;
+
+    // Initialiser les sélecteurs HTML
+    const viewSelect = document.getElementById('calendar-view-type-select');
+    const yearSelect = document.getElementById('academic-year-select'); // Sélecteur d'année scolaire
+    // ... récupérer les autres sélecteurs (month, semester, trimester, weekDate, dayDate)
+
+    if (viewSelect) viewSelect.value = selectedCalendarView;
+
+    // Peupler et sélectionner l'année scolaire
+    // populateAcademicYearSelector() utilise et met à jour selectedAcademicYear,
+    // donc s'assurer que selectedAcademicYear est bien la valeur de la préférence AVANT d'appeler.
+    // Si yearSelect existe et a déjà des options, on peut juste essayer de setter la valeur.
+    // Sinon, populateAcademicYearSelector() le fera.
+    if (yearSelect) {
+        // Si populateAcademicYearSelector est appelé plus tard dans la chaîne d'init,
+        // il utilisera la valeur de selectedAcademicYear mise à jour ici.
+        // S'il est déjà peuplé, on essaie de sélectionner.
+        if (Array.from(yearSelect.options).find(opt => opt.value === selectedAcademicYear)) {
+            yearSelect.value = selectedAcademicYear;
+        } else {
+            // L'année préférée n'est pas dans les options, peut-être qu'il faut repeupler ou logguer.
+            // Pour l'instant, populateAcademicYearSelector() appelé dans DOMContentLoaded devrait gérer cela.
+            console.warn(`Année scolaire préférée ${selectedAcademicYear} non trouvée dans le sélecteur. populateAcademicYearSelector doit s'en charger.`);
+        }
+    }
+
+
+    // Initialiser les autres variables et sélecteurs en fonction de la vue préférée
+    if (selectedCalendarView === 'semester') {
+        selectedSemester = prefs.calendar_default_semester || 1; // Défaut à S1
+        const semesterSelect = document.getElementById('semester-select');
+        if (semesterSelect) semesterSelect.value = selectedSemester;
+    } else if (selectedCalendarView === 'trimester') {
+        selectedTrimester = prefs.calendar_default_trimester || 1; // Défaut à T1
+        const trimesterSelect = document.getElementById('trimester-select');
+        if (trimesterSelect) trimesterSelect.value = selectedTrimester;
+    } else if (selectedCalendarView === 'month') {
+        // populateMonthSelector sera appelé par changeCalendarView si la vue est 'month'
+        // On a juste besoin de s'assurer que selectedMonth a la bonne valeur de préférence
+        selectedMonth = prefs.calendar_default_month || (new Date().getMonth() + 1); // Défaut au mois actuel
+        const monthSelect = document.getElementById('month-select');
+        if (monthSelect) {
+            // populateMonthSelector sera appelé plus tard, mais on peut tenter de pré-sélectionner si déjà peuplé
+            // monthSelect.value = selectedMonth; // populateMonthSelector gère mieux la sélection initiale
+        }
+    } else if (selectedCalendarView === 'week') {
+        selectedWeekStartDate = prefs.calendar_default_week_start_iso
+                                ? new Date(prefs.calendar_default_week_start_iso + "T00:00:00") // Assurer UTC-like pour input date
+                                : new Date(); // Défaut à aujourd'hui
+        const weekDateSelect = document.getElementById('week-date-select');
+        if (weekDateSelect) weekDateSelect.value = selectedWeekStartDate.toISOString().split('T')[0];
+    } else if (selectedCalendarView === 'day') {
+        selectedSpecificDay = prefs.calendar_default_day_iso
+                            ? new Date(prefs.calendar_default_day_iso + "T00:00:00")
+                            : new Date(); // Défaut à aujourd'hui
+        const dayDateSelect = document.getElementById('day-date-select');
+        if (dayDateSelect) dayDateSelect.value = selectedSpecificDay.toISOString().split('T')[0];
+    }
+    console.log("[control.html] Variables globales de calendrier mises à jour par préférences/défauts.");
+}
+
 // Variables pour la logique d'alerte
 let ppmsClickTimer = null;
 let attentatClickTimer = null;
@@ -1549,40 +1620,82 @@ function callEndAlertAPI() { return callApiAndRefresh('/api/alert/end', 'POST', 
 document.addEventListener('DOMContentLoaded', function() {
     console.log("[control.html] DOMContentLoaded: Initialisation de la page de contrôle...");
 
-    selectedAcademicYear = getDefaultAcademicYear(); // Initialisation pour le calendrier
-
+    // Initialisations de base (variables globales, éléments DOM pour les alertes)
+    selectedAcademicYear = getDefaultAcademicYear();
     btnAlertPpms = document.getElementById('btn-alert-ppms');
     btnAlertAttentat = document.getElementById('btn-alert-attentat');
     btnEndAlert = document.getElementById('btn-end-alert');
+    // ... récupérer les autres boutons (prev/next week/day) et éléments de sélecteurs ici ...
+    const viewSelect = document.getElementById('calendar-view-type-select');
+    const yearSelect = document.getElementById('academic-year-select');
+    const monthSelect = document.getElementById('month-select');
+    const semesterSelect = document.getElementById('semester-select');
+    const trimesterSelect = document.getElementById('trimester-select');
+    const weekDateSelect = document.getElementById('week-date-select');
+    const dayDateSelect = document.getElementById('day-date-select');
+    const btnSaveDefaultView = document.getElementById('btn-save-default-view');
 
-    if (typeof populateAcademicYearSelector === 'function') populateAcademicYearSelector();
 
-    if (typeof loadConfigSettings === 'function') {
-        loadConfigSettings()
-            .then(() => {
-                console.log("[control.html] DOMContentLoaded: Config settings chargées.");
-                if (typeof fetchPageStatusAndUpdateAlertUI === 'function') {
-                    return fetchPageStatusAndUpdateAlertUI();
-                } else {
-                     console.error("[control.html] fetchPageStatusAndUpdateAlertUI non définie !");
-                }
-            })
-            .then(() => {
-                console.log("[control.html] DOMContentLoaded: Statut initial chargé et UI alertes mise à jour.");
-                // if (typeof showCalendar === 'function') showCalendar(); // ANCIEN APPEL
-                if (typeof changeCalendarView === 'function') { // NOUVEL APPEL
-                    changeCalendarView();
-                }
-            })
-            .catch(error => {
-                console.error("[control.html] DOMContentLoaded: Erreur dans la séquence d'initialisation.", error);
-                updateAlertButtonsUI({ alert_active: false, alert_type: null });
-            });
-    } else {
-        console.error("[control.html] loadConfigSettings n'est pas définie! Initialisation incomplète.");
-        updateAlertButtonsUI({ alert_active: false, alert_type: null });
+    if (typeof populateAcademicYearSelector === 'function') {
+        populateAcademicYearSelector(); // Peupler l'année scolaire d'abord
     }
 
+    let configLoadedPromise = Promise.resolve(); // Promesse qui résout immédiatement si loadConfigSettings n'existe pas
+    if (typeof loadConfigSettings === 'function') {
+        configLoadedPromise = loadConfigSettings();
+    } else {
+        console.error("[control.html] loadConfigSettings n'est pas définie!");
+    }
+
+    configLoadedPromise
+        .then(() => {
+            console.log("[control.html] DOMContentLoaded: Config settings (alertes) chargées.");
+            // Maintenant, charger les préférences utilisateur
+            return fetch('/api/user/get_calendar_preference');
+        })
+        .then(response => {
+            if (!response.ok) {
+                 // Essayer de lire le corps JSON de l'erreur
+                return response.json().then(errData => {
+                    throw new Error(errData.error || `Erreur HTTP ${response.status} lors de la récupération des préférences`);
+                }).catch(() => {
+                    // Si le corps JSON n'est pas lisible ou n'existe pas
+                    throw new Error(`Erreur HTTP ${response.status} lors de la récupération des préférences (pas de détail JSON)`);
+                });
+            }
+            return response.json();
+        })
+        .then(preferences => {
+            applyCalendarPreferences(preferences); // Appliquer les préférences
+            // Le statut des alertes peut être chargé en parallèle ou après
+            if (typeof fetchPageStatusAndUpdateAlertUI === 'function') {
+                return fetchPageStatusAndUpdateAlertUI(); // Charger statut pour les boutons d'alerte
+            }
+        })
+        .then(() => {
+            console.log("[control.html] DOMContentLoaded: Préférences appliquées et statut alertes chargé.");
+            // Maintenant, et seulement maintenant, afficher le calendrier avec la vue correcte
+            if (typeof changeCalendarView === 'function') {
+                changeCalendarView();
+            } else {
+                console.error("changeCalendarView n'est pas définie !");
+            }
+        })
+        .catch(error => {
+            console.error("[control.html] DOMContentLoaded: Erreur majeure dans la séquence d'initialisation:", error);
+            if (typeof showFeedback === 'function') showFeedback("Erreur d'initialisation de la page: " + error.message, "error");
+            // Tenter d'afficher le calendrier avec les vues par défaut même en cas d'erreur de préférence/statut
+            if (typeof changeCalendarView === 'function') {
+                console.warn("[control.html] Tentative d'affichage du calendrier avec les valeurs par défaut après erreur d'init.");
+                if (typeof applyCalendarPreferences === 'function') applyCalendarPreferences({}); // Appliquer les défauts
+                else console.error("applyCalendarPreferences non définie pour fallback.");
+                changeCalendarView();
+            }
+             if (typeof updateAlertButtonsUI === 'function') updateAlertButtonsUI({ alert_active: false, alert_type: null }); // S'assurer que les boutons d'alerte sont dans un état sûr
+        });
+
+    // Attacher les listeners (y compris celui de btnSaveDefaultView)
+    // ... (code existant pour les listeners des boutons d'alerte, navigation semaine/jour) ...
     if (btnAlertPpms) {
         btnAlertPpms.addEventListener('click', function() {
             if (this.disabled) return;
