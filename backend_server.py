@@ -1229,17 +1229,25 @@ def api_calendar_view():
             current_day_obj = week_start_date_obj + timedelta(days=i)
             date_str_key = current_day_obj.strftime('%Y-%m-%d')
 
-            day_type_val, day_desc_val, schedule_periods_val = holiday_manager.get_day_type_and_schedule(
+            # Appeler la méthode correcte et récupérer les informations
+            day_info = holiday_manager.get_day_type_and_desc(
                 current_day_obj,
-                day_types,          # Global
                 weekly_planning,    # Global
                 planning_exceptions # Global
             )
 
+            day_type_val = day_info.get("type")
+            day_desc_val = day_info.get("description")
+            schedule_name = day_info.get("schedule_name")
+
+            schedule_periods_val = []
+            if schedule_name and schedule_name in day_types: # day_types est une variable globale
+                schedule_periods_val = day_types[schedule_name].get("periodes", [])
+
             days_data_week[date_str_key] = {
                 "type": day_type_val,
                 "description": day_desc_val,
-                "schedule": schedule_periods_val if schedule_periods_val else []
+                "schedule": schedule_periods_val if schedule_periods_val else [] # Assurer une liste vide si None
             }
 
         calendar_data = {"days": days_data_week}
