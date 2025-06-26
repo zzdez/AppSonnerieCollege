@@ -480,17 +480,17 @@ function generateSemesterView(apiResponseData, academicYearString, semesterNumbe
     const daysDataFromApi = apiResponseData.days;
 
     let monthsToDisplay = []; // Array de {month: (1-12), year: YYYY}
-    if (semesterNumber === 1) { // S1: Sept, Oct, Nov, Déc (start_year), Jan (end_year)
+    if (semesterNumber === 1) { // S1: Sept, Oct, Nov, Déc (start_year), Jan, Fev (end_year)
         monthsToDisplay = [
             {month: 9, year: startYear}, {month: 10, year: startYear},
             {month: 11, year: startYear}, {month: 12, year: startYear},
-            {month: 1, year: endYear}
+            {month: 1, year: endYear}, {month: 2, year: endYear} // CHANGEMENT ICI
         ];
-    } else if (semesterNumber === 2) { // S2: Fev, Mar, Avr, Mai, Jui, Jul, Aoû (end_year)
+    } else if (semesterNumber === 2) { // S2: Mar, Avr, Mai, Jui, Jul, Aoû (end_year)
         monthsToDisplay = [
-            {month: 2, year: endYear}, {month: 3, year: endYear},
-            {month: 4, year: endYear}, {month: 5, year: endYear},
-            {month: 6, year: endYear}, {month: 7, year: endYear}, {month: 8, year: endYear}
+            {month: 3, year: endYear}, {month: 4, year: endYear},
+            {month: 5, year: endYear}, {month: 6, year: endYear},
+            {month: 7, year: endYear}, {month: 8, year: endYear} // CHANGEMENT ICI
         ];
     } else {
         calendarContainer.innerHTML = "<p>Numéro de semestre invalide.</p>";

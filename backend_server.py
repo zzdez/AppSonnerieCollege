@@ -1166,13 +1166,13 @@ def api_calendar_view():
             return jsonify({"error": "Paramètre 'semester' invalide ou manquant pour la vue semestrielle."}), 400
 
         semester_months_config = {
-            1: [ # S1: Sept, Oct, Nov, Déc (start_acad_year), Jan (end_acad_year)
+            1: [ # S1: Sept, Oct, Nov, Déc (start_acad_year), Jan, Fev (end_acad_year)
                 (9, start_acad_year), (10, start_acad_year), (11, start_acad_year), (12, start_acad_year),
-                (1, end_acad_year)
+                (1, end_acad_year), (2, end_acad_year) # CHANGEMENT ICI
             ],
-            2: [ # S2: Fev, Mar, Avr, Mai, Jui, Jul, Aoû (end_acad_year)
-                (2, end_acad_year), (3, end_acad_year), (4, end_acad_year), (5, end_acad_year),
-                (6, end_acad_year), (7, end_acad_year), (8, end_acad_year)
+            2: [ # S2: Mar, Avr, Mai, Jui, Jul, Aoû (end_acad_year)
+                (3, end_acad_year), (4, end_acad_year), (5, end_acad_year), (6, end_acad_year),
+                (7, end_acad_year), (8, end_acad_year) # CHANGEMENT ICI
             ]
         }
         if target_semester_num not in semester_months_config: # Double check, ne devrait pas être atteint
