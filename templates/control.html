@@ -87,9 +87,19 @@
                         </select>
                     </div>
 
-                    <div id="week-selector-container" class="d-flex align-items-center me-3 mb-2" style="display: none;">
-                        <label for="week-date-select" class="form-label mb-0 me-2 text-nowrap">Semaine du :</label>
-                        <input type="date" id="week-date-select" class="form-control form-control-sm" style="min-width: 150px;" onchange="changeCalendarView()">
+                    <div id="week-selector-container" class="d-flex align-items-center flex-wrap me-3 mb-2" style="display: none;">
+                        <label for="week-date-select" class="form-label mb-0 me-2">Choisir une date dans la semaine :</label>
+                        <input type="date" id="week-date-select" class="form-control form-control-sm me-2" style="min-width: 150px;" onchange="changeCalendarView()">
+
+                        <div class="btn-group btn-group-sm me-2" role="group">
+                            <button type="button" class="btn btn-outline-secondary" id="prev-week-btn" title="Semaine précédente">
+                                <i class="bi bi-chevron-left"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="next-week-btn" title="Semaine suivante">
+                                <i class="bi bi-chevron-right"></i>
+                            </button>
+                        </div>
+                        <span id="week-info-display" class="align-middle small"></span> {# Pour afficher "Semaine X (du ... au ...)" #}
                     </div>
 
                     <div id="day-selector-container" class="d-flex align-items-center mb-2" style="display: none;">
@@ -127,6 +137,15 @@
 // --- Variables Globales pour control.html ---
 let currentStatus = { alert_active: false, alert_type: null };
 let configSettings = { alert_files: { ppms: null, attentat: null } };
+
+// --- Fonctions Utilitaires ---
+function getISOWeekNumber(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7; // Remapper Dimanche (0) à 7
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
 let selectedAcademicYear; // Sera initialisée par getDefaultAcademicYear dans DOMContentLoaded
 let selectedCalendarView = 'year'; // Valeur par défaut
 let selectedMonth = new Date().getMonth() + 1; // Mois actuel par défaut (1-12)
@@ -277,12 +296,45 @@ function changeCalendarView() {
         }
     } else if (selectedCalendarView === 'week') {
         if (weekSelectorContainer) weekSelectorContainer.style.display = 'flex';
-        if (weekDateSelect) {
-            if (!weekDateSelect.value) {
-                weekDateSelect.valueAsDate = new Date();
+        const weekInfoDisplay = document.getElementById('week-info-display');
+
+        if (weekDateSelect) { // weekDateSelect est l'input type="date"
+            // Initialiser selectedWeekStartDate si ce n'est pas déjà fait ou si l'input est vide
+            if (!selectedWeekStartDate) { // Premier chargement ou reset
+                 selectedWeekStartDate = weekDateSelect.valueAsDate ? new Date(weekDateSelect.valueAsDate) : new Date();
             }
-            selectedWeekStartDate = new Date(weekDateSelect.value);
+            // Si le changement vient de l'input date lui-même (et non des boutons)
+            if (event && event.target && event.target.id === 'week-date-select' && weekDateSelect.valueAsDate) {
+                 selectedWeekStartDate = new Date(weekDateSelect.valueAsDate);
+            }
+            // S'assurer que l'input date reflète selectedWeekStartDate (surtout après clic sur boutons)
+            // Convertir selectedWeekStartDate en YYYY-MM-DD pour l'input
+             const yyyy = selectedWeekStartDate.getFullYear();
+             const mm = String(selectedWeekStartDate.getMonth() + 1).padStart(2, '0'); // Mois 0-indexed
+             const dd = String(selectedWeekStartDate.getDate()).padStart(2, '0');
+             weekDateSelect.value = `${yyyy}-${mm}-${dd}`;
+        } else if (!selectedWeekStartDate) { // Fallback si weekDateSelect n'existe pas mais qu'on arrive ici
+            selectedWeekStartDate = new Date();
         }
+
+        // Calculer le lundi de la semaine
+        let mondayOfSelectedWeek = new Date(selectedWeekStartDate);
+        let dayOfWeek = mondayOfSelectedWeek.getDay();
+        let diffToMonday = mondayOfSelectedWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+        mondayOfSelectedWeek.setDate(diffToMonday);
+
+        selectedWeekStartDate = mondayOfSelectedWeek; // Assurer que selectedWeekStartDate est bien le Lundi pour l'API
+
+        const sundayOfSelectedWeek = new Date(mondayOfSelectedWeek);
+        sundayOfSelectedWeek.setDate(mondayOfSelectedWeek.getDate() + 6);
+        const weekNumber = getISOWeekNumber(mondayOfSelectedWeek);
+        const calendarTitleSpan = document.getElementById('calendar-title-year'); // Récupérer ici aussi
+
+        const titleText = `Sem. ${weekNumber} (du ${mondayOfSelectedWeek.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'})} au ${sundayOfSelectedWeek.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'})} ${mondayOfSelectedWeek.getFullYear()})`;
+
+        if (weekInfoDisplay) weekInfoDisplay.textContent = titleText;
+        if (calendarTitleSpan) calendarTitleSpan.textContent = titleText; // Mettre à jour aussi le titre principal
+
     } else if (selectedCalendarView === 'day') {
         if (daySelectorContainer) daySelectorContainer.style.display = 'flex';
         if (dayDateSelect) {
@@ -440,13 +492,42 @@ function showSelectedCalendarView() {
         let dayOfWeek = selectedWeekStartDate.getDay(); // 0=Dim, 1=Lun, ..., 6=Sam
         let diffToMonday = selectedWeekStartDate.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Ajuster pour Lundi
         let mondayOfSelectedWeek = new Date(new Date(selectedWeekStartDate).setDate(diffToMonday)); // Crée une nouvelle instance pour ne pas modifier selectedWeekStartDate
-        let sundayOfSelectedWeek = new Date(new Date(mondayOfSelectedWeek).setDate(mondayOfSelectedWeek.getDate() + 6));
+        let sundayOfSelectedWeek = new Date(new Date(mondayOfSelectedWeek).setDate(mondayOfSelectedWeek.getDate() + 6)); // Not strictly needed for API call if backend handles 7 days
 
         const startDateStr = mondayOfSelectedWeek.toISOString().split('T')[0]; // YYYY-MM-DD
-        apiUrl = `/api/daily_schedule_range?start_date=${startDateStr}&days=7`;
+
+        // Utiliser /api/calendar_view comme pour les autres vues, maintenant qu'il supporte 'week'
+        // Le backend s'attend à 'start_date' et 'view_type=week'.
+        // 'year' pourrait être utile au backend pour un contexte, même si start_date est absolu.
+        apiUrl = `/api/calendar_view?start_date=${startDateStr}&view_type=week&year=${selectedAcademicYear}`;
+
         console.log(`API call for Weekly view: ${apiUrl}`);
-        calendarContainer.innerHTML = `<p>Vue Hebdomadaire pour la semaine du ${mondayOfSelectedWeek.toLocaleDateString('fr-FR')} au ${sundayOfSelectedWeek.toLocaleDateString('fr-FR')} - Implémentation à venir. API: ${apiUrl}</p>`;
-        // fetch(apiUrl)... then(data => generateWeekView(data)); ...
+        calendarContainer.innerHTML = `<p>Chargement de la vue hebdomadaire pour la semaine du ${mondayOfSelectedWeek.toLocaleDateString('fr-FR')}...</p>`;
+
+        fetch(apiUrl)
+            .then(response => {
+                if (!response.ok) {
+                     return response.json().then(err => {throw new Error(`Erreur HTTP ${response.status}: ${err.error||response.statusText}`)}).catch(() => {throw new Error(`Erreur HTTP ${response.status}`)});
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("[control.html] Données pour vue hebdomadaire reçues:", data);
+                if (data.error) { // Vérifier si l'API elle-même a renvoyé une erreur dans le JSON
+                    throw new Error(`Erreur API calendrier (semaine): ${data.error}`);
+                }
+                // La structure attendue de 'data' est { days: { "YYYY-MM-DD": dayData, ... } }
+                // comme pour les autres appels à /api/calendar_view
+                const daysDataForWeek = data.days;
+                if (!daysDataForWeek) {
+                    throw new Error("Format de données incorrect pour la vue hebdomadaire: 'days' manquant.");
+                }
+                generateWeekView(daysDataForWeek, mondayOfSelectedWeek);
+            })
+            .catch(error => {
+                console.error("Erreur showSelectedCalendarView (week):", error);
+                calendarContainer.innerHTML = `<p>Erreur chargement vue hebdomadaire: ${error.message}</p>`;
+            });
     } else if (selectedCalendarView === 'day') {
         if (!selectedSpecificDay) {
             calendarContainer.innerHTML = "<p>Veuillez sélectionner une date pour la vue journalière.</p>";
@@ -680,6 +761,127 @@ function generateTrimesterView(apiResponseData, academicYearString, trimesterNum
         calendarContainer.appendChild(monthDiv);
     }
     console.log("Fin de generateTrimesterView");
+}
+
+function generateWeekView(weekScheduleData, mondayDate) {
+    console.log(`[control.html] generateWeekView pour la semaine commençant le:`, mondayDate, "avec données:", weekScheduleData);
+    const calendarContainer = document.getElementById('calendar-container');
+    if (!calendarContainer) { console.error("Conteneur #calendar-container introuvable !"); return; }
+    calendarContainer.innerHTML = ''; // Vider le conteneur
+
+    if (!weekScheduleData) {
+        calendarContainer.innerHTML = "<p>Aucune donnée reçue pour la vue hebdomadaire.</p>";
+        console.error("generateWeekView: Données API manquantes ou incorrectes.", weekScheduleData);
+        return;
+    }
+
+    const weekDaysNames = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    const weekFlexContainer = document.createElement('div');
+    weekFlexContainer.className = 'd-flex flex-row flex-wrap justify-content-start align-items-stretch'; // align-items-stretch pour cartes de même hauteur
+    calendarContainer.appendChild(weekFlexContainer);
+
+    for (let i = 0; i < 7; i++) {
+        const currentDayIter = new Date(mondayDate);
+        currentDayIter.setDate(mondayDate.getDate() + i);
+        const dateKey = currentDayIter.toISOString().split('T')[0];
+
+        const dayData = weekScheduleData[dateKey];
+
+        const dayDiv = document.createElement('div');
+        dayDiv.className = 'card m-1 flex-fill';
+        dayDiv.style.minWidth = '220px'; // Augmenté pour un peu plus d'espace
+        dayDiv.style.maxWidth = '300px'; // Max width pour éviter trop d'étirement
+        dayDiv.style.flexBasis = 'calc(100% / 4 - 0.5rem)'; // Pour environ 4 cartes par ligne sur grands écrans, puis wrap
+
+        const cardHeader = document.createElement('div');
+        cardHeader.className = 'card-header text-center fw-bold';
+        cardHeader.textContent = `${weekDaysNames[i]} ${currentDayIter.toLocaleDateString('fr-FR', {day: '2-digit', month: '2-digit'})}`;
+        dayDiv.appendChild(cardHeader);
+
+        const cardBody = document.createElement('div');
+        cardBody.className = 'card-body p-2 d-flex flex-column'; // d-flex et flex-column pour gestion hauteur
+        dayDiv.appendChild(cardBody);
+
+        if (dateKey === todayStr) {
+            cardHeader.classList.add('bg-info', 'text-white'); // Mettre en évidence le jour actuel avec une couleur différente
+        }
+
+        if (dayData) {
+            const typeLower = (dayData.type || '').toLowerCase().trim();
+            let bgColorClass = '';
+            let mainInfoHtml = '';
+
+            if (typeLower.startsWith('exception (silence)')) {
+                bgColorClass = 'bg-light text-muted';
+                mainInfoHtml = `<p class="text-center fst-italic small">${dayData.description || dayData.type}</p>`;
+            } else if (typeLower.startsWith('exception (utiliser_jt')) {
+                bgColorClass = 'bg-info-subtle';
+                mainInfoHtml = `<p class="text-center fst-italic small">${dayData.description || dayData.type}</p>`;
+            } else if (typeLower === 'férié') {
+                bgColorClass = 'bg-warning-subtle';
+                mainInfoHtml = `<p class="text-center fw-bold">${dayData.type}</p>`;
+            } else if (typeLower === 'vacances') {
+                bgColorClass = 'bg-success-subtle';
+                mainInfoHtml = `<p class="text-center fw-bold">${dayData.type}</p>`;
+            } else if (currentDayIter.getDay() === 0) { // Dimanche
+                bgColorClass = 'bg-danger-subtle';
+                if (!dayData.schedule || dayData.schedule.length === 0) mainInfoHtml = `<p class="text-center text-muted small"><em>Dimanche</em></p>`;
+            } else if (currentDayIter.getDay() === 6) { // Samedi
+                bgColorClass = 'bg-secondary-subtle';
+                if (!dayData.schedule || dayData.schedule.length === 0) mainInfoHtml = `<p class="text-center text-muted small"><em>Samedi</em></p>`;
+            } else if (typeLower.startsWith('classe')) {
+                bgColorClass = 'bg-white';
+            } else {
+                bgColorClass = 'bg-light';
+            }
+
+            dayDiv.classList.add(bgColorClass);
+            cardBody.innerHTML = mainInfoHtml; // Afficher l'info principale (Férié, Vacances, etc.)
+
+            if (dayData.schedule && dayData.schedule.length > 0) {
+                const scheduleList = document.createElement('ul');
+                scheduleList.className = 'list-unstyled mb-0 small mt-2 flex-grow-1'; // mt-2 pour espacement, flex-grow-1
+                dayData.schedule.forEach(period => {
+                    const li = document.createElement('li');
+                    li.className = 'mb-1 border-bottom pb-1'; // Style pour séparer les périodes
+                    let periodText = `<strong>${period.heure_debut.substring(0,5)} - ${period.heure_fin.substring(0,5)}:</strong> ${period.nom}`;
+
+                    let sonnerieDebutText = "";
+                    if (period.sonnerie_debut && period.sonnerie_debut.toLowerCase() !== 'aucune' && period.sonnerie_debut.toLowerCase() !== 'silence') {
+                        sonnerieDebutText = `<small class="ms-2 text-muted">🔔 D: <em>${period.sonnerie_debut.replace('.mp3','')}</em></small>`;
+                    } else if (period.sonnerie_debut && (period.sonnerie_debut.toLowerCase() === 'aucune' || period.sonnerie_debut.toLowerCase() === 'silence')) {
+                        sonnerieDebutText = `<small class="ms-2 text-muted">🔔 D: <em>Silence</em></small>`;
+                    }
+
+                    let sonnerieFinText = "";
+                     if (period.sonnerie_fin && period.sonnerie_fin.toLowerCase() !== 'aucune' && period.sonnerie_fin.toLowerCase() !== 'silence') {
+                        sonnerieFinText = `<small class="ms-2 text-muted">🔔 F: <em>${period.sonnerie_fin.replace('.mp3','')}</em></small>`;
+                    } else if (period.sonnerie_fin && (period.sonnerie_fin.toLowerCase() === 'aucune' || period.sonnerie_fin.toLowerCase() === 'silence')) {
+                         sonnerieFinText = `<small class="ms-2 text-muted">🔔 F: <em>Silence</em></small>`;
+                    }
+
+                    if (sonnerieDebutText || sonnerieFinText) {
+                         periodText += `<br>${sonnerieDebutText}${sonnerieDebutText && sonnerieFinText ? " " : ""}${sonnerieFinText}`;
+                    }
+
+                    li.innerHTML = periodText;
+                    scheduleList.appendChild(li);
+                });
+                cardBody.appendChild(scheduleList);
+            } else if (mainInfoHtml === '' && (!dayData.type || dayData.type.toLowerCase().startsWith('classe'))) {
+                // Si c'est un jour de classe sans planning spécifique affiché et sans info principale
+                cardBody.innerHTML += `<p class="text-center text-muted small mt-2 flex-grow-1"><em>Aucun planning spécifique</em></p>`;
+            }
+        } else {
+            dayDiv.classList.add('bg-light');
+            cardBody.innerHTML = `<p class="text-center text-muted small mt-2 flex-grow-1"><em>Données non disponibles</em></p>`;
+        }
+        weekFlexContainer.appendChild(dayDiv);
+    }
+    console.log("[control.html] Fin de generateWeekView");
 }
 
 function generateMonthCalendar(apiResponseData, academicYearString, monthNumber) {
@@ -1301,6 +1503,41 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     } else { console.error("Bouton #btn-end-alert non trouvé pour attacher listener."); }
+
+    // Gestionnaires pour les boutons de navigation semaine
+    const prevWeekBtn = document.getElementById('prev-week-btn');
+    const nextWeekBtn = document.getElementById('next-week-btn');
+    const weekDateSelectInput = document.getElementById('week-date-select'); // Récupérer l'input date
+
+    if (prevWeekBtn) {
+        prevWeekBtn.addEventListener('click', function() {
+            if (selectedWeekStartDate) { // S'assurer que la date est initialisée
+                selectedWeekStartDate.setDate(selectedWeekStartDate.getDate() - 7);
+                // Mettre à jour l'input date pour refléter le changement
+                if(weekDateSelectInput) {
+                    // Créer une nouvelle date pour valueAsDate pour éviter les problèmes de référence/mutation
+                    weekDateSelectInput.valueAsDate = new Date(selectedWeekStartDate);
+                }
+                changeCalendarView({target: {id: 'prev-week-btn'}}); // Passer un objet event factice
+            } else {
+                console.warn("selectedWeekStartDate non initialisée pour prev-week-btn");
+            }
+        });
+    }
+
+    if (nextWeekBtn) {
+        nextWeekBtn.addEventListener('click', function() {
+            if (selectedWeekStartDate) { // S'assurer que la date est initialisée
+                selectedWeekStartDate.setDate(selectedWeekStartDate.getDate() + 7);
+                if(weekDateSelectInput) {
+                    weekDateSelectInput.valueAsDate = new Date(selectedWeekStartDate);
+                }
+                changeCalendarView({target: {id: 'next-week-btn'}});
+            } else {
+                console.warn("selectedWeekStartDate non initialisée pour next-week-btn");
+            }
+        });
+    }
 
     console.log("[control.html] DOMContentLoaded: Fin de l'initialisation.");
 });

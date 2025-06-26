@@ -1116,12 +1116,18 @@ def api_calendar_view():
     view_type = request.args.get('view_type', default='year').lower()
     target_month_num = request.args.get('month', default=None, type=int)
     target_trimester_num = request.args.get('trimester', default=None, type=int)
-    target_semester_num = request.args.get('semester', default=None, type=int) # Nouveau paramètre pour semestre
+    target_semester_num = request.args.get('semester', default=None, type=int)
+    request_start_date_str = request.args.get('start_date', default=None) # Pour la vue hebdomadaire
 
-    logger.debug(f"User '{user}' requête /api/calendar_view with params: year='{academic_year_str}', view_type='{view_type}', month='{target_month_num}', trimester='{target_trimester_num}', semester='{target_semester_num}'")
+    logger.debug(
+        f"User '{user}' requête /api/calendar_view with params: "
+        f"year='{academic_year_str}', view_type='{view_type}', month='{target_month_num}', "
+        f"trimester='{target_trimester_num}', semester='{target_semester_num}', "
+        f"start_date='{request_start_date_str}'"
+    )
 
-    if not academic_year_str:
-        logger.warning("API /api/calendar_view: Paramètre 'year' (année scolaire YYYY-YYYY) manquant.")
+    if not academic_year_str and view_type not in ['week', 'day']: # Year is not strictly needed for week/day if start_date is absolute
+        logger.warning("API /api/calendar_view: Paramètre 'year' (année scolaire YYYY-YYYY) manquant pour une vue qui le requiert.")
         return jsonify({"error": "Paramètre 'year' (année scolaire YYYY-YYYY) manquant."}), 400
 
     try:
@@ -1144,7 +1150,7 @@ def api_calendar_view():
 
         current_calendar_year_for_month = start_acad_year if target_month_num >= 9 else end_acad_year
 
-        import calendar # Assurer l'import
+        # import calendar # Assurer l'import << SUPPRIMÉ
         try:
             _, num_days_in_month = calendar.monthrange(current_calendar_year_for_month, target_month_num)
             start_date = date(current_calendar_year_for_month, target_month_num, 1)
@@ -1182,8 +1188,8 @@ def api_calendar_view():
         months_in_semester = semester_months_config[target_semester_num]
 
         days_data_semester = {}
-        import calendar # Assurer l'import localement
-        from datetime import datetime # Assurer l'import localement
+        # import calendar # Assurer l'import localement << SUPPRIMÉ
+        # from datetime import datetime # Assurer l'import localement << SUPPRIMÉ
 
         for month_num, year_for_month in months_in_semester:
             num_days_in_month = calendar.monthrange(year_for_month, month_num)[1]
@@ -1201,6 +1207,51 @@ def api_calendar_view():
 
         calendar_data = {"days": days_data_semester}
         logger.info(f"Calcul calendrier pour vue semestrielle: S{target_semester_num} de {academic_year_str}")
+
+    elif view_type == 'week':
+        if not request_start_date_str:
+            logger.warning("API /api/calendar_view (week view): Paramètre 'start_date' manquant.")
+            return jsonify({"error": "Paramètre 'start_date' manquant pour la vue hebdomadaire."}), 400
+        try:
+            # Convertir la date de début de la chaîne en objet datetime.date
+            # current_day_start_obj = datetime.strptime(request_start_date_str, '%Y-%m-%d').date()
+            # La JS envoie une date qui est déjà le Lundi.
+            week_start_date_obj = datetime.strptime(request_start_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            logger.warning(f"API /api/calendar_view (week view): Format 'start_date' invalide: {request_start_date_str}")
+            return jsonify({"error": "Format 'start_date' invalide. Attendu YYYY-MM-DD."}), 400
+
+        days_data_week = {}
+        # Pas besoin d'importer calendar et datetime ici car ils sont déjà importés globalement et dans d'autres branches.
+        # On s'assure que les variables globales sont bien accessibles : day_types, weekly_planning, planning_exceptions, holiday_manager
+
+        for i in range(7): # Pour les 7 jours de la semaine
+            current_day_obj = week_start_date_obj + timedelta(days=i)
+            date_str_key = current_day_obj.strftime('%Y-%m-%d')
+
+            # Appeler la méthode correcte et récupérer les informations
+            day_info = holiday_manager.get_day_type_and_desc(
+                current_day_obj,
+                weekly_planning,    # Global
+                planning_exceptions # Global
+            )
+
+            day_type_val = day_info.get("type")
+            day_desc_val = day_info.get("description")
+            schedule_name = day_info.get("schedule_name")
+
+            schedule_periods_val = []
+            if schedule_name and schedule_name in day_types: # day_types est une variable globale
+                schedule_periods_val = day_types[schedule_name].get("periodes", [])
+
+            days_data_week[date_str_key] = {
+                "type": day_type_val,
+                "description": day_desc_val,
+                "schedule": schedule_periods_val if schedule_periods_val else [] # Assurer une liste vide si None
+            }
+
+        calendar_data = {"days": days_data_week}
+        logger.info(f"Calcul calendrier pour vue hebdomadaire démarrant le {request_start_date_str}")
 
     elif view_type == 'year':
         # Logique pour l'année scolaire complète (Septembre à Août)
@@ -1233,8 +1284,8 @@ def api_calendar_view():
 
         days_data_trimester = {}
         # S'assurer que calendar et datetime sont importés (normalement déjà fait en haut du fichier)
-        import calendar
-        from datetime import datetime # Bien que datetime soit global, c'est plus propre ici aussi
+        # import calendar << SUPPRIMÉ
+        # from datetime import datetime # Bien que datetime soit global, c'est plus propre ici aussi << SUPPRIMÉ
 
         for month_num, calendar_year_for_month in months_in_trimester:
             num_days_in_month = calendar.monthrange(calendar_year_for_month, month_num)[1]
@@ -1265,7 +1316,8 @@ def api_calendar_view():
         "requested_view_type": view_type,
         "requested_month": target_month_num if view_type == 'month' else None,
         "requested_trimester": target_trimester_num if view_type == 'trimester' else None,
-        "requested_semester": target_semester_num if view_type == 'semester' else None
+        "requested_semester": target_semester_num if view_type == 'semester' else None,
+        "requested_start_date": request_start_date_str if view_type == 'week' else None
     }
 
     if view_type == 'year' or view_type == 'month':
@@ -1302,6 +1354,16 @@ def api_calendar_view():
             semester_end_d = date(last_month_info[1], last_month_info[0], num_days_last_m)
             base_debug_params["calculated_semester_start_date"] = semester_start_d.isoformat()
             base_debug_params["calculated_semester_end_date"] = semester_end_d.isoformat()
+        calendar_data["debug_params"] = base_debug_params
+
+    elif view_type == 'week':
+        # La vue semaine peuple `calendar_data['days']` directement.
+        # `week_start_date_obj` est défini dans le bloc 'week'.
+        if 'week_start_date_obj' in locals():
+            # calculated_end_date pour la semaine serait week_start_date_obj + 6 jours
+            week_end_date_obj = week_start_date_obj + timedelta(days=6)
+            base_debug_params["calculated_week_start_date"] = week_start_date_obj.isoformat()
+            base_debug_params["calculated_week_end_date"] = week_end_date_obj.isoformat()
         calendar_data["debug_params"] = base_debug_params
 
     # else: # Cas où view_type n'est pas géré, déjà couvert plus haut, calendar_data serait vide.
