@@ -780,7 +780,7 @@ function generateWeekView(weekScheduleData, mondayDate) {
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
     const weekFlexContainer = document.createElement('div');
-    weekFlexContainer.className = 'd-flex flex-row flex-wrap justify-content-start align-items-stretch'; // align-items-stretch pour cartes de même hauteur
+    weekFlexContainer.className = 'd-flex flex-row flex-wrap justify-content-start calendar-week-view-container'; 
     calendarContainer.appendChild(weekFlexContainer);
 
     for (let i = 0; i < 7; i++) {
