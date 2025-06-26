@@ -827,6 +827,109 @@ h2 { color: #333; } /* Gardé pour certains titres spécifiques si besoin */
 .blinking-alert {
     animation: blinker 1s linear infinite;
 }
+/* ============================================= */
+/* Styles pour la Vue Hebdomadaire du Calendrier */
+/* ============================================= */
+
+/* Classe pour le conteneur principal de la vue hebdomadaire (à ajouter en JS à calendarContainer) */
+/* Si tu as ajouté la classe 'calendar-week-view-container' au calendarContainer via JS, utilise-la. */
+/* Sinon, tu peux cibler plus spécifiquement si generateWeekView crée une structure unique. */
+/* Pour l'instant, je vais supposer que les cartes jour de la vue semaine sont dans un conteneur */
+/* qui a, ou dont le parent a, la classe 'calendar-week-view-container'. */
+/* Si generateWeekView ajoute la classe directement à #calendar-container, alors ce sera: */
+/* #calendar-container.calendar-week-view-container .card { ... } */
+
+/* Si vous mettez la classe 'calendar-week-view-container' sur le 'weekFlexContainer' qui est DANS #calendar-container : */
+.calendar-week-view-container .card { 
+    font-size: 0.85rem; /* Réduire la taille de police générale de la carte jour */
+    margin: 0.25rem !important; /* Réduire la marge entre les cartes jour */
+    /* min-width: 180px; */ /* Ajuster la largeur minimale si besoin, ex: pour 7 jours sur une ligne */
+}
+
+.calendar-week-view-container .card-header {
+    padding: 0.3rem 0.5rem; /* Réduire le padding du header de la carte jour */
+    font-size: 0.9em;    /* Taille de police relative au parent .card */
+    font-weight: bold;   /* Garder le nom du jour en gras */
+}
+
+.calendar-week-view-container .card-body {
+    padding: 0.4rem; /* Réduire le padding du corps de la carte jour */
+    /* Optionnel: Limiter la hauteur et ajouter un scroll si beaucoup de sonneries */
+    /* Vous pouvez décommenter et ajuster ces lignes si vous avez des listes très longues */
+    /* max-height: 250px;  */
+    /* overflow-y: auto;   */
+}
+
+/* Style pour la liste des périodes de sonnerie dans la carte jour */
+.calendar-week-view-container .list-unstyled {
+    margin-bottom: 0 !important; /* Enlever la marge en bas de la liste ul */
+}
+
+.calendar-week-view-container .list-unstyled li {
+    margin-bottom: 0.3rem !important; /* Réduire la marge entre les éléments de la liste (sonneries) */
+    line-height: 1.25;         /* Rapprocher les lignes si le texte d'une sonnerie passe à la ligne */
+    padding: 0.1rem 0;       /* Petit padding vertical pour chaque item */
+    /* border-bottom: 1px solid #f0f0f0; */ /* Optionnel: séparateur léger */
+}
+/* .calendar-week-view-container .list-unstyled li:last-child {
+    border-bottom: none; 
+    margin-bottom: 0 !important;
+} */
+
+
+.calendar-week-view-container .list-unstyled li strong { /* Pour les heures (ex: 08:00-08:55) */
+    font-size: 0.9em; /* Légèrement plus petit que le texte normal de la carte */
+    /* display: inline-block; */ /* Pourrait aider à l'alignement */
+    /* min-width: 70px; */     /* Si vous voulez une largeur fixe pour les heures */
+}
+
+.calendar-week-view-container .list-unstyled li .period-name { /* Classe pour le nom de la période */
+    /* La taille sera héritée de .card (0.85rem), ce qui est déjà réduit. */
+    /* Si besoin d'encore plus petit : font-size: 0.9em; (relatif à .list-unstyled li) */
+}
+
+.calendar-week-view-container .list-unstyled li small { /* Pour les infos (D: Son1 | F: Son2) */
+    font-size: 0.8em;  /* Encore plus petit, relatif à .list-unstyled li */
+    color: #485560;    /* Couleur un peu plus discrète */
+    display: block;    /* Pour que ça passe à la ligne en dessous des heures/nom si trop long */
+    margin-left: 0.5rem; /* Petit retrait si sur une nouvelle ligne */
+}
+
+/* Styles pour les jours sans planning ou avec des messages spécifiques */
+.calendar-week-view-container .card-body .text-center.text-muted.small {
+    font-size: 0.8em; /* Taille pour "Aucun planning" ou "Données non disponibles" */
+    padding: 0.5rem 0;
+}
+
+/* Couleurs de fond pour les jours de la semaine (bg-*-subtle de Bootstrap) */
+/* Ces classes doivent être ajoutées dynamiquement par JavaScript au `div.card` */
+/* Exemple si vous ajoutez directement la classe Bootstrap : */
+.calendar-week-view-container .card.bg-light { /* Type de jour "Autre" ou inconnu sans planning */
+    /* Bootstrap gère déjà le style de .bg-light */
+}
+.calendar-week-view-container .card.bg-info-subtle { /* Exception avec JT */
+    /* Bootstrap gère */
+}
+.calendar-week-view-container .card.bg-warning-subtle { /* Férié */
+    /* Bootstrap gère */
+}
+.calendar-week-view-container .card.bg-success-subtle { /* Vacances */
+    /* Bootstrap gère */
+}
+.calendar-week-view-container .card.bg-danger-subtle { /* Dimanche */
+    /* Bootstrap gère */
+}
+.calendar-week-view-container .card.bg-secondary-subtle { /* Samedi */
+    /* Bootstrap gère */
+}
+.calendar-week-view-container .card.bg-white { /* Jour de classe normal */
+    /* Fond blanc par défaut pour les cartes, ou spécifier si différent */
+}
+
+/* S'assurer que le header de la carte pour le jour actuel reste lisible */
+.calendar-week-view-container .card .card-header.bg-primary.text-white {
+    font-size: 0.9em; /* Assurer la cohérence avec les autres headers de jour */
+}
 
 /* Feedback dans cette page (utilise déjà .feedback-message global) */
 /* #exception-feedback, #list-feedback { margin-top: 15px; } */
