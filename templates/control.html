@@ -58,7 +58,12 @@
                     </select>
                 </div>
 
-                <div id="calendar-period-controls" class="d-flex align-items-center flex-wrap"> {# Nouveau conteneur global pour TOUS les contrôles de période #}
+                {# Bouton Mémoriser Vue - Ajouté ici avant les contrôles de période pour qu'il ne soit pas poussé trop loin par ms-auto si les contrôles sont nombreux #}
+                <button type="button" class="btn btn-sm btn-outline-primary ms-2 mb-2" id="btn-save-default-view" title="Mémoriser cette vue et période comme affichage par défaut">
+                    <i class="bi bi-bookmark-star me-1"></i> Mémoriser vue
+                </button>
+
+                <div id="calendar-period-controls" class="d-flex align-items-center flex-wrap ms-auto"> {# ms-auto ici pour pousser les contrôles de période à droite #}
 
                     <div id="academic-year-selector-container" class="d-flex align-items-center me-3 mb-2" style="display: none;">
                         <label for="academic-year-select" class="form-label mb-0 me-2 text-nowrap">Année scolaire :</label>
@@ -1762,6 +1767,88 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
         if (!nextDayBtn) console.warn("Élément #next-day-btn non trouvé.");
         // dayDateSelectInputForNav déjà vérifié avec prevDayBtn
+    }
+
+    // Script pour le bouton "Mémoriser cette vue"
+    const btnSaveDefaultView = document.getElementById('btn-save-default-view');
+    if (btnSaveDefaultView) {
+        btnSaveDefaultView.addEventListener('click', function() {
+            console.log("Sauvegarde de la vue par défaut demandée...");
+
+            // S'assurer que les variables globales sont à jour avec les sélecteurs si la vue n'a pas été changée récemment
+            // Ce code est un peu redondant avec changeCalendarView mais assure que les valeurs sont les plus récentes.
+            const viewSelect = document.getElementById('calendar-view-type-select');
+            const yearSelect = document.getElementById('academic-year-select');
+            const monthSelect = document.getElementById('month-select');
+            const semesterSelect = document.getElementById('semester-select');
+            const trimesterSelect = document.getElementById('trimester-select');
+            const weekDateSelect = document.getElementById('week-date-select');
+            const dayDateSelect = document.getElementById('day-date-select');
+
+            if (viewSelect) selectedCalendarView = viewSelect.value;
+            if (yearSelect) selectedAcademicYear = yearSelect.value;
+            if (monthSelect && selectedCalendarView === 'month') selectedMonth = parseInt(monthSelect.value);
+            if (semesterSelect && selectedCalendarView === 'semester') selectedSemester = parseInt(semesterSelect.value);
+            if (trimesterSelect && selectedCalendarView === 'trimester') selectedTrimester = parseInt(trimesterSelect.value);
+            // Pour week et day, selectedWeekStartDate et selectedSpecificDay sont mis à jour dans changeCalendarView
+            // et via les inputs date. On s'assure qu'ils sont corrects avant de construire le payload.
+            if (weekDateSelect && selectedCalendarView === 'week' && weekDateSelect.valueAsDate) {
+                 // Recalculer le lundi si l'utilisateur a choisi une autre date dans la semaine
+                 let tempDate = new Date(weekDateSelect.valueAsDate);
+                 let dayOfWeek = tempDate.getDay();
+                 let diffToMonday = tempDate.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+                 selectedWeekStartDate = new Date(tempDate.setDate(diffToMonday));
+            } else if (selectedCalendarView === 'week' && !selectedWeekStartDate) {
+                // Fallback si selectedWeekStartDate n'est pas défini pour une raison quelconque
+                selectedWeekStartDate = new Date(); // ou une autre logique de défaut
+                let dayOfWeek = selectedWeekStartDate.getDay();
+                let diffToMonday = selectedWeekStartDate.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+                selectedWeekStartDate.setDate(diffToMonday);
+            }
+
+            if (dayDateSelect && selectedCalendarView === 'day' && dayDateSelect.valueAsDate) {
+                selectedSpecificDay = new Date(dayDateSelect.valueAsDate);
+            } else if (selectedCalendarView === 'day' && !selectedSpecificDay) {
+                selectedSpecificDay = new Date(); // Fallback
+            }
+
+
+            const preferencePayload = {
+                view: selectedCalendarView,
+                academic_year: selectedAcademicYear, // Toujours requis
+                semester: (selectedCalendarView === 'semester') ? selectedSemester : null,
+                trimester: (selectedCalendarView === 'trimester') ? selectedTrimester : null,
+                month: (selectedCalendarView === 'month') ? selectedMonth : null,
+                week_start_iso: (selectedCalendarView === 'week' && selectedWeekStartDate) ? selectedWeekStartDate.toISOString().split('T')[0] : null,
+                day_iso: (selectedCalendarView === 'day' && selectedSpecificDay) ? selectedSpecificDay.toISOString().split('T')[0] : null
+            };
+
+            console.log("Payload pour sauvegarde:", preferencePayload);
+
+            fetch('/api/user/set_calendar_preference', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // Ajouter le header CSRF si Flask-WTF avec CSRFProtect est utilisé pour les POST AJAX
+                    // 'X-CSRFToken': '{{ csrf_token() }}' // Nécessite que le token soit dans le template via Jinja
+                },
+                body: JSON.stringify(preferencePayload)
+            })
+            .then(response => response.json().then(data => ({ok: response.ok, data})))
+            .then(({ok, data}) => {
+                if (ok) {
+                    showFeedback(data.message || "Vue par défaut sauvegardée avec succès !", 'success');
+                } else {
+                    showFeedback(data.error || "Erreur lors de la sauvegarde de la vue par défaut.", 'error');
+                }
+            })
+            .catch(error => {
+                console.error("Erreur réseau sauvegarde préférence:", error);
+                showFeedback("Erreur réseau lors de la sauvegarde.", 'error');
+            });
+        });
+    } else {
+        console.warn("Bouton #btn-save-default-view non trouvé.");
     }
 
     console.log("[control.html] DOMContentLoaded: Fin de l'initialisation.");

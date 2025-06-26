@@ -355,9 +355,19 @@ def load_users(filename=USERS_FILE):
             users_data_from_file[username] = {
                 "hash": user_info,
                 "nom_complet": "Utilisateur (migré)",
-                "role": default_role_for_migration
+                "role": default_role_for_migration,
+                "preferences": { # Initialiser aussi pour les utilisateurs migrés
+                    "calendar_default_view": None,
+                    "calendar_default_academic_year": None,
+                    "calendar_default_semester": None,
+                    "calendar_default_trimester": None,
+                    "calendar_default_month": None,
+                    "calendar_default_week_start_iso": None,
+                    "calendar_default_day_iso": None
+                }
                 # Pas de champ 'permissions' ici, il sera chargé dynamiquement via le rôle
             }
+            logger.info(f"Utilisateur '{username}': Champ 'preferences' initialisé lors de la migration.")
             made_change = True
         elif isinstance(user_info, dict):
             # 1. Vérifier et assigner 'nom_complet'
@@ -393,6 +403,40 @@ def load_users(filename=USERS_FILE):
                 logger.info(f"Utilisateur '{username}': Suppression de l'ancien champ 'permissions' stocké dans users.json.")
                 del user_info["permissions"]
                 made_change = True
+
+            # 4. Initialiser les préférences si elles n'existent pas
+            if "preferences" not in user_info or user_info["preferences"] is None:
+                user_info["preferences"] = {
+                    "calendar_default_view": None,
+                    "calendar_default_academic_year": None,
+                    "calendar_default_semester": None,
+                    "calendar_default_trimester": None,
+                    "calendar_default_month": None,
+                    "calendar_default_week_start_iso": None,
+                    "calendar_default_day_iso": None
+                }
+                logger.info(f"Utilisateur '{username}': Champ 'preferences' initialisé avec les valeurs par défaut.")
+                made_change = True
+            # S'assurer que toutes les clés de préférences existent, même si 'preferences' existe déjà
+            elif isinstance(user_info.get("preferences"), dict):
+                default_prefs_keys = {
+                    "calendar_default_view": None,
+                    "calendar_default_academic_year": None,
+                    "calendar_default_semester": None,
+                    "calendar_default_trimester": None,
+                    "calendar_default_month": None,
+                    "calendar_default_week_start_iso": None,
+                    "calendar_default_day_iso": None
+                }
+                prefs_changed_for_existing_user = False
+                for key, default_value in default_prefs_keys.items():
+                    if key not in user_info["preferences"]:
+                        user_info["preferences"][key] = default_value
+                        prefs_changed_for_existing_user = True
+                if prefs_changed_for_existing_user:
+                    logger.info(f"Utilisateur '{username}': Clés manquantes ajoutées à 'preferences' existantes.")
+                    made_change = True
+
         else:
             logger.error(f"Format de données utilisateur inconnu pour '{username}': {type(user_info)}. Ignoré.")
             # On pourrait le supprimer ou tenter une migration plus agressive. Pour l'instant, on logue et ignore.
@@ -3121,6 +3165,84 @@ def update_role_permissions(role_name):
         # --- FIN NOUVELLES ROUTES POUR LA CONFIGURATION WEB ---
         # --- FIN ROUTES API POUR LA GESTION DES UTILISATEURS ---
         # --- FIN ROUTES API POUR LA GESTION DES RÔLES ---
+
+# ==============================================================================
+# Routes API pour les Préférences Utilisateur
+# ==============================================================================
+
+@app.route('/api/user/set_calendar_preference', methods=['POST'])
+@login_required
+@require_permission("page:view_control") # Ou une permission plus spécifique si créée
+def set_user_calendar_preference():
+    user_id = current_user.id
+    data = request.json
+    logger.info(f"User '{user_id}' sauvegarde préférences calendrier: {data}")
+
+    if not data:
+        logger.warning(f"User '{user_id}' - set_calendar_preference: Aucune donnée JSON reçue.")
+        return jsonify({"error": "Aucune donnée JSON reçue."}), 400
+
+    required_view = data.get('view')
+    required_academic_year = data.get('academic_year')
+
+    if not required_view or not required_academic_year:
+        logger.warning(f"User '{user_id}' - set_calendar_preference: Données 'view' ou 'academic_year' manquantes. Reçu: {data}")
+        return jsonify({"error": "Les champs 'view' et 'academic_year' sont requis."}), 400
+
+    # Valider les types de données plus précisément si nécessaire
+    # Exemple: view doit être dans une liste prédéfinie, academic_year doit correspondre à un format YYYY-YYYY, etc.
+
+    if user_id in users_data:
+        if 'preferences' not in users_data[user_id] or users_data[user_id]['preferences'] is None:
+            # Initialiser avec toutes les clés au cas où load_users n'aurait pas été appelé récemment (peu probable mais sécurisé)
+            users_data[user_id]['preferences'] = {
+                "calendar_default_view": None,
+                "calendar_default_academic_year": None,
+                "calendar_default_semester": None,
+                "calendar_default_trimester": None,
+                "calendar_default_month": None,
+                "calendar_default_week_start_iso": None,
+                "calendar_default_day_iso": None
+            }
+
+        users_data[user_id]['preferences']['calendar_default_view'] = data.get('view')
+        users_data[user_id]['preferences']['calendar_default_academic_year'] = data.get('academic_year')
+        users_data[user_id]['preferences']['calendar_default_semester'] = data.get('semester', None)
+        users_data[user_id]['preferences']['calendar_default_trimester'] = data.get('trimester', None)
+        users_data[user_id]['preferences']['calendar_default_month'] = data.get('month', None)
+        users_data[user_id]['preferences']['calendar_default_week_start_iso'] = data.get('week_start_iso', None)
+        users_data[user_id]['preferences']['calendar_default_day_iso'] = data.get('day_iso', None)
+
+        if save_users_data():
+            logger.info(f"Préférences calendrier sauvegardées pour user '{user_id}'.")
+            return jsonify({"message": "Préférence de vue calendrier sauvegardée avec succès."}), 200
+        else:
+            logger.error(f"Échec sauvegarde users.json pour préférences user '{user_id}'.")
+            # Il serait bon d'annuler les modifications en mémoire si la sauvegarde échoue
+            # load_users() # Pourrait être trop lourd, ou recharger l'état précédent de cet utilisateur
+            return jsonify({"error": "Erreur serveur lors de la sauvegarde des préférences."}), 500
+    else:
+        logger.error(f"Utilisateur '{user_id}' non trouvé pour sauvegarder préférences calendrier.")
+        return jsonify({"error": "Utilisateur non trouvé."}), 404
+
+@app.route('/api/user/get_calendar_preference', methods=['GET'])
+@login_required
+@require_permission("page:view_control") # Ou une permission plus spécifique
+def get_user_calendar_preference():
+    user_id = current_user.id
+    # Utiliser .get pour éviter KeyError si l'utilisateur ou les préférences n'existent pas
+    user_prefs_data = users_data.get(user_id, {}).get('preferences', {})
+
+    # Si user_prefs_data est None (ce qui peut arriver si le fichier json a été modifié manuellement avec "preferences": null),
+    # on le convertit en {} pour être cohérent avec le cas où la clé "preferences" n'existe pas.
+    if user_prefs_data is None:
+        user_prefs_data = {}
+
+    logger.debug(f"Récupération préférences calendrier pour user '{user_id}': {user_prefs_data}")
+    return jsonify(user_prefs_data), 200
+
+# FIN Routes API pour les Préférences Utilisateur
+# ==============================================================================
 
 # Retirer l'ancienne infrastructure de rôles
 # ROLES_HIERARCHIE, role_access_denied, require_role,
