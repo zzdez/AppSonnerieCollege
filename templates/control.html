@@ -87,9 +87,19 @@
                         </select>
                     </div>
 
-                    <div id="week-selector-container" class="d-flex align-items-center me-3 mb-2" style="display: none;">
-                        <label for="week-date-select" class="form-label mb-0 me-2 text-nowrap">Semaine du :</label>
-                        <input type="date" id="week-date-select" class="form-control form-control-sm" style="min-width: 150px;" onchange="changeCalendarView()">
+                    <div id="week-selector-container" class="d-flex align-items-center flex-wrap me-3 mb-2" style="display: none;">
+                        <label for="week-date-select" class="form-label mb-0 me-2">Choisir une date dans la semaine :</label>
+                        <input type="date" id="week-date-select" class="form-control form-control-sm me-2" style="min-width: 150px;" onchange="changeCalendarView()">
+
+                        <div class="btn-group btn-group-sm me-2" role="group">
+                            <button type="button" class="btn btn-outline-secondary" id="prev-week-btn" title="Semaine précédente">
+                                <i class="bi bi-chevron-left"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="next-week-btn" title="Semaine suivante">
+                                <i class="bi bi-chevron-right"></i>
+                            </button>
+                        </div>
+                        <span id="week-info-display" class="align-middle small"></span> {# Pour afficher "Semaine X (du ... au ...)" #}
                     </div>
 
                     <div id="day-selector-container" class="d-flex align-items-center mb-2" style="display: none;">
@@ -127,6 +137,15 @@
 // --- Variables Globales pour control.html ---
 let currentStatus = { alert_active: false, alert_type: null };
 let configSettings = { alert_files: { ppms: null, attentat: null } };
+
+// --- Fonctions Utilitaires ---
+function getISOWeekNumber(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7; // Remapper Dimanche (0) à 7
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
 let selectedAcademicYear; // Sera initialisée par getDefaultAcademicYear dans DOMContentLoaded
 let selectedCalendarView = 'year'; // Valeur par défaut
 let selectedMonth = new Date().getMonth() + 1; // Mois actuel par défaut (1-12)
@@ -277,12 +296,45 @@ function changeCalendarView() {
         }
     } else if (selectedCalendarView === 'week') {
         if (weekSelectorContainer) weekSelectorContainer.style.display = 'flex';
-        if (weekDateSelect) {
-            if (!weekDateSelect.value) {
-                weekDateSelect.valueAsDate = new Date();
+        const weekInfoDisplay = document.getElementById('week-info-display');
+
+        if (weekDateSelect) { // weekDateSelect est l'input type="date"
+            // Initialiser selectedWeekStartDate si ce n'est pas déjà fait ou si l'input est vide
+            if (!selectedWeekStartDate) { // Premier chargement ou reset
+                 selectedWeekStartDate = weekDateSelect.valueAsDate ? new Date(weekDateSelect.valueAsDate) : new Date();
             }
-            selectedWeekStartDate = new Date(weekDateSelect.value);
+            // Si le changement vient de l'input date lui-même (et non des boutons)
+            if (event && event.target && event.target.id === 'week-date-select' && weekDateSelect.valueAsDate) {
+                 selectedWeekStartDate = new Date(weekDateSelect.valueAsDate);
+            }
+            // S'assurer que l'input date reflète selectedWeekStartDate (surtout après clic sur boutons)
+            // Convertir selectedWeekStartDate en YYYY-MM-DD pour l'input
+             const yyyy = selectedWeekStartDate.getFullYear();
+             const mm = String(selectedWeekStartDate.getMonth() + 1).padStart(2, '0'); // Mois 0-indexed
+             const dd = String(selectedWeekStartDate.getDate()).padStart(2, '0');
+             weekDateSelect.value = `${yyyy}-${mm}-${dd}`;
+        } else if (!selectedWeekStartDate) { // Fallback si weekDateSelect n'existe pas mais qu'on arrive ici
+            selectedWeekStartDate = new Date();
         }
+
+        // Calculer le lundi de la semaine
+        let mondayOfSelectedWeek = new Date(selectedWeekStartDate);
+        let dayOfWeek = mondayOfSelectedWeek.getDay();
+        let diffToMonday = mondayOfSelectedWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+        mondayOfSelectedWeek.setDate(diffToMonday);
+
+        selectedWeekStartDate = mondayOfSelectedWeek; // Assurer que selectedWeekStartDate est bien le Lundi pour l'API
+
+        const sundayOfSelectedWeek = new Date(mondayOfSelectedWeek);
+        sundayOfSelectedWeek.setDate(mondayOfSelectedWeek.getDate() + 6);
+        const weekNumber = getISOWeekNumber(mondayOfSelectedWeek);
+        const calendarTitleSpan = document.getElementById('calendar-title-year'); // Récupérer ici aussi
+
+        const titleText = `Sem. ${weekNumber} (du ${mondayOfSelectedWeek.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'})} au ${sundayOfSelectedWeek.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'})} ${mondayOfSelectedWeek.getFullYear()})`;
+
+        if (weekInfoDisplay) weekInfoDisplay.textContent = titleText;
+        if (calendarTitleSpan) calendarTitleSpan.textContent = titleText; // Mettre à jour aussi le titre principal
+
     } else if (selectedCalendarView === 'day') {
         if (daySelectorContainer) daySelectorContainer.style.display = 'flex';
         if (dayDateSelect) {
@@ -1451,6 +1503,41 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     } else { console.error("Bouton #btn-end-alert non trouvé pour attacher listener."); }
+
+    // Gestionnaires pour les boutons de navigation semaine
+    const prevWeekBtn = document.getElementById('prev-week-btn');
+    const nextWeekBtn = document.getElementById('next-week-btn');
+    const weekDateSelectInput = document.getElementById('week-date-select'); // Récupérer l'input date
+
+    if (prevWeekBtn) {
+        prevWeekBtn.addEventListener('click', function() {
+            if (selectedWeekStartDate) { // S'assurer que la date est initialisée
+                selectedWeekStartDate.setDate(selectedWeekStartDate.getDate() - 7);
+                // Mettre à jour l'input date pour refléter le changement
+                if(weekDateSelectInput) {
+                    // Créer une nouvelle date pour valueAsDate pour éviter les problèmes de référence/mutation
+                    weekDateSelectInput.valueAsDate = new Date(selectedWeekStartDate);
+                }
+                changeCalendarView({target: {id: 'prev-week-btn'}}); // Passer un objet event factice
+            } else {
+                console.warn("selectedWeekStartDate non initialisée pour prev-week-btn");
+            }
+        });
+    }
+
+    if (nextWeekBtn) {
+        nextWeekBtn.addEventListener('click', function() {
+            if (selectedWeekStartDate) { // S'assurer que la date est initialisée
+                selectedWeekStartDate.setDate(selectedWeekStartDate.getDate() + 7);
+                if(weekDateSelectInput) {
+                    weekDateSelectInput.valueAsDate = new Date(selectedWeekStartDate);
+                }
+                changeCalendarView({target: {id: 'next-week-btn'}});
+            } else {
+                console.warn("selectedWeekStartDate non initialisée pour next-week-btn");
+            }
+        });
+    }
 
     console.log("[control.html] DOMContentLoaded: Fin de l'initialisation.");
 });
