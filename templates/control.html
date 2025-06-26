@@ -535,9 +535,27 @@ function showSelectedCalendarView() {
         }
         const dateStr = selectedSpecificDay.toISOString().split('T')[0]; // YYYY-MM-DD
         apiUrl = `/api/daily_schedule?date=${dateStr}`;
+
         console.log(`API call for Daily view: ${apiUrl}`);
-        calendarContainer.innerHTML = `<p>Vue Journalière pour le ${selectedSpecificDay.toLocaleDateString('fr-FR')} - Implémentation à venir. API: ${apiUrl}</p>`;
-        // fetch(apiUrl)... then(data => generateDayView(data)); ...
+        calendarContainer.innerHTML = `<p>Chargement de la vue journalière pour le ${selectedSpecificDay.toLocaleDateString('fr-FR')}...</p>`;
+
+        fetch(apiUrl)
+            .then(response => {
+                if (!response.ok) {
+                    // Essayer de lire le corps de l'erreur JSON si possible
+                    return response.json().catch(() => null).then(err => {throw new Error(`Erreur HTTP ${response.status}: ${err.error || err.message || response.statusText}`)}).catch(() => {throw new Error(`Erreur HTTP ${response.status}`)});
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) throw new Error(`Erreur API calendrier (jour): ${data.error}`);
+                console.log("[control.html] Données pour vue journalière reçues:", data);
+                generateDayView(data, selectedSpecificDay); // APPEL À LA NOUVELLE FONCTION
+            })
+            .catch(error => {
+                console.error("Erreur showSelectedCalendarView (day):", error);
+                calendarContainer.innerHTML = `<p>Erreur chargement vue journalière: ${error.message}</p>`;
+            });
     } else {
         calendarContainer.innerHTML = `<p>Type de vue '${selectedCalendarView}' non supporté pour le moment.</p>`;
     }
@@ -545,6 +563,91 @@ function showSelectedCalendarView() {
 
 // --- Fonctions Calendrier Existantes (celles qui restent) ---
 // La fonction showCalendar() a été supprimée car sa logique est maintenant dans showSelectedCalendarView() et changeCalendarView().
+
+function generateDayView(dayApiData, dateObject) {
+     console.log(`[control.html] generateDayView pour:`, dateObject.toLocaleDateString('fr-FR'), "avec données:", dayApiData);
+     const calendarContainer = document.getElementById('calendar-container');
+     if (!calendarContainer) { console.error("Conteneur #calendar-container introuvable !"); return; }
+     calendarContainer.innerHTML = ''; // Vider le conteneur
+     calendarContainer.className = 'calendar-day-view-container'; // Classe pour ciblage CSS optionnel
+
+     if (!dayApiData) {
+         calendarContainer.innerHTML = "<p>Aucune donnée reçue pour la vue journalière.</p>";
+         console.error("generateDayView: Données API manquantes.", dayApiData);
+         return;
+     }
+
+     // Créer la structure d'affichage pour un seul jour
+     const dayViewDiv = document.createElement('div');
+     dayViewDiv.className = 'card'; // Utiliser une carte pour un look cohérent
+
+     const cardHeader = document.createElement('div');
+     cardHeader.className = 'card-header text-center fs-5 fw-bold'; // fs-5 pour une police un peu plus grande
+     // Formater la date : Jour de la semaine, JJ Mois AAAA
+     const formattedDate = dateObject.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+     cardHeader.textContent = formattedDate;
+     dayViewDiv.appendChild(cardHeader);
+
+     const cardBody = document.createElement('div');
+     cardBody.className = 'card-body';
+     dayViewDiv.appendChild(cardBody);
+
+     // Appliquer une couleur de fond basée sur dayApiData.day_type (similaire à generateWeekView)
+     const typeLower = (dayApiData.day_type || '').toLowerCase().trim();
+     let bgColorClass = '';
+     if (typeLower.startsWith('exception (silence)')) { bgColorClass = 'bg-light text-muted'; }
+     else if (typeLower.startsWith('exception (utiliser_jt')) { bgColorClass = 'bg-info-subtle'; }
+     else if (typeLower === 'férié') { bgColorClass = 'bg-warning-subtle'; }
+     else if (typeLower === 'vacances') { bgColorClass = 'bg-success-subtle'; }
+     else if (dateObject.getDay() === 0) { bgColorClass = 'bg-danger-subtle'; } // Dimanche
+     else if (dateObject.getDay() === 6) { bgColorClass = 'bg-secondary-subtle'; } // Samedi
+     else if (typeLower.startsWith('classe')) { bgColorClass = 'bg-white';}
+     else { bgColorClass = 'bg-light';}
+     dayViewDiv.classList.add(bgColorClass); // Appliquer sur la carte entière
+
+     // Afficher le type de jour / description
+     const dayTypeInfo = document.createElement('p');
+     dayTypeInfo.className = 'text-center fst-italic mb-3';
+     dayTypeInfo.textContent = dayApiData.message || dayApiData.day_type || "Type de jour non spécifié";
+     cardBody.appendChild(dayTypeInfo);
+
+     // Afficher le planning des sonneries
+     if (dayApiData.schedule && Array.isArray(dayApiData.schedule) && dayApiData.schedule.length > 0) {
+         const scheduleTable = document.createElement('table');
+         scheduleTable.className = 'table table-sm table-striped table-bordered'; // Table Bootstrap
+         const thead = document.createElement('thead');
+         thead.innerHTML = `<tr>
+                              <th scope="col">Période</th>
+                              <th scope="col">Début</th>
+                              <th scope="col">Fin</th>
+                              <th scope="col">Son. Début</th>
+                              <th scope="col">Son. Fin</th>
+                            </tr>`;
+         scheduleTable.appendChild(thead);
+
+         const tbody = document.createElement('tbody');
+         dayApiData.schedule.forEach(period => {
+             const tr = document.createElement('tr');
+             tr.innerHTML = `
+                 <td>${period.event || period.nom || 'N/A'}</td>
+                 <td>${period.heure_debut ? period.heure_debut.substring(0,5) : '-'}</td>
+                 <td>${period.heure_fin ? period.heure_fin.substring(0,5) : '-'}</td>
+                 <td>${(period.sonnerie_debut && period.sonnerie_debut !== "Aucune") ? period.sonnerie_debut.replace('.mp3','') : '-'}</td>
+                 <td>${(period.sonnerie_fin && period.sonnerie_fin !== "Aucune") ? period.sonnerie_fin.replace('.mp3','') : '-'}</td>
+             `;
+             tbody.appendChild(tr);
+         });
+         scheduleTable.appendChild(tbody);
+         cardBody.appendChild(scheduleTable);
+     } else {
+         const noScheduleMsg = document.createElement('p');
+         noScheduleMsg.className = 'text-center text-muted';
+         noScheduleMsg.textContent = "Aucun planning de sonneries pour ce jour.";
+         cardBody.appendChild(noScheduleMsg);
+     }
+     calendarContainer.appendChild(dayViewDiv);
+     console.log("[control.html] Fin de generateDayView");
+ }
 
 function generateSemesterView(apiResponseData, academicYearString, semesterNumber) {
     console.log(`generateSemesterView pour Année: ${academicYearString}, Semestre: ${semesterNumber}`);
