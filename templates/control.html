@@ -102,9 +102,19 @@
                         <span id="week-info-display" class="align-middle small"></span> {# Pour afficher "Semaine X (du ... au ...)" #}
                     </div>
 
-                    <div id="day-selector-container" class="d-flex align-items-center mb-2" style="display: none;">
+                    <div id="day-selector-container" class="d-flex align-items-center mb-2" style="display: none;"> {# style="display: none;" est géré par JS #}
                         <label for="day-date-select" class="form-label mb-0 me-2 text-nowrap">Jour :</label>
-                        <input type="date" id="day-date-select" class="form-control form-control-sm" style="min-width: 150px;" onchange="changeCalendarView()">
+                        <input type="date" id="day-date-select" class="form-control form-control-sm me-2" style="min-width: 150px;" onchange="changeCalendarView()">
+
+                        {# NOUVEAU BLOC DE BOUTONS À AJOUTER ICI #}
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Navigation journalière">
+                            <button type="button" class="btn btn-outline-secondary" id="prev-day-btn" title="Jour précédent">
+                                <i class="bi bi-chevron-left"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="next-day-btn" title="Jour suivant">
+                                <i class="bi bi-chevron-right"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1640,6 +1650,69 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.warn("selectedWeekStartDate non initialisée pour next-week-btn");
             }
         });
+    }
+
+    // Gestionnaires pour les boutons de navigation JOUR
+    const prevDayBtn = document.getElementById('prev-day-btn');
+    const nextDayBtn = document.getElementById('next-day-btn');
+    const dayDateSelectInputForNav = document.getElementById('day-date-select'); // Pour mettre à jour l'input
+
+    if (prevDayBtn && dayDateSelectInputForNav) {
+        prevDayBtn.addEventListener('click', function() {
+            if (!selectedSpecificDay) { // S'assurer que la date est initialisée
+                console.warn("prevDayBtn: selectedSpecificDay non initialisée.");
+                // Tenter de lire l'input ou prendre aujourd'hui. valueAsDate retourne un objet Date ou null.
+                const dateFromInput = dayDateSelectInputForNav.valueAsDate;
+                selectedSpecificDay = dateFromInput ? new Date(dateFromInput.valueOf()) : new Date(); // Cloner si non null, sinon aujourd'hui
+                // Si valueAsDate a donné null (ex: input vide ou invalide), selectedSpecificDay est maintenant 'aujourd'hui'.
+                // Il faut s'assurer que l'input reflète cela s'il était vide, pour que l'opération -1 jour soit correcte.
+                if (!dateFromInput) {
+                    dayDateSelectInputForNav.value = selectedSpecificDay.toISOString().split('T')[0];
+                }
+            }
+            const newDate = new Date(selectedSpecificDay); // Cloner pour éviter de modifier directement la référence si elle est partagée
+            newDate.setDate(newDate.getDate() - 1);
+            selectedSpecificDay = newDate; // Mettre à jour la variable globale
+
+            // Mettre à jour l'input date
+            dayDateSelectInputForNav.value = selectedSpecificDay.toISOString().split('T')[0];
+
+            if (typeof changeCalendarView === 'function') {
+                changeCalendarView({target: {id: 'prev-day-btn'}}); // Déclencher la mise à jour de la vue
+            } else {
+                console.error("La fonction changeCalendarView n'est pas définie.");
+            }
+        });
+    } else {
+        if (!prevDayBtn) console.warn("Élément #prev-day-btn non trouvé.");
+        if (!dayDateSelectInputForNav) console.warn("Élément #day-date-select non trouvé pour la navigation journalière.");
+    }
+
+    if (nextDayBtn && dayDateSelectInputForNav) {
+        nextDayBtn.addEventListener('click', function() {
+            if (!selectedSpecificDay) {
+                console.warn("nextDayBtn: selectedSpecificDay non initialisée.");
+                const dateFromInput = dayDateSelectInputForNav.valueAsDate;
+                selectedSpecificDay = dateFromInput ? new Date(dateFromInput.valueOf()) : new Date();
+                if (!dateFromInput) {
+                    dayDateSelectInputForNav.value = selectedSpecificDay.toISOString().split('T')[0];
+                }
+            }
+            const newDate = new Date(selectedSpecificDay);
+            newDate.setDate(newDate.getDate() + 1);
+            selectedSpecificDay = newDate;
+
+            dayDateSelectInputForNav.value = selectedSpecificDay.toISOString().split('T')[0];
+
+            if (typeof changeCalendarView === 'function') {
+                changeCalendarView({target: {id: 'next-day-btn'}});
+            } else {
+                console.error("La fonction changeCalendarView n'est pas définie.");
+            }
+        });
+    } else {
+        if (!nextDayBtn) console.warn("Élément #next-day-btn non trouvé.");
+        // dayDateSelectInputForNav déjà vérifié avec prevDayBtn
     }
 
     console.log("[control.html] DOMContentLoaded: Fin de l'initialisation.");
