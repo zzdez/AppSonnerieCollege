@@ -58,7 +58,12 @@
                     </select>
                 </div>
 
-                <div id="calendar-period-controls" class="d-flex align-items-center flex-wrap"> {# Nouveau conteneur global pour TOUS les contrôles de période #}
+                {# Bouton Mémoriser Vue - Ajouté ici avant les contrôles de période pour qu'il ne soit pas poussé trop loin par ms-auto si les contrôles sont nombreux #}
+                <button type="button" class="btn btn-sm btn-outline-primary ms-2 mb-2" id="btn-save-default-view" title="Mémoriser cette vue et période comme affichage par défaut">
+                    <i class="bi bi-bookmark-star me-1"></i> Mémoriser vue
+                </button>
+
+                <div id="calendar-period-controls" class="d-flex align-items-center flex-wrap ms-auto"> {# ms-auto ici pour pousser les contrôles de période à droite #}
 
                     <div id="academic-year-selector-container" class="d-flex align-items-center me-3 mb-2" style="display: none;">
                         <label for="academic-year-select" class="form-label mb-0 me-2 text-nowrap">Année scolaire :</label>
@@ -164,6 +169,34 @@ let selectedSpecificDay = null; // Stockera l'objet Date du jour sélectionné
 let selectedSemester = 1; // 1 pour S1, 2 pour S2
 let selectedTrimester = 1; // 1, 2, ou 3
 
+// --- NOUVELLE Fonction pour appliquer la préférence de VUE UNIQUEMENT ---
+function applyUserDefaultView(viewPreference) {
+    if (viewPreference) {
+        console.log(`[control.html] Préférence de vue trouvée: "${viewPreference}". Application.`);
+        selectedCalendarView = viewPreference;
+        const viewSelect = document.getElementById('calendar-view-type-select');
+        if (viewSelect) {
+            viewSelect.value = selectedCalendarView;
+        }
+    } else {
+        console.log("[control.html] Aucune préférence de vue, utilisation de la vue par défaut (Annuelle).");
+        selectedCalendarView = 'year'; // Définir la vue par défaut si aucune n'est sauvegardée
+        const viewSelect = document.getElementById('calendar-view-type-select');
+        if (viewSelect) { // S'assurer de mettre à jour le sélecteur aussi pour la vue par défaut
+            viewSelect.value = selectedCalendarView;
+        }
+    }
+    // Les variables de période (selectedAcademicYear, selectedMonth, etc.)
+    // seront initialisées à leur valeur par défaut (basée sur la date actuelle)
+    // dans la fonction changeCalendarView().
+    // selectedAcademicYear est déjà initialisé par getDefaultAcademicYear() plus tôt.
+    // Les autres (selectedMonth, selectedWeekStartDate, selectedSpecificDay) seront gérés
+    // par la logique interne de changeCalendarView() qui s'assure qu'ils ont des valeurs
+    // par défaut appropriées pour la vue sélectionnée (souvent basées sur la date actuelle).
+    console.log("[control.html applyUserDefaultView] FIN - selectedCalendarView:", selectedCalendarView);
+}
+
+
 // Variables pour la logique d'alerte
 let ppmsClickTimer = null;
 let attentatClickTimer = null;
@@ -254,14 +287,14 @@ function showFeedback(message, type = 'info', duration = 4000) {
 }
 
 // --- NOUVELLES Fonctions Calendrier ---
-function changeCalendarView() {
+function changeCalendarView(event) { // Ajout du paramètre event
     const viewSelect = document.getElementById('calendar-view-type-select');
     const yearSelect = document.getElementById('academic-year-select');
     const monthSelect = document.getElementById('month-select');
     const semesterSelect = document.getElementById('semester-select');
     const trimesterSelect = document.getElementById('trimester-select');
-    const weekDateSelect = document.getElementById('week-date-select');
-    const dayDateSelect = document.getElementById('day-date-select');
+    const weekDateSelect = document.getElementById('week-date-select'); // Récupéré une seule fois
+    const dayDateSelect = document.getElementById('day-date-select');   // Récupéré une seule fois
 
     // Conteneurs de sélecteurs individuels
     const academicYearSelectorContainer = document.getElementById('academic-year-selector-container');
@@ -273,7 +306,7 @@ function changeCalendarView() {
 
     if (viewSelect) selectedCalendarView = viewSelect.value;
 
-    const previousAcademicYear = selectedAcademicYear; // Utile pour savoir si on doit repeupler le mois
+    const previousAcademicYear = selectedAcademicYear;
     if (yearSelect) selectedAcademicYear = yearSelect.value;
 
     // Cacher tous les conteneurs de contrôle de période par défaut
@@ -284,7 +317,12 @@ function changeCalendarView() {
     if (weekSelectorContainer) weekSelectorContainer.style.display = 'none';
     if (daySelectorContainer) daySelectorContainer.style.display = 'none';
 
-    // Afficher les conteneurs pertinents et mettre à jour les valeurs
+    const eventSourceId = event ? event.target.id : null;
+    console.log("[control.html] changeCalendarView - eventSourceId:", eventSourceId, "selectedCalendarView:", selectedCalendarView);
+
+
+    // Afficher les conteneurs pertinents et mettre à jour les valeurs des variables globales
+    // pour l'année, semestre, trimestre, mois (logique existante)
     if (selectedCalendarView === 'year') {
         if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
     } else if (selectedCalendarView === 'semester') {
@@ -299,65 +337,96 @@ function changeCalendarView() {
         if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
         if (monthSelectorContainer) monthSelectorContainer.style.display = 'flex';
         if (monthSelect) {
-            if (!monthSelect.options.length || previousAcademicYear !== selectedAcademicYear || selectedMonth === undefined) {
-                populateMonthSelector(selectedAcademicYear);
+            if (!monthSelect.options.length || previousAcademicYear !== selectedAcademicYear || typeof selectedMonth === 'undefined') {
+                populateMonthSelector(selectedAcademicYear); // populateMonthSelector mettra à jour selectedMonth
             }
-            selectedMonth = parseInt(monthSelect.value);
-        }
-    } else if (selectedCalendarView === 'week') {
-        if (weekSelectorContainer) weekSelectorContainer.style.display = 'flex';
-        const weekInfoDisplay = document.getElementById('week-info-display');
-
-        if (weekDateSelect) { // weekDateSelect est l'input type="date"
-            // Initialiser selectedWeekStartDate si ce n'est pas déjà fait ou si l'input est vide
-            if (!selectedWeekStartDate) { // Premier chargement ou reset
-                 selectedWeekStartDate = weekDateSelect.valueAsDate ? new Date(weekDateSelect.valueAsDate) : new Date();
-            }
-            // Si le changement vient de l'input date lui-même (et non des boutons)
-            if (event && event.target && event.target.id === 'week-date-select' && weekDateSelect.valueAsDate) {
-                 selectedWeekStartDate = new Date(weekDateSelect.valueAsDate);
-            }
-            // S'assurer que l'input date reflète selectedWeekStartDate (surtout après clic sur boutons)
-            // Convertir selectedWeekStartDate en YYYY-MM-DD pour l'input
-             const yyyy = selectedWeekStartDate.getFullYear();
-             const mm = String(selectedWeekStartDate.getMonth() + 1).padStart(2, '0'); // Mois 0-indexed
-             const dd = String(selectedWeekStartDate.getDate()).padStart(2, '0');
-             weekDateSelect.value = `${yyyy}-${mm}-${dd}`;
-        } else if (!selectedWeekStartDate) { // Fallback si weekDateSelect n'existe pas mais qu'on arrive ici
-            selectedWeekStartDate = new Date();
-        }
-
-        // Calculer le lundi de la semaine
-        let mondayOfSelectedWeek = new Date(selectedWeekStartDate);
-        let dayOfWeek = mondayOfSelectedWeek.getDay();
-        let diffToMonday = mondayOfSelectedWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-        mondayOfSelectedWeek.setDate(diffToMonday);
-
-        selectedWeekStartDate = mondayOfSelectedWeek; // Assurer que selectedWeekStartDate est bien le Lundi pour l'API
-
-        const sundayOfSelectedWeek = new Date(mondayOfSelectedWeek);
-        sundayOfSelectedWeek.setDate(mondayOfSelectedWeek.getDate() + 6);
-        const weekNumber = getISOWeekNumber(mondayOfSelectedWeek);
-        const calendarTitleSpan = document.getElementById('calendar-title-year'); // Récupérer ici aussi
-
-        const titleText = `Sem. ${weekNumber} (du ${mondayOfSelectedWeek.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'})} au ${sundayOfSelectedWeek.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'})} ${mondayOfSelectedWeek.getFullYear()})`;
-
-        if (weekInfoDisplay) weekInfoDisplay.textContent = titleText;
-        if (calendarTitleSpan) calendarTitleSpan.textContent = titleText; // Mettre à jour aussi le titre principal
-
-    } else if (selectedCalendarView === 'day') {
-        if (daySelectorContainer) daySelectorContainer.style.display = 'flex';
-        if (dayDateSelect) {
-            if (!dayDateSelect.value) {
-                dayDateSelect.valueAsDate = new Date();
-            }
-            selectedSpecificDay = new Date(dayDateSelect.value);
+            // S'assurer que selectedMonth est mis à jour à partir du sélecteur si celui-ci a changé
+             selectedMonth = parseInt(monthSelect.value);
         }
     }
+    // --- NOUVELLE LOGIQUE POUR 'week' ET 'day' ---
+    else if (selectedCalendarView === 'week') {
+        if (weekSelectorContainer) weekSelectorContainer.style.display = 'flex';
+        // const weekDateSelect = document.getElementById('week-date-select'); // Déjà récupéré en haut
 
-    console.log(`Vue: ${selectedCalendarView}, Année: ${selectedAcademicYear}, Semestre: ${selectedSemester}, Trimestre: ${selectedTrimester}, Mois: ${selectedMonth}, Semaine Début: ${selectedWeekStartDate ? selectedWeekStartDate.toISOString().split('T')[0] : 'null'}, Jour Spécifique: ${selectedSpecificDay ? selectedSpecificDay.toISOString().split('T')[0] : 'null'}`);
+        if (weekDateSelect) {
+            if (eventSourceId === 'week-date-select') {
+                // L'utilisateur a changé la date via le date picker
+                // Utiliser valueAsDate pour obtenir un objet Date directement, gère les fuseaux horaires locaux.
+                // S'assurer que valueAsDate n'est pas null (si l'input est vidé par ex.)
+                if (weekDateSelect.valueAsDate) {
+                    selectedWeekStartDate = new Date(weekDateSelect.valueAsDate.valueOf()); // Cloner la date
+                    console.log("[control.html] Vue Semaine: date mise à jour par input date à:", selectedWeekStartDate);
+                } else if (weekDateSelect.value === '') { // Si l'input est vide
+                    selectedWeekStartDate = new Date(); // Fallback à aujourd'hui
+                    console.log("[control.html] Vue Semaine: input date vidé, réinitialisation à aujourd'hui:", selectedWeekStartDate);
+                }
+            } else if (eventSourceId === 'calendar-view-type-select' || !selectedWeekStartDate) {
+                // On vient de basculer sur la vue semaine, OU la variable selectedWeekStartDate est vide (ex: chargement initial sans préférence)
+                if (!weekDateSelect.value) { // Si l'input de date est vide
+                    selectedWeekStartDate = new Date(); // Initialiser à aujourd'hui
+                    // weekDateSelect.valueAsDate = new Date(selectedWeekStartDate.valueOf()); // Synchroniser l'input
+                    console.log("[control.html] Vue Semaine: date initialisée à aujourd'hui (input vide).", selectedWeekStartDate);
+                } else if (weekDateSelect.valueAsDate) { // Si l'input a une valeur (ex: préférence appliquée) mais la var globale est peut-être pas synchro
+                    selectedWeekStartDate = new Date(weekDateSelect.valueAsDate.valueOf());
+                    console.log("[control.html] Vue Semaine: date initialisée depuis input (valeur existante).", selectedWeekStartDate);
+                } else { // Fallback si l'input a une valeur non parsable par valueAsDate mais n'est pas vide
+                    selectedWeekStartDate = new Date();
+                    console.log("[control.html] Vue Semaine: date initialisée à aujourd'hui (input non vide mais non parsable).", selectedWeekStartDate);
+                }
+            }
+            // Si le changement vient des boutons 'prev-week-btn'/'next-week-btn',
+            // selectedWeekStartDate est déjà mise à jour par le listener du bouton AVANT l'appel à changeCalendarView.
+            // Il faut juste s'assurer que l'input reflète cette valeur.
+            // Et si selectedWeekStartDate est null pour une raison quelconque, on initialise.
+            if (!selectedWeekStartDate) { // Fallback ultime si toujours null
+                selectedWeekStartDate = new Date();
+                console.log("[control.html] Vue Semaine: selectedWeekStartDate était null, fallback à aujourd'hui.", selectedWeekStartDate);
+            }
+            // Synchroniser l'input avec la variable globale DANS TOUS LES CAS pour la vue semaine
+            weekDateSelect.value = selectedWeekStartDate.toISOString().split('T')[0];
+        }
+    } else if (selectedCalendarView === 'day') {
+        if (daySelectorContainer) daySelectorContainer.style.display = 'flex';
+        // const dayDateSelect = document.getElementById('day-date-select'); // Déjà récupéré
 
-    // Mise à jour du titre du calendrier
+        if (dayDateSelect) {
+            if (eventSourceId === 'day-date-select') {
+                if (dayDateSelect.valueAsDate) {
+                    selectedSpecificDay = new Date(dayDateSelect.valueAsDate.valueOf());
+                    console.log("[control.html] Vue Jour: date mise à jour par input date à:", selectedSpecificDay);
+                } else if (dayDateSelect.value === '') {
+                    selectedSpecificDay = new Date();
+                    console.log("[control.html] Vue Jour: input date vidé, réinitialisation à aujourd'hui:", selectedSpecificDay);
+                }
+            } else if (eventSourceId === 'calendar-view-type-select' || !selectedSpecificDay) {
+                if (!dayDateSelect.value) {
+                    selectedSpecificDay = new Date();
+                    // dayDateSelect.valueAsDate = new Date(selectedSpecificDay.valueOf());
+                    console.log("[control.html] Vue Jour: date initialisée à aujourd'hui (input vide).", selectedSpecificDay);
+                } else if (dayDateSelect.valueAsDate){
+                    selectedSpecificDay = new Date(dayDateSelect.valueAsDate.valueOf());
+                    console.log("[control.html] Vue Jour: date initialisée depuis input (valeur existante).", selectedSpecificDay);
+                } else {
+                     selectedSpecificDay = new Date();
+                     console.log("[control.html] Vue Jour: date initialisée à aujourd'hui (input non vide mais non parsable).", selectedSpecificDay);
+                }
+            }
+            // Si changement par bouton prev/next, selectedSpecificDay est déjà à jour.
+            // Fallback et synchro input
+            if (!selectedSpecificDay) { // Fallback ultime
+                selectedSpecificDay = new Date();
+                 console.log("[control.html] Vue Jour: selectedSpecificDay était null, fallback à aujourd'hui.", selectedSpecificDay);
+            }
+            // Synchroniser l'input avec la variable globale DANS TOUS LES CAS pour la vue jour
+            dayDateSelect.value = selectedSpecificDay.toISOString().split('T')[0];
+        }
+    }
+    // --- FIN NOUVELLE LOGIQUE ---
+
+    console.log(`[FIN changeCalendarView] Vue: ${selectedCalendarView}, Année: ${selectedAcademicYear}, Semestre: ${selectedSemester}, Trimestre: ${selectedTrimester}, Mois: ${selectedMonth}, Semaine Début: ${selectedWeekStartDate ? selectedWeekStartDate.toISOString().split('T')[0] : 'null'}, Jour Spécifique: ${selectedSpecificDay ? selectedSpecificDay.toISOString().split('T')[0] : 'null'}`);
+
+    // Mise à jour du titre du calendrier et des informations spécifiques à la vue (comme week-info-display)
     const calendarTitleSpan = document.getElementById('calendar-title-year');
     if (calendarTitleSpan) {
         if (selectedCalendarView === 'year') {
@@ -369,12 +438,31 @@ function changeCalendarView() {
         } else if (selectedCalendarView === 'month') {
             const monthName = monthSelect && monthSelect.options.length > 0 && monthSelect.selectedIndex !== -1 ? monthSelect.options[monthSelect.selectedIndex].text : `Mois ${selectedMonth}`;
             calendarTitleSpan.textContent = `${monthName}`;
-        } else if (selectedCalendarView === 'week' && selectedWeekStartDate) {
-            const endDate = new Date(selectedWeekStartDate);
-            endDate.setDate(selectedWeekStartDate.getDate() + 6);
-            calendarTitleSpan.textContent = `Sem. du ${selectedWeekStartDate.toLocaleDateString('fr-FR')} au ${endDate.toLocaleDateString('fr-FR')}`;
-        } else if (selectedCalendarView === 'day' && selectedSpecificDay) {
-            calendarTitleSpan.textContent = `Jour du ${selectedSpecificDay.toLocaleDateString('fr-FR')}`;
+        } else if (selectedCalendarView === 'week') {
+            if (selectedWeekStartDate) {
+                const weekInfoDisplay = document.getElementById('week-info-display');
+                let mondayOfSelectedWeek = new Date(selectedWeekStartDate.valueOf()); // Cloner
+                let dayOfWeek = mondayOfSelectedWeek.getDay(); // 0=Dim, 1=Lun, ...
+                let diffToMonday = mondayOfSelectedWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+                mondayOfSelectedWeek.setDate(diffToMonday);
+
+                const sundayOfSelectedWeek = new Date(mondayOfSelectedWeek.valueOf());
+                sundayOfSelectedWeek.setDate(mondayOfSelectedWeek.getDate() + 6);
+                const weekNumber = getISOWeekNumber(mondayOfSelectedWeek);
+
+                const titleText = `Sem. ${weekNumber} (du ${mondayOfSelectedWeek.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'})} au ${sundayOfSelectedWeek.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'})} ${mondayOfSelectedWeek.getFullYear()})`;
+                
+                if (weekInfoDisplay) weekInfoDisplay.textContent = titleText; // Pour le span à côté du date picker
+                calendarTitleSpan.textContent = titleText; // Pour le titre principal du calendrier
+            } else {
+                calendarTitleSpan.textContent = "Hebdomadaire (date non définie)";
+            }
+        } else if (selectedCalendarView === 'day') {
+            if (selectedSpecificDay) {
+                calendarTitleSpan.textContent = `Jour du ${selectedSpecificDay.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
+            } else {
+                calendarTitleSpan.textContent = "Journalier (date non définie)";
+            }
         } else {
             calendarTitleSpan.textContent = selectedAcademicYear || new Date().getFullYear(); // Fallback
         }
@@ -1544,40 +1632,73 @@ function callEndAlertAPI() { return callApiAndRefresh('/api/alert/end', 'POST', 
 document.addEventListener('DOMContentLoaded', function() {
     console.log("[control.html] DOMContentLoaded: Initialisation de la page de contrôle...");
 
-    selectedAcademicYear = getDefaultAcademicYear(); // Initialisation pour le calendrier
-
+    // Initialisations de base (variables globales, éléments DOM pour les alertes)
+    selectedAcademicYear = getDefaultAcademicYear();
     btnAlertPpms = document.getElementById('btn-alert-ppms');
     btnAlertAttentat = document.getElementById('btn-alert-attentat');
     btnEndAlert = document.getElementById('btn-end-alert');
+    // ... récupérer les autres boutons (prev/next week/day) et éléments de sélecteurs ici ...
+    const viewSelect = document.getElementById('calendar-view-type-select');
+    const yearSelect = document.getElementById('academic-year-select');
+    const monthSelect = document.getElementById('month-select');
+    const semesterSelect = document.getElementById('semester-select');
+    const trimesterSelect = document.getElementById('trimester-select');
+    const weekDateSelect = document.getElementById('week-date-select');
+    const dayDateSelect = document.getElementById('day-date-select');
 
-    if (typeof populateAcademicYearSelector === 'function') populateAcademicYearSelector();
+    if (typeof populateAcademicYearSelector === 'function') {
+        populateAcademicYearSelector(); // Peupler l'année scolaire d'abord
+    }
 
+    // Séquence d'initialisation MISE À JOUR
     if (typeof loadConfigSettings === 'function') {
         loadConfigSettings()
             .then(() => {
                 console.log("[control.html] DOMContentLoaded: Config settings chargées.");
-                if (typeof fetchPageStatusAndUpdateAlertUI === 'function') {
-                    return fetchPageStatusAndUpdateAlertUI();
-                } else {
-                     console.error("[control.html] fetchPageStatusAndUpdateAlertUI non définie !");
+                // Récupérer la préférence de vue
+                return fetch('/api/user/get_calendar_preference');
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(errData => { throw new Error(errData.error || `Erreur HTTP ${response.status} (get_calendar_preference)`); }).catch(() => { throw new Error(`Erreur HTTP ${response.status} (get_calendar_preference)`); });
                 }
+                return response.json();
+            })
+            .then(preferenceData => {
+                // preferenceData devrait être {"calendar_default_view": "valeur"} ou {"calendar_default_view": null}
+                applyUserDefaultView(preferenceData.calendar_default_view); // NOUVELLE FONCTION
+                return fetchPageStatusAndUpdateAlertUI(); // Charger statut des alertes
             })
             .then(() => {
-                console.log("[control.html] DOMContentLoaded: Statut initial chargé et UI alertes mise à jour.");
-                // if (typeof showCalendar === 'function') showCalendar(); // ANCIEN APPEL
-                if (typeof changeCalendarView === 'function') { // NOUVEL APPEL
-                    changeCalendarView();
+                console.log("[control.html] DOMContentLoaded: Préférences de VUE appliquées et statut alertes chargé.");
+                if (typeof changeCalendarView === 'function') {
+                    changeCalendarView(); // Appeler changeCalendarView QUI VA initialiser les dates/périodes
+                } else {
+                     console.error("[control.html] changeCalendarView n'est pas définie !");
                 }
             })
             .catch(error => {
-                console.error("[control.html] DOMContentLoaded: Erreur dans la séquence d'initialisation.", error);
-                updateAlertButtonsUI({ alert_active: false, alert_type: null });
+                console.error("[control.html] DOMContentLoaded: Erreur majeure dans la séquence d'initialisation:", error);
+                if (typeof showFeedback === 'function') showFeedback("Erreur d'initialisation de la page: " + error.message, "error");
+                // Fallback: appliquer la vue par défaut et tenter d'afficher le calendrier
+                applyUserDefaultView(null); // Appliquer la vue par défaut (ex: 'year')
+                if (typeof changeCalendarView === 'function') {
+                    changeCalendarView();
+                }
+                if (typeof updateAlertButtonsUI === 'function') updateAlertButtonsUI({ alert_active: false, alert_type: null });
             });
     } else {
-        console.error("[control.html] loadConfigSettings n'est pas définie! Initialisation incomplète.");
-        updateAlertButtonsUI({ alert_active: false, alert_type: null });
+        console.error("[control.html] loadConfigSettings n'est pas définie! Impossible de charger la configuration et les préférences correctement.");
+        // Fallback minimal si loadConfigSettings n'existe pas du tout
+        applyUserDefaultView(null);
+        if (typeof changeCalendarView === 'function') changeCalendarView();
+        if (typeof fetchPageStatusAndUpdateAlertUI === 'function') fetchPageStatusAndUpdateAlertUI(); // Tenter de charger le statut des alertes
     }
+    // --- FIN Séquence d'initialisation MISE À JOUR ---
 
+
+    // Attacher les listeners (y compris celui de btnSaveDefaultView)
+    // ... (code existant pour les listeners des boutons d'alerte, navigation semaine/jour) ...
     if (btnAlertPpms) {
         btnAlertPpms.addEventListener('click', function() {
             if (this.disabled) return;
@@ -1673,96 +1794,120 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (prevWeekBtn) {
         prevWeekBtn.addEventListener('click', function() {
-            if (selectedWeekStartDate) { // S'assurer que la date est initialisée
-                selectedWeekStartDate.setDate(selectedWeekStartDate.getDate() - 7);
-                // Mettre à jour l'input date pour refléter le changement
-                if(weekDateSelectInput) {
-                    // Créer une nouvelle date pour valueAsDate pour éviter les problèmes de référence/mutation
-                    weekDateSelectInput.valueAsDate = new Date(selectedWeekStartDate);
-                }
-                changeCalendarView({target: {id: 'prev-week-btn'}}); // Passer un objet event factice
-            } else {
-                console.warn("selectedWeekStartDate non initialisée pour prev-week-btn");
+            if (!selectedWeekStartDate) { // Initialiser si null
+                console.warn("prevWeekBtn: selectedWeekStartDate non initialisée. Tentative d'init depuis input ou aujourd'hui.");
+                selectedWeekStartDate = weekDateSelectInput && weekDateSelectInput.valueAsDate 
+                                        ? new Date(weekDateSelectInput.valueAsDate.valueOf()) 
+                                        : new Date();
             }
+            selectedWeekStartDate.setDate(selectedWeekStartDate.getDate() - 7);
+            if(weekDateSelectInput) {
+                // Mettre à jour l'input. Utiliser valueAsDate pour affecter un objet Date.
+                // Il est crucial de créer une NOUVELLE instance de Date pour valueAsDate.
+                weekDateSelectInput.valueAsDate = new Date(selectedWeekStartDate.valueOf());
+            }
+            changeCalendarView({target: {id: 'prev-week-btn'}});
         });
     }
 
     if (nextWeekBtn) {
         nextWeekBtn.addEventListener('click', function() {
-            if (selectedWeekStartDate) { // S'assurer que la date est initialisée
-                selectedWeekStartDate.setDate(selectedWeekStartDate.getDate() + 7);
-                if(weekDateSelectInput) {
-                    weekDateSelectInput.valueAsDate = new Date(selectedWeekStartDate);
-                }
-                changeCalendarView({target: {id: 'next-week-btn'}});
-            } else {
-                console.warn("selectedWeekStartDate non initialisée pour next-week-btn");
+            if (!selectedWeekStartDate) { // Initialiser si null
+                console.warn("nextWeekBtn: selectedWeekStartDate non initialisée. Tentative d'init depuis input ou aujourd'hui.");
+                selectedWeekStartDate = weekDateSelectInput && weekDateSelectInput.valueAsDate 
+                                        ? new Date(weekDateSelectInput.valueAsDate.valueOf()) 
+                                        : new Date();
             }
+            selectedWeekStartDate.setDate(selectedWeekStartDate.getDate() + 7);
+            if(weekDateSelectInput) {
+                weekDateSelectInput.valueAsDate = new Date(selectedWeekStartDate.valueOf());
+            }
+            changeCalendarView({target: {id: 'next-week-btn'}});
         });
     }
 
     // Gestionnaires pour les boutons de navigation JOUR
     const prevDayBtn = document.getElementById('prev-day-btn');
     const nextDayBtn = document.getElementById('next-day-btn');
-    const dayDateSelectInputForNav = document.getElementById('day-date-select'); // Pour mettre à jour l'input
+    const dayDateSelectInputForNav = document.getElementById('day-date-select'); 
 
-    if (prevDayBtn && dayDateSelectInputForNav) {
+    if (prevDayBtn) {
         prevDayBtn.addEventListener('click', function() {
-            if (!selectedSpecificDay) { // S'assurer que la date est initialisée
-                console.warn("prevDayBtn: selectedSpecificDay non initialisée.");
-                // Tenter de lire l'input ou prendre aujourd'hui. valueAsDate retourne un objet Date ou null.
-                const dateFromInput = dayDateSelectInputForNav.valueAsDate;
-                selectedSpecificDay = dateFromInput ? new Date(dateFromInput.valueOf()) : new Date(); // Cloner si non null, sinon aujourd'hui
-                // Si valueAsDate a donné null (ex: input vide ou invalide), selectedSpecificDay est maintenant 'aujourd'hui'.
-                // Il faut s'assurer que l'input reflète cela s'il était vide, pour que l'opération -1 jour soit correcte.
-                if (!dateFromInput) {
-                    dayDateSelectInputForNav.value = selectedSpecificDay.toISOString().split('T')[0];
-                }
+            if (!selectedSpecificDay) {
+                console.warn("prevDayBtn: selectedSpecificDay non initialisée. Tentative d'init depuis input ou aujourd'hui.");
+                selectedSpecificDay = dayDateSelectInputForNav && dayDateSelectInputForNav.valueAsDate
+                                      ? new Date(dayDateSelectInputForNav.valueAsDate.valueOf())
+                                      : new Date();
             }
-            const newDate = new Date(selectedSpecificDay); // Cloner pour éviter de modifier directement la référence si elle est partagée
-            newDate.setDate(newDate.getDate() - 1);
-            selectedSpecificDay = newDate; // Mettre à jour la variable globale
-
-            // Mettre à jour l'input date
-            dayDateSelectInputForNav.value = selectedSpecificDay.toISOString().split('T')[0];
-
-            if (typeof changeCalendarView === 'function') {
-                changeCalendarView({target: {id: 'prev-day-btn'}}); // Déclencher la mise à jour de la vue
-            } else {
-                console.error("La fonction changeCalendarView n'est pas définie.");
+            selectedSpecificDay.setDate(selectedSpecificDay.getDate() - 1);
+            if(dayDateSelectInputForNav) {
+                dayDateSelectInputForNav.valueAsDate = new Date(selectedSpecificDay.valueOf());
             }
+            changeCalendarView({target: {id: 'prev-day-btn'}});
         });
-    } else {
-        if (!prevDayBtn) console.warn("Élément #prev-day-btn non trouvé.");
-        if (!dayDateSelectInputForNav) console.warn("Élément #day-date-select non trouvé pour la navigation journalière.");
     }
 
-    if (nextDayBtn && dayDateSelectInputForNav) {
+    if (nextDayBtn) {
         nextDayBtn.addEventListener('click', function() {
             if (!selectedSpecificDay) {
-                console.warn("nextDayBtn: selectedSpecificDay non initialisée.");
-                const dateFromInput = dayDateSelectInputForNav.valueAsDate;
-                selectedSpecificDay = dateFromInput ? new Date(dateFromInput.valueOf()) : new Date();
-                if (!dateFromInput) {
-                    dayDateSelectInputForNav.value = selectedSpecificDay.toISOString().split('T')[0];
-                }
+                console.warn("nextDayBtn: selectedSpecificDay non initialisée. Tentative d'init depuis input ou aujourd'hui.");
+                selectedSpecificDay = dayDateSelectInputForNav && dayDateSelectInputForNav.valueAsDate
+                                      ? new Date(dayDateSelectInputForNav.valueAsDate.valueOf())
+                                      : new Date();
             }
-            const newDate = new Date(selectedSpecificDay);
-            newDate.setDate(newDate.getDate() + 1);
-            selectedSpecificDay = newDate;
+            selectedSpecificDay.setDate(selectedSpecificDay.getDate() + 1);
+            if(dayDateSelectInputForNav) {
+                dayDateSelectInputForNav.valueAsDate = new Date(selectedSpecificDay.valueOf());
+            }
+            changeCalendarView({target: {id: 'next-day-btn'}});
+        });
+    }
 
-            dayDateSelectInputForNav.value = selectedSpecificDay.toISOString().split('T')[0];
+    // Script pour le bouton "Mémoriser cette vue" - NOUVELLE VERSION
+    const btnSaveDefaultView = document.getElementById('btn-save-default-view');
+    if (btnSaveDefaultView) {
+        btnSaveDefaultView.addEventListener('click', function() {
+            // selectedCalendarView est mis à jour par changeCalendarView() et par applyUserDefaultView()
+            // On s'assure juste qu'elle a une valeur.
+            // Le selecteur HTML '#calendar-view-type-select' devrait être la source de vérité si l'utilisateur
+            // a changé la vue sans que `selectedCalendarView` soit mise à jour pour une raison X,
+            // mais normalement `changeCalendarView` s'en occupe.
+            // Par sécurité, on peut relire la valeur du selecteur ici:
+            const viewSelectElement = document.getElementById('calendar-view-type-select');
+            const currentSelectedViewInUI = viewSelectElement ? viewSelectElement.value : selectedCalendarView;
 
-            if (typeof changeCalendarView === 'function') {
-                changeCalendarView({target: {id: 'next-day-btn'}});
+            if (currentSelectedViewInUI) { // Utiliser la valeur du sélecteur s'il existe, sinon la variable globale
+                const preferenceToSave = { view: currentSelectedViewInUI };
+                console.log("Sauvegarde du type de vue par défaut:", JSON.stringify(preferenceToSave));
+
+                fetch('/api/user/set_calendar_preference', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(preferenceToSave)
+                })
+                .then(response => response.json()) // On s'attend à ce que le backend renvoie un JSON même en cas d'erreur métier
+                .then(data => {
+                    // Le backend devrait renvoyer un champ "success": true/false ou "message"/"error"
+                    if (data.success || (data.message && !data.error)) { // Adapter selon la réponse exacte du backend
+                        showFeedback(data.message || "Vue par défaut enregistrée !", "success");
+                    } else {
+                        showFeedback(`Erreur sauvegarde: ${data.error || data.message || 'Erreur inconnue'}`, "error");
+                    }
+                })
+                .catch(error => {
+                    console.error("Erreur réseau sauvegarde préférence:", error);
+                    showFeedback("Erreur réseau lors de la sauvegarde.", "error");
+                });
+
             } else {
-                console.error("La fonction changeCalendarView n'est pas définie.");
+                console.error("Impossible de sauvegarder : currentSelectedViewInUI (ou selectedCalendarView) est vide.");
+                showFeedback("Erreur : Impossible de déterminer la vue actuelle.", "error");
             }
         });
     } else {
-        if (!nextDayBtn) console.warn("Élément #next-day-btn non trouvé.");
-        // dayDateSelectInputForNav déjà vérifié avec prevDayBtn
+        console.warn("Bouton #btn-save-default-view non trouvé.");
     }
+    // FIN NOUVELLE VERSION btnSaveDefaultView
 
     console.log("[control.html] DOMContentLoaded: Fin de l'initialisation.");
 });
