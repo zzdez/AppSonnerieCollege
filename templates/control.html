@@ -304,123 +304,102 @@ function changeCalendarView(event) { // Ajout du paramètre event
     const weekSelectorContainer = document.getElementById('week-selector-container');
     const daySelectorContainer = document.getElementById('day-selector-container');
 
+    const previousSelectedView = selectedCalendarView; // Garder en mémoire l'ancienne vue
     if (viewSelect) selectedCalendarView = viewSelect.value;
 
+    const eventSourceId = event ? event.target.id : null; // Doit être lu APRES avoir mis à jour selectedCalendarView
     const previousAcademicYear = selectedAcademicYear;
     if (yearSelect) selectedAcademicYear = yearSelect.value;
 
-    // Cacher tous les conteneurs de contrôle de période par défaut
+
+    // 1. Cacher tous les conteneurs par défaut
     if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'none';
-    if (monthSelectorContainer) monthSelectorContainer.style.display = 'none';
     if (semesterSelectorContainer) semesterSelectorContainer.style.display = 'none';
     if (trimesterSelectorContainer) trimesterSelectorContainer.style.display = 'none';
+    if (monthSelectorContainer) monthSelectorContainer.style.display = 'none';
     if (weekSelectorContainer) weekSelectorContainer.style.display = 'none';
     if (daySelectorContainer) daySelectorContainer.style.display = 'none';
 
-    const eventSourceId = event ? event.target.id : null;
     console.log("[control.html] changeCalendarView - eventSourceId:", eventSourceId, "selectedCalendarView:", selectedCalendarView);
 
-
-    // Afficher les conteneurs pertinents et mettre à jour les valeurs des variables globales
-    // pour l'année, semestre, trimestre, mois (logique existante)
-    if (selectedCalendarView === 'year') {
-        if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
-    } else if (selectedCalendarView === 'semester') {
-        if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
-        if (semesterSelectorContainer) semesterSelectorContainer.style.display = 'flex';
-        if (semesterSelect) selectedSemester = parseInt(semesterSelect.value);
-    } else if (selectedCalendarView === 'trimester') {
-        if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
-        if (trimesterSelectorContainer) trimesterSelectorContainer.style.display = 'flex';
-        if (trimesterSelect) selectedTrimester = parseInt(trimesterSelect.value);
-    } else if (selectedCalendarView === 'month') {
-        if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
-        if (monthSelectorContainer) monthSelectorContainer.style.display = 'flex';
-        if (monthSelect) {
-            if (!monthSelect.options.length || previousAcademicYear !== selectedAcademicYear || typeof selectedMonth === 'undefined') {
-                populateMonthSelector(selectedAcademicYear); // populateMonthSelector mettra à jour selectedMonth
-            }
-            // S'assurer que selectedMonth est mis à jour à partir du sélecteur si celui-ci a changé
-             selectedMonth = parseInt(monthSelect.value);
-        }
-    }
-    // --- NOUVELLE LOGIQUE POUR 'week' ET 'day' ---
-    else if (selectedCalendarView === 'week') {
-        if (weekSelectorContainer) weekSelectorContainer.style.display = 'flex';
-        // const weekDateSelect = document.getElementById('week-date-select'); // Déjà récupéré en haut
-
-        if (weekDateSelect) {
-            if (eventSourceId === 'week-date-select') {
-                // L'utilisateur a changé la date via le date picker
-                // Utiliser valueAsDate pour obtenir un objet Date directement, gère les fuseaux horaires locaux.
-                // S'assurer que valueAsDate n'est pas null (si l'input est vidé par ex.)
-                if (weekDateSelect.valueAsDate) {
-                    selectedWeekStartDate = new Date(weekDateSelect.valueAsDate.valueOf()); // Cloner la date
-                    console.log("[control.html] Vue Semaine: date mise à jour par input date à:", selectedWeekStartDate);
-                } else if (weekDateSelect.value === '') { // Si l'input est vide
-                    selectedWeekStartDate = new Date(); // Fallback à aujourd'hui
-                    console.log("[control.html] Vue Semaine: input date vidé, réinitialisation à aujourd'hui:", selectedWeekStartDate);
+    // 2. Afficher uniquement les conteneurs pertinents et mettre à jour les variables de période
+    switch (selectedCalendarView) {
+        case 'year':
+            if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
+            // selectedAcademicYear est déjà à jour
+            break;
+        case 'semester':
+            if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
+            if (semesterSelectorContainer) semesterSelectorContainer.style.display = 'flex';
+            if (semesterSelect) selectedSemester = parseInt(semesterSelect.value);
+            break;
+        case 'trimester':
+            if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
+            if (trimesterSelectorContainer) trimesterSelectorContainer.style.display = 'flex';
+            if (trimesterSelect) selectedTrimester = parseInt(trimesterSelect.value);
+            break;
+        case 'month':
+            if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
+            if (monthSelectorContainer) monthSelectorContainer.style.display = 'flex';
+            if (monthSelect) {
+                // Si l'année académique a changé, ou si on vient d'une vue qui n'utilisait pas les mois,
+                // ou si le sélecteur de mois est vide, il faut le (re)peupler.
+                if (eventSourceId === 'calendar-view-type-select' || previousAcademicYear !== selectedAcademicYear || !monthSelect.options.length || typeof selectedMonth === 'undefined') {
+                    populateMonthSelector(selectedAcademicYear); // populateMonthSelector met à jour selectedMonth
                 }
-            } else if (eventSourceId === 'calendar-view-type-select' || !selectedWeekStartDate) {
-                // On vient de basculer sur la vue semaine, OU la variable selectedWeekStartDate est vide (ex: chargement initial sans préférence)
-                if (!weekDateSelect.value) { // Si l'input de date est vide
-                    selectedWeekStartDate = new Date(); // Initialiser à aujourd'hui
-                    // weekDateSelect.valueAsDate = new Date(selectedWeekStartDate.valueOf()); // Synchroniser l'input
-                    console.log("[control.html] Vue Semaine: date initialisée à aujourd'hui (input vide).", selectedWeekStartDate);
-                } else if (weekDateSelect.valueAsDate) { // Si l'input a une valeur (ex: préférence appliquée) mais la var globale est peut-être pas synchro
-                    selectedWeekStartDate = new Date(weekDateSelect.valueAsDate.valueOf());
-                    console.log("[control.html] Vue Semaine: date initialisée depuis input (valeur existante).", selectedWeekStartDate);
-                } else { // Fallback si l'input a une valeur non parsable par valueAsDate mais n'est pas vide
-                    selectedWeekStartDate = new Date();
-                    console.log("[control.html] Vue Semaine: date initialisée à aujourd'hui (input non vide mais non parsable).", selectedWeekStartDate);
+                // S'assurer que selectedMonth est mis à jour à partir du sélecteur si celui-ci a changé (par l'utilisateur ou par populateMonthSelector)
+                selectedMonth = parseInt(monthSelect.value);
+            }
+            break;
+        case 'week':
+            if (weekSelectorContainer) weekSelectorContainer.style.display = 'flex';
+            if (weekDateSelect) {
+                if (eventSourceId === 'week-date-select') {
+                    if (weekDateSelect.valueAsDate) {
+                        selectedWeekStartDate = new Date(weekDateSelect.valueAsDate.valueOf());
+                    } else if (weekDateSelect.value === '') {
+                        selectedWeekStartDate = new Date(); // Fallback à aujourd'hui si vidé
+                    }
+                } else if (eventSourceId === 'calendar-view-type-select' || !selectedWeekStartDate || previousSelectedView !== 'week') {
+                    // Si on change de vue VERS semaine, ou si la date n'est pas initialisée, ou si la vue précédente n'était pas 'week'
+                    // on initialise la date de la semaine.
+                    if (!weekDateSelect.value || previousSelectedView !== 'week') { // Si l'input est vide ou si on ne vient pas de la vue semaine
+                        selectedWeekStartDate = new Date(); // Initialiser à aujourd'hui
+                    } else if (weekDateSelect.valueAsDate) { // Si l'input a une valeur (ex: préférence appliquée)
+                        selectedWeekStartDate = new Date(weekDateSelect.valueAsDate.valueOf());
+                    } else { // Fallback
+                        selectedWeekStartDate = new Date();
+                    }
                 }
+                // Si le changement vient des boutons 'prev-week-btn'/'next-week-btn', selectedWeekStartDate est déjà à jour.
+                if (!selectedWeekStartDate) selectedWeekStartDate = new Date(); // Fallback ultime
+                weekDateSelect.value = selectedWeekStartDate.toISOString().split('T')[0]; // Synchroniser l'input
             }
-            // Si le changement vient des boutons 'prev-week-btn'/'next-week-btn',
-            // selectedWeekStartDate est déjà mise à jour par le listener du bouton AVANT l'appel à changeCalendarView.
-            // Il faut juste s'assurer que l'input reflète cette valeur.
-            // Et si selectedWeekStartDate est null pour une raison quelconque, on initialise.
-            if (!selectedWeekStartDate) { // Fallback ultime si toujours null
-                selectedWeekStartDate = new Date();
-                console.log("[control.html] Vue Semaine: selectedWeekStartDate était null, fallback à aujourd'hui.", selectedWeekStartDate);
-            }
-            // Synchroniser l'input avec la variable globale DANS TOUS LES CAS pour la vue semaine
-            weekDateSelect.value = selectedWeekStartDate.toISOString().split('T')[0];
-        }
-    } else if (selectedCalendarView === 'day') {
-        if (daySelectorContainer) daySelectorContainer.style.display = 'flex';
-        // const dayDateSelect = document.getElementById('day-date-select'); // Déjà récupéré
-
-        if (dayDateSelect) {
-            if (eventSourceId === 'day-date-select') {
-                if (dayDateSelect.valueAsDate) {
-                    selectedSpecificDay = new Date(dayDateSelect.valueAsDate.valueOf());
-                    console.log("[control.html] Vue Jour: date mise à jour par input date à:", selectedSpecificDay);
-                } else if (dayDateSelect.value === '') {
-                    selectedSpecificDay = new Date();
-                    console.log("[control.html] Vue Jour: input date vidé, réinitialisation à aujourd'hui:", selectedSpecificDay);
+            break;
+        case 'day':
+            if (daySelectorContainer) daySelectorContainer.style.display = 'flex';
+            if (dayDateSelect) {
+                if (eventSourceId === 'day-date-select') {
+                    if (dayDateSelect.valueAsDate) {
+                        selectedSpecificDay = new Date(dayDateSelect.valueAsDate.valueOf());
+                    } else if (dayDateSelect.value === '') {
+                        selectedSpecificDay = new Date(); // Fallback à aujourd'hui si vidé
+                    }
+                } else if (eventSourceId === 'calendar-view-type-select' || !selectedSpecificDay || previousSelectedView !== 'day') {
+                     // Si on change de vue VERS jour, ou si la date n'est pas initialisée, ou si la vue précédente n'était pas 'day'
+                    if (!dayDateSelect.value || previousSelectedView !== 'day') {
+                        selectedSpecificDay = new Date();
+                    } else if (dayDateSelect.valueAsDate) {
+                        selectedSpecificDay = new Date(dayDateSelect.valueAsDate.valueOf());
+                    } else {
+                        selectedSpecificDay = new Date();
+                    }
                 }
-            } else if (eventSourceId === 'calendar-view-type-select' || !selectedSpecificDay) {
-                if (!dayDateSelect.value) {
-                    selectedSpecificDay = new Date();
-                    // dayDateSelect.valueAsDate = new Date(selectedSpecificDay.valueOf());
-                    console.log("[control.html] Vue Jour: date initialisée à aujourd'hui (input vide).", selectedSpecificDay);
-                } else if (dayDateSelect.valueAsDate){
-                    selectedSpecificDay = new Date(dayDateSelect.valueAsDate.valueOf());
-                    console.log("[control.html] Vue Jour: date initialisée depuis input (valeur existante).", selectedSpecificDay);
-                } else {
-                     selectedSpecificDay = new Date();
-                     console.log("[control.html] Vue Jour: date initialisée à aujourd'hui (input non vide mais non parsable).", selectedSpecificDay);
-                }
+                // Si changement par bouton prev/next, selectedSpecificDay est déjà à jour.
+                if (!selectedSpecificDay) selectedSpecificDay = new Date(); // Fallback ultime
+                dayDateSelect.value = selectedSpecificDay.toISOString().split('T')[0]; // Synchroniser l'input
             }
-            // Si changement par bouton prev/next, selectedSpecificDay est déjà à jour.
-            // Fallback et synchro input
-            if (!selectedSpecificDay) { // Fallback ultime
-                selectedSpecificDay = new Date();
-                 console.log("[control.html] Vue Jour: selectedSpecificDay était null, fallback à aujourd'hui.", selectedSpecificDay);
-            }
-            // Synchroniser l'input avec la variable globale DANS TOUS LES CAS pour la vue jour
-            dayDateSelect.value = selectedSpecificDay.toISOString().split('T')[0];
-        }
+            break;
     }
     // --- FIN NOUVELLE LOGIQUE ---
 
