@@ -362,12 +362,74 @@ function changeCalendarView(event) {
         case 'semester':
             if (academicYearSelectorContainer) academicYearSelectorContainer.classList.remove('d-none');
             if (semesterSelectorContainer) semesterSelectorContainer.classList.remove('d-none');
-            if (semesterSelect) selectedSemester = parseInt(semesterSelect.value);
+            // selectedAcademicYear est déjà mis à jour globalement si yearSelect existe et a changé.
+            // if (yearSelect) selectedAcademicYear = yearSelect.value; // L'année est nécessaire et déjà à jour
+
+            // --- NOUVELLE LOGIQUE D'INITIALISATION ---
+            // Si on vient de basculer sur cette vue, ou si la source n'est pas le sélecteur de semestre lui-même,
+            // on calcule et on définit le semestre actuel.
+            // La condition eventSourceId === 'academic-year-select' a été ajoutée pour recalculer le semestre
+            // si l'année change, car le semestre "actuel" peut dépendre de l'année scolaire sélectionnée
+            // (même si notre logique actuelle est basée sur le mois civil, c'est une bonne pratique).
+            if (eventSourceId === 'calendar-view-type-select' || previousSelectedView !== 'semester' || eventSourceId === 'academic-year-select') {
+                const today = new Date();
+                const currentMonth = today.getMonth(); // 0=Jan, 1=Fev, ..., 11=Dec
+                let currentSemester = 1; // Par défaut S1
+
+                // S1 = Sept(8) à Fev(1)
+                // S2 = Mar(2) à Aoû(7)
+                // Si le mois est entre Mars (2) et Août (7) inclus, c'est le S2.
+                if (currentMonth >= 2 && currentMonth <= 7) {
+                    currentSemester = 2;
+                }
+
+                selectedSemester = currentSemester;
+                if (semesterSelect) semesterSelect.value = selectedSemester; // Mettre à jour l'affichage du select
+                console.log(`[control.html] Vue Semestre: Initialisation/recalcul au semestre actuel: S${selectedSemester} (source: ${eventSourceId}, prevView: ${previousSelectedView})`);
+            } else if (semesterSelect && eventSourceId === 'semester-select') {
+                // Sinon (si l'utilisateur change lui-même le semestre), on lit la valeur
+                selectedSemester = parseInt(semesterSelect.value);
+                console.log(`[control.html] Vue Semestre: Changement manuel du semestre à S${selectedSemester}`);
+            } else if (semesterSelect) {
+                // Fallback pour s'assurer que selectedSemester a une valeur si le select existe
+                // Cela peut arriver si l'événement n'est pas l'un des cas ci-dessus mais que la vue est 'semester'
+                selectedSemester = parseInt(semesterSelect.value);
+                console.log(`[control.html] Vue Semestre: Fallback - lecture du semestre S${selectedSemester}`);
+            }
+            // --- FIN NOUVELLE LOGIQUE ---
             break;
         case 'trimester':
             if (academicYearSelectorContainer) academicYearSelectorContainer.classList.remove('d-none');
             if (trimesterSelectorContainer) trimesterSelectorContainer.classList.remove('d-none');
-            if (trimesterSelect) selectedTrimester = parseInt(trimesterSelect.value);
+            // selectedAcademicYear est déjà mis à jour globalement.
+
+            // --- NOUVELLE LOGIQUE D'INITIALISATION ---
+            if (eventSourceId === 'calendar-view-type-select' || previousSelectedView !== 'trimester' || eventSourceId === 'academic-year-select') {
+                const today = new Date();
+                const currentMonth = today.getMonth(); // 0=Jan, ..., 11=Dec
+                let currentTrimester = 1; // Par défaut T1
+
+                // T1 = Sept(8) à Déc(11)
+                // T2 = Jan(0) à Avr(3)
+                // T3 = Mai(4) à Aoû(7)
+                if (currentMonth >= 0 && currentMonth <= 3) { // Jan-Avr
+                    currentTrimester = 2;
+                } else if (currentMonth >= 4 && currentMonth <= 7) { // Mai-Août
+                    currentTrimester = 3;
+                } // Sinon, c'est Sept-Déc (T1), la valeur par défaut.
+
+                selectedTrimester = currentTrimester;
+                if (trimesterSelect) trimesterSelect.value = selectedTrimester; // Mettre à jour le select
+                console.log(`[control.html] Vue Trimestre: Initialisation/recalcul au trimestre actuel: T${selectedTrimester} (source: ${eventSourceId}, prevView: ${previousSelectedView})`);
+            } else if (trimesterSelect && eventSourceId === 'trimester-select') {
+                selectedTrimester = parseInt(trimesterSelect.value);
+                console.log(`[control.html] Vue Trimestre: Changement manuel du trimestre à T${selectedTrimester}`);
+            } else if (trimesterSelect) {
+                // Fallback
+                selectedTrimester = parseInt(trimesterSelect.value);
+                console.log(`[control.html] Vue Trimestre: Fallback - lecture du trimestre T${selectedTrimester}`);
+            }
+            // --- FIN NOUVELLE LOGIQUE ---
             break;
         case 'month':
             if (academicYearSelectorContainer) academicYearSelectorContainer.classList.remove('d-none');
