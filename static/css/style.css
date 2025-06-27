@@ -930,6 +930,19 @@ h2 { color: #333; } /* Gardé pour certains titres spécifiques si besoin */
 .calendar-week-view-container .card .card-header.bg-primary.text-white {
     font-size: 0.9em; /* Assurer la cohérence avec les autres headers de jour */
 }
+/* --- Correction Calendrier : Empêcher les labels des sélecteurs de passer à la ligne --- */
+   
+/* Cible tous les labels qui sont des enfants directs des conteneurs de sélecteurs */
+#calendar-view-selector > label,
+#academic-year-selector-container > label,
+#semester-selector-container > label,
+#trimester-selector-container > label,
+#month-selector-container > label,
+#week-selector-container > label,
+#day-selector-container > label {
+    white-space: nowrap; /* Empêche le texte du label de se couper */
+    flex-shrink: 0;      /* Empêche le label de rétrécir si l'espace manque */
+}
 
 /* Feedback dans cette page (utilise déjà .feedback-message global) */
 /* #exception-feedback, #list-feedback { margin-top: 15px; } */
