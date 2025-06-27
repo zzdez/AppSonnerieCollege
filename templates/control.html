@@ -287,22 +287,36 @@ function showFeedback(message, type = 'info', duration = 4000) {
 }
 
 // --- NOUVELLES Fonctions Calendrier ---
-function changeCalendarView(event) { // Ajout du paramètre event
-    const viewSelect = document.getElementById('calendar-view-type-select');
-    const yearSelect = document.getElementById('academic-year-select');
-    const monthSelect = document.getElementById('month-select');
-    const semesterSelect = document.getElementById('semester-select');
-    const trimesterSelect = document.getElementById('trimester-select');
-    const weekDateSelect = document.getElementById('week-date-select'); // Récupéré une seule fois
-    const dayDateSelect = document.getElementById('day-date-select');   // Récupéré une seule fois
+function changeCalendarView(event) {
+    // --- DÉBUT DU BLOC À AJOUTER/VÉRIFIER ---
+    console.log("[control.html] changeCalendarView déclenchée.");
 
-    // Conteneurs de sélecteurs individuels
+    // Récupération des éléments principaux
+    const viewSelect = document.getElementById('calendar-view-type-select');
+    const calendarTitleSpan = document.getElementById('calendar-title-year');
+
+    // Récupération de TOUS les conteneurs de sélecteurs de période
     const academicYearSelectorContainer = document.getElementById('academic-year-selector-container');
-    const monthSelectorContainer = document.getElementById('month-selector-container');
     const semesterSelectorContainer = document.getElementById('semester-selector-container');
     const trimesterSelectorContainer = document.getElementById('trimester-selector-container');
+    const monthSelectorContainer = document.getElementById('month-selector-container');
     const weekSelectorContainer = document.getElementById('week-selector-container');
     const daySelectorContainer = document.getElementById('day-selector-container');
+
+    // Récupération des inputs/selects internes
+    const yearSelect = document.getElementById('academic-year-select');
+    const semesterSelect = document.getElementById('semester-select');
+    const trimesterSelect = document.getElementById('trimester-select');
+    const monthSelect = document.getElementById('month-select');
+    const weekDateSelect = document.getElementById('week-date-select');
+    const dayDateSelect = document.getElementById('day-date-select');
+
+    // Vérification rapide que les éléments principaux existent
+    if (!viewSelect || !calendarTitleSpan) {
+        console.error("Éléments de base du calendrier manquants (viewSelect ou calendarTitleSpan).");
+        return;
+    }
+    // --- FIN DU BLOC À AJOUTER/VÉRIFIER ---
 
     const previousSelectedView = selectedCalendarView; // Garder en mémoire l'ancienne vue
     if (viewSelect) selectedCalendarView = viewSelect.value;
