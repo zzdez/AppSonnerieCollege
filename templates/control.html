@@ -48,9 +48,7 @@
 <h2 class="mb-0 me-auto">Calendrier <span id="calendar-title-year">Annuel</span></h2>
 
 {% if user_has_permission('control:view_calendar') %}
-<div class="d-flex align-items-center flex-wrap justify-content-end"> {# Conteneur global pour tous les contrôles à droite #}
-
-    {# Sélecteur de Vue Principal #}
+    {# Les sélecteurs sont maintenant des enfants directs du conteneur flex principal #}
     <div id="calendar-view-selector" class="d-flex align-items-center me-3">
         <label for="calendar-view-type-select" class="form-label mb-0 me-2">Vue :</label>
         <select id="calendar-view-type-select" class="form-select form-select-sm" style="min-width: 120px;" onchange="changeCalendarView(event)">
@@ -63,15 +61,12 @@
         </select>
     </div>
 
-    {# Conteneur pour les sélecteurs de période qui changent dynamiquement #}
     <div id="calendar-period-controls" class="d-flex align-items-center flex-wrap">
-
         {# Sélecteur d'Année Scolaire #}
         <div id="academic-year-selector-container" class="d-flex align-items-center me-3" style="display: none;">
             <label for="academic-year-select" class="form-label mb-0 me-2">Année scolaire :</label>
             <select id="academic-year-select" class="form-select form-select-sm" style="min-width: 120px;" onchange="changeCalendarView(event)"></select>
         </div>
-
         {# Sélecteur de Semestre #}
         <div id="semester-selector-container" class="d-flex align-items-center me-3" style="display: none;">
             <label for="semester-select" class="form-label mb-0 me-2">Semestre :</label>
@@ -117,18 +112,14 @@
                 <button type="button" class="btn btn-outline-secondary" id="next-day-btn" title="Jour suivant"><i class="bi bi-chevron-right"></i></button>
             </div>
         </div>
-
     </div>
-</div>
 
-{# Bouton "Mémoriser cette vue" #}
-<div class="text-end mb-3"> {# Alignement à droite, avec une marge en bas #}
-     <button type="button" class="btn btn-outline-primary btn-sm" id="btn-save-default-view" title="Enregistrer la vue actuelle comme affichage par défaut">
-         <i class="bi bi-star me-1"></i> Mémoriser cette vue
-     </button>
-</div>
+    <div class="ms-auto align-self-center"> {# Le bouton Mémoriser est maintenant ici #}
+         <button type="button" class="btn btn-outline-primary btn-sm" id="btn-save-default-view" title="Enregistrer la vue actuelle comme affichage par défaut">
+             <i class="bi bi-star me-1"></i> Mémoriser cette vue
+         </button>
+    </div>
 {% endif %}
-{# --- FIN DE LA STRUCTURE HTML DE RÉFÉRENCE --- #}
         </div>
 
         {% if user_has_permission('control:view_calendar') %}
