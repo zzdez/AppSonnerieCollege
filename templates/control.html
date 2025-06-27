@@ -169,76 +169,33 @@ let selectedSpecificDay = null; // Stockera l'objet Date du jour sélectionné
 let selectedSemester = 1; // 1 pour S1, 2 pour S2
 let selectedTrimester = 1; // 1, 2, ou 3
 
-// --- Fonction pour appliquer les préférences ---
-function applyCalendarPreferences(prefs) {
-    console.log("[control.html] Application des préférences calendrier:", prefs);
-
-    // Valeurs par défaut si les préférences ne sont pas définies
-    const defaultView = 'year';
-    const defaultAcademicYear = getDefaultAcademicYear(); // Utiliser la fonction existante
-
-    selectedCalendarView = prefs.calendar_default_view || defaultView;
-    selectedAcademicYear = prefs.calendar_default_academic_year || defaultAcademicYear;
-
-    // Initialiser les sélecteurs HTML
-    const viewSelect = document.getElementById('calendar-view-type-select');
-    const yearSelect = document.getElementById('academic-year-select');
-    const monthSelect = document.getElementById('month-select');
-    const semesterSelect = document.getElementById('semester-select');
-    const trimesterSelect = document.getElementById('trimester-select');
-    const weekDateSelect = document.getElementById('week-date-select');
-    const dayDateSelect = document.getElementById('day-date-select');
-
-    if (viewSelect) viewSelect.value = selectedCalendarView;
-
-    if (yearSelect) {
-        if (Array.from(yearSelect.options).find(opt => opt.value === selectedAcademicYear)) {
-            yearSelect.value = selectedAcademicYear;
-        } else {
-            console.warn(`Année scolaire préférée ${selectedAcademicYear} non trouvée dans le sélecteur. populateAcademicYearSelector s'en chargera.`);
+// --- NOUVELLE Fonction pour appliquer la préférence de VUE UNIQUEMENT ---
+function applyUserDefaultView(viewPreference) {
+    if (viewPreference) {
+        console.log(`[control.html] Préférence de vue trouvée: "${viewPreference}". Application.`);
+        selectedCalendarView = viewPreference;
+        const viewSelect = document.getElementById('calendar-view-type-select');
+        if (viewSelect) {
+            viewSelect.value = selectedCalendarView;
+        }
+    } else {
+        console.log("[control.html] Aucune préférence de vue, utilisation de la vue par défaut (Annuelle).");
+        selectedCalendarView = 'year'; // Définir la vue par défaut si aucune n'est sauvegardée
+        const viewSelect = document.getElementById('calendar-view-type-select');
+        if (viewSelect) { // S'assurer de mettre à jour le sélecteur aussi pour la vue par défaut
+            viewSelect.value = selectedCalendarView;
         }
     }
-
-    // Initialiser les autres variables et sélecteurs en fonction de la vue préférée
-    if (selectedCalendarView === 'semester') {
-        selectedSemester = prefs.calendar_default_semester || 1;
-        if (semesterSelect) semesterSelect.value = selectedSemester;
-    } else if (selectedCalendarView === 'trimester') {
-        selectedTrimester = prefs.calendar_default_trimester || 1;
-        if (trimesterSelect) trimesterSelect.value = selectedTrimester;
-    } else if (selectedCalendarView === 'month') {
-        selectedMonth = prefs.calendar_default_month || (new Date().getMonth() + 1);
-        // monthSelect.value sera géré par populateMonthSelector appelé dans changeCalendarView
-    } else if (selectedCalendarView === 'week') {
-        if (prefs.calendar_default_week_start_iso) {
-            // Utiliser T12:00:00Z pour éviter les pbs de fuseau horaire avec les dates minuit UTC
-            const prefDate = new Date(prefs.calendar_default_week_start_iso + 'T12:00:00Z');
-            selectedWeekStartDate = prefDate;
-            if (weekDateSelect) {
-                weekDateSelect.value = prefs.calendar_default_week_start_iso; // Mettre à jour l'input avec la string YYYY-MM-DD
-                console.log(`[control.html Prefs] Vue Semaine: préférence appliquée. selectedWeekStartDate: ${selectedWeekStartDate}, input: ${weekDateSelect.value}`);
-            }
-        } else {
-            selectedWeekStartDate = null; // Pas de préférence, sera initialisé par changeCalendarView
-            if (weekDateSelect) weekDateSelect.value = ''; // Vider l'input s'il n'y a pas de préférence
-            console.log("[control.html Prefs] Vue Semaine: aucune préférence de date.");
-        }
-    } else if (selectedCalendarView === 'day') {
-        if (prefs.calendar_default_day_iso) {
-            const prefDate = new Date(prefs.calendar_default_day_iso + 'T12:00:00Z');
-            selectedSpecificDay = prefDate;
-            if (dayDateSelect) {
-                dayDateSelect.value = prefs.calendar_default_day_iso; // Mettre à jour l'input
-                console.log(`[control.html Prefs] Vue Jour: préférence appliquée. selectedSpecificDay: ${selectedSpecificDay}, input: ${dayDateSelect.value}`);
-            }
-        } else {
-            selectedSpecificDay = null; // Pas de préférence
-            if (dayDateSelect) dayDateSelect.value = ''; // Vider l'input
-            console.log("[control.html Prefs] Vue Jour: aucune préférence de date.");
-        }
-    }
-    console.log("[control.html applyCalendarPreferences] FIN - Variables globales: ", {selectedCalendarView, selectedAcademicYear, selectedSemester, selectedTrimester, selectedMonth, selectedWeekStartDate, selectedSpecificDay});
+    // Les variables de période (selectedAcademicYear, selectedMonth, etc.)
+    // seront initialisées à leur valeur par défaut (basée sur la date actuelle)
+    // dans la fonction changeCalendarView().
+    // selectedAcademicYear est déjà initialisé par getDefaultAcademicYear() plus tôt.
+    // Les autres (selectedMonth, selectedWeekStartDate, selectedSpecificDay) seront gérés
+    // par la logique interne de changeCalendarView() qui s'assure qu'ils ont des valeurs
+    // par défaut appropriées pour la vue sélectionnée (souvent basées sur la date actuelle).
+    console.log("[control.html applyUserDefaultView] FIN - selectedCalendarView:", selectedCalendarView);
 }
+
 
 // Variables pour la logique d'alerte
 let ppmsClickTimer = null;
@@ -1688,66 +1645,57 @@ document.addEventListener('DOMContentLoaded', function() {
     const trimesterSelect = document.getElementById('trimester-select');
     const weekDateSelect = document.getElementById('week-date-select');
     const dayDateSelect = document.getElementById('day-date-select');
-    // const btnSaveDefaultView = document.getElementById('btn-save-default-view'); // Déclaration déplacée plus bas
-
 
     if (typeof populateAcademicYearSelector === 'function') {
         populateAcademicYearSelector(); // Peupler l'année scolaire d'abord
     }
 
-    let configLoadedPromise = Promise.resolve(); // Promesse qui résout immédiatement si loadConfigSettings n'existe pas
+    // Séquence d'initialisation MISE À JOUR
     if (typeof loadConfigSettings === 'function') {
-        configLoadedPromise = loadConfigSettings();
+        loadConfigSettings()
+            .then(() => {
+                console.log("[control.html] DOMContentLoaded: Config settings chargées.");
+                // Récupérer la préférence de vue
+                return fetch('/api/user/get_calendar_preference');
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(errData => { throw new Error(errData.error || `Erreur HTTP ${response.status} (get_calendar_preference)`); }).catch(() => { throw new Error(`Erreur HTTP ${response.status} (get_calendar_preference)`); });
+                }
+                return response.json();
+            })
+            .then(preferenceData => {
+                // preferenceData devrait être {"calendar_default_view": "valeur"} ou {"calendar_default_view": null}
+                applyUserDefaultView(preferenceData.calendar_default_view); // NOUVELLE FONCTION
+                return fetchPageStatusAndUpdateAlertUI(); // Charger statut des alertes
+            })
+            .then(() => {
+                console.log("[control.html] DOMContentLoaded: Préférences de VUE appliquées et statut alertes chargé.");
+                if (typeof changeCalendarView === 'function') {
+                    changeCalendarView(); // Appeler changeCalendarView QUI VA initialiser les dates/périodes
+                } else {
+                     console.error("[control.html] changeCalendarView n'est pas définie !");
+                }
+            })
+            .catch(error => {
+                console.error("[control.html] DOMContentLoaded: Erreur majeure dans la séquence d'initialisation:", error);
+                if (typeof showFeedback === 'function') showFeedback("Erreur d'initialisation de la page: " + error.message, "error");
+                // Fallback: appliquer la vue par défaut et tenter d'afficher le calendrier
+                applyUserDefaultView(null); // Appliquer la vue par défaut (ex: 'year')
+                if (typeof changeCalendarView === 'function') {
+                    changeCalendarView();
+                }
+                if (typeof updateAlertButtonsUI === 'function') updateAlertButtonsUI({ alert_active: false, alert_type: null });
+            });
     } else {
-        console.error("[control.html] loadConfigSettings n'est pas définie!");
+        console.error("[control.html] loadConfigSettings n'est pas définie! Impossible de charger la configuration et les préférences correctement.");
+        // Fallback minimal si loadConfigSettings n'existe pas du tout
+        applyUserDefaultView(null);
+        if (typeof changeCalendarView === 'function') changeCalendarView();
+        if (typeof fetchPageStatusAndUpdateAlertUI === 'function') fetchPageStatusAndUpdateAlertUI(); // Tenter de charger le statut des alertes
     }
+    // --- FIN Séquence d'initialisation MISE À JOUR ---
 
-    configLoadedPromise
-        .then(() => {
-            console.log("[control.html] DOMContentLoaded: Config settings (alertes) chargées.");
-            // Maintenant, charger les préférences utilisateur
-            return fetch('/api/user/get_calendar_preference');
-        })
-        .then(response => {
-            if (!response.ok) {
-                 // Essayer de lire le corps JSON de l'erreur
-                return response.json().then(errData => {
-                    throw new Error(errData.error || `Erreur HTTP ${response.status} lors de la récupération des préférences`);
-                }).catch(() => {
-                    // Si le corps JSON n'est pas lisible ou n'existe pas
-                    throw new Error(`Erreur HTTP ${response.status} lors de la récupération des préférences (pas de détail JSON)`);
-                });
-            }
-            return response.json();
-        })
-        .then(preferences => {
-            applyCalendarPreferences(preferences); // Appliquer les préférences
-            // Le statut des alertes peut être chargé en parallèle ou après
-            if (typeof fetchPageStatusAndUpdateAlertUI === 'function') {
-                return fetchPageStatusAndUpdateAlertUI(); // Charger statut pour les boutons d'alerte
-            }
-        })
-        .then(() => {
-            console.log("[control.html] DOMContentLoaded: Préférences appliquées et statut alertes chargé.");
-            // Maintenant, et seulement maintenant, afficher le calendrier avec la vue correcte
-            if (typeof changeCalendarView === 'function') {
-                changeCalendarView();
-            } else {
-                console.error("changeCalendarView n'est pas définie !");
-            }
-        })
-        .catch(error => {
-            console.error("[control.html] DOMContentLoaded: Erreur majeure dans la séquence d'initialisation:", error);
-            if (typeof showFeedback === 'function') showFeedback("Erreur d'initialisation de la page: " + error.message, "error");
-            // Tenter d'afficher le calendrier avec les vues par défaut même en cas d'erreur de préférence/statut
-            if (typeof changeCalendarView === 'function') {
-                console.warn("[control.html] Tentative d'affichage du calendrier avec les valeurs par défaut après erreur d'init.");
-                if (typeof applyCalendarPreferences === 'function') applyCalendarPreferences({}); // Appliquer les défauts
-                else console.error("applyCalendarPreferences non définie pour fallback.");
-                changeCalendarView();
-            }
-             if (typeof updateAlertButtonsUI === 'function') updateAlertButtonsUI({ alert_active: false, alert_type: null }); // S'assurer que les boutons d'alerte sont dans un état sûr
-        });
 
     // Attacher les listeners (y compris celui de btnSaveDefaultView)
     // ... (code existant pour les listeners des boutons d'alerte, navigation semaine/jour) ...
@@ -1915,87 +1863,51 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Script pour le bouton "Mémoriser cette vue"
+    // Script pour le bouton "Mémoriser cette vue" - NOUVELLE VERSION
     const btnSaveDefaultView = document.getElementById('btn-save-default-view');
     if (btnSaveDefaultView) {
         btnSaveDefaultView.addEventListener('click', function() {
-            console.log("Sauvegarde de la vue par défaut demandée...");
+            // selectedCalendarView est mis à jour par changeCalendarView() et par applyUserDefaultView()
+            // On s'assure juste qu'elle a une valeur.
+            // Le selecteur HTML '#calendar-view-type-select' devrait être la source de vérité si l'utilisateur
+            // a changé la vue sans que `selectedCalendarView` soit mise à jour pour une raison X,
+            // mais normalement `changeCalendarView` s'en occupe.
+            // Par sécurité, on peut relire la valeur du selecteur ici:
+            const viewSelectElement = document.getElementById('calendar-view-type-select');
+            const currentSelectedViewInUI = viewSelectElement ? viewSelectElement.value : selectedCalendarView;
 
-            // S'assurer que les variables globales sont à jour avec les sélecteurs si la vue n'a pas été changée récemment
-            // Ce code est un peu redondant avec changeCalendarView mais assure que les valeurs sont les plus récentes.
-            const viewSelect = document.getElementById('calendar-view-type-select');
-            const yearSelect = document.getElementById('academic-year-select');
-            const monthSelect = document.getElementById('month-select');
-            const semesterSelect = document.getElementById('semester-select');
-            const trimesterSelect = document.getElementById('trimester-select');
-            const weekDateSelect = document.getElementById('week-date-select');
-            const dayDateSelect = document.getElementById('day-date-select');
+            if (currentSelectedViewInUI) { // Utiliser la valeur du sélecteur s'il existe, sinon la variable globale
+                const preferenceToSave = { view: currentSelectedViewInUI };
+                console.log("Sauvegarde du type de vue par défaut:", JSON.stringify(preferenceToSave));
 
-            if (viewSelect) selectedCalendarView = viewSelect.value;
-            if (yearSelect) selectedAcademicYear = yearSelect.value;
-            if (monthSelect && selectedCalendarView === 'month') selectedMonth = parseInt(monthSelect.value);
-            if (semesterSelect && selectedCalendarView === 'semester') selectedSemester = parseInt(semesterSelect.value);
-            if (trimesterSelect && selectedCalendarView === 'trimester') selectedTrimester = parseInt(trimesterSelect.value);
-            // Pour week et day, selectedWeekStartDate et selectedSpecificDay sont mis à jour dans changeCalendarView
-            // et via les inputs date. On s'assure qu'ils sont corrects avant de construire le payload.
-            if (weekDateSelect && selectedCalendarView === 'week' && weekDateSelect.valueAsDate) {
-                 // Recalculer le lundi si l'utilisateur a choisi une autre date dans la semaine
-                 let tempDate = new Date(weekDateSelect.valueAsDate);
-                 let dayOfWeek = tempDate.getDay();
-                 let diffToMonday = tempDate.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-                 selectedWeekStartDate = new Date(tempDate.setDate(diffToMonday));
-            } else if (selectedCalendarView === 'week' && !selectedWeekStartDate) {
-                // Fallback si selectedWeekStartDate n'est pas défini pour une raison quelconque
-                selectedWeekStartDate = new Date(); // ou une autre logique de défaut
-                let dayOfWeek = selectedWeekStartDate.getDay();
-                let diffToMonday = selectedWeekStartDate.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-                selectedWeekStartDate.setDate(diffToMonday);
+                fetch('/api/user/set_calendar_preference', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(preferenceToSave)
+                })
+                .then(response => response.json()) // On s'attend à ce que le backend renvoie un JSON même en cas d'erreur métier
+                .then(data => {
+                    // Le backend devrait renvoyer un champ "success": true/false ou "message"/"error"
+                    if (data.success || (data.message && !data.error)) { // Adapter selon la réponse exacte du backend
+                        showFeedback(data.message || "Vue par défaut enregistrée !", "success");
+                    } else {
+                        showFeedback(`Erreur sauvegarde: ${data.error || data.message || 'Erreur inconnue'}`, "error");
+                    }
+                })
+                .catch(error => {
+                    console.error("Erreur réseau sauvegarde préférence:", error);
+                    showFeedback("Erreur réseau lors de la sauvegarde.", "error");
+                });
+
+            } else {
+                console.error("Impossible de sauvegarder : currentSelectedViewInUI (ou selectedCalendarView) est vide.");
+                showFeedback("Erreur : Impossible de déterminer la vue actuelle.", "error");
             }
-
-            if (dayDateSelect && selectedCalendarView === 'day' && dayDateSelect.valueAsDate) {
-                selectedSpecificDay = new Date(dayDateSelect.valueAsDate);
-            } else if (selectedCalendarView === 'day' && !selectedSpecificDay) {
-                selectedSpecificDay = new Date(); // Fallback
-            }
-
-
-            const preferencePayload = {
-                view: selectedCalendarView,
-                academic_year: selectedAcademicYear, // Toujours requis
-                semester: (selectedCalendarView === 'semester') ? selectedSemester : null,
-                trimester: (selectedCalendarView === 'trimester') ? selectedTrimester : null,
-                month: (selectedCalendarView === 'month') ? selectedMonth : null,
-                week_start_iso: (selectedCalendarView === 'week' && selectedWeekStartDate) ? selectedWeekStartDate.toISOString().split('T')[0] : null,
-                day_iso: (selectedCalendarView === 'day' && selectedSpecificDay) ? selectedSpecificDay.toISOString().split('T')[0] : null
-            };
-
-            console.log("Payload pour sauvegarde:", preferencePayload);
-
-            fetch('/api/user/set_calendar_preference', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    // Ajouter le header CSRF si Flask-WTF avec CSRFProtect est utilisé pour les POST AJAX
-                    // Exemple: 'X-CSRFToken': csrfTokenVariable // Nécessite que csrfTokenVariable soit défini dans le scope JS
-                },
-                body: JSON.stringify(preferencePayload)
-            })
-            .then(response => response.json().then(data => ({ok: response.ok, data})))
-            .then(({ok, data}) => {
-                if (ok) {
-                    showFeedback(data.message || "Vue par défaut sauvegardée avec succès !", 'success');
-                } else {
-                    showFeedback(data.error || "Erreur lors de la sauvegarde de la vue par défaut.", 'error');
-                }
-            })
-            .catch(error => {
-                console.error("Erreur réseau sauvegarde préférence:", error);
-                showFeedback("Erreur réseau lors de la sauvegarde.", 'error');
-            });
         });
     } else {
         console.warn("Bouton #btn-save-default-view non trouvé.");
     }
+    // FIN NOUVELLE VERSION btnSaveDefaultView
 
     console.log("[control.html] DOMContentLoaded: Fin de l'initialisation.");
 });

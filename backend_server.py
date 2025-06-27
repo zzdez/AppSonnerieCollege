@@ -356,18 +356,12 @@ def load_users(filename=USERS_FILE):
                 "hash": user_info,
                 "nom_complet": "Utilisateur (migré)",
                 "role": default_role_for_migration,
-                "preferences": { # Initialiser aussi pour les utilisateurs migrés
-                    "calendar_default_view": None,
-                    "calendar_default_academic_year": None,
-                    "calendar_default_semester": None,
-                    "calendar_default_trimester": None,
-                    "calendar_default_month": None,
-                    "calendar_default_week_start_iso": None,
-                    "calendar_default_day_iso": None
+                "preferences": {
+                    "calendar_default_view": None
                 }
                 # Pas de champ 'permissions' ici, il sera chargé dynamiquement via le rôle
             }
-            logger.info(f"Utilisateur '{username}': Champ 'preferences' initialisé lors de la migration.")
+            logger.info(f"Utilisateur '{username}': Champ 'preferences' simplifié et initialisé lors de la migration.")
             made_change = True
         elif isinstance(user_info, dict):
             # 1. Vérifier et assigner 'nom_complet'
@@ -404,39 +398,31 @@ def load_users(filename=USERS_FILE):
                 del user_info["permissions"]
                 made_change = True
 
-            # 4. Initialiser les préférences si elles n'existent pas
+            # 4. Gérer les préférences
+            prefs_changed_for_existing_user = False
             if "preferences" not in user_info or user_info["preferences"] is None:
-                user_info["preferences"] = {
-                    "calendar_default_view": None,
-                    "calendar_default_academic_year": None,
-                    "calendar_default_semester": None,
-                    "calendar_default_trimester": None,
-                    "calendar_default_month": None,
-                    "calendar_default_week_start_iso": None,
-                    "calendar_default_day_iso": None
-                }
-                logger.info(f"Utilisateur '{username}': Champ 'preferences' initialisé avec les valeurs par défaut.")
-                made_change = True
-            # S'assurer que toutes les clés de préférences existent, même si 'preferences' existe déjà
+                user_info["preferences"] = {"calendar_default_view": None}
+                logger.info(f"Utilisateur '{username}': Champ 'preferences' initialisé avec 'calendar_default_view'.")
+                prefs_changed_for_existing_user = True # Pour marquer que made_change doit être True
             elif isinstance(user_info.get("preferences"), dict):
-                default_prefs_keys = {
-                    "calendar_default_view": None,
-                    "calendar_default_academic_year": None,
-                    "calendar_default_semester": None,
-                    "calendar_default_trimester": None,
-                    "calendar_default_month": None,
-                    "calendar_default_week_start_iso": None,
-                    "calendar_default_day_iso": None
-                }
-                prefs_changed_for_existing_user = False
-                for key, default_value in default_prefs_keys.items():
-                    if key not in user_info["preferences"]:
-                        user_info["preferences"][key] = default_value
-                        prefs_changed_for_existing_user = True
-                if prefs_changed_for_existing_user:
-                    logger.info(f"Utilisateur '{username}': Clés manquantes ajoutées à 'preferences' existantes.")
-                    made_change = True
+                current_prefs = user_info["preferences"]
+                # Garder uniquement calendar_default_view, et sa valeur si elle existe.
+                # Si calendar_default_view n'existe pas, l'initialiser à None.
+                # Supprimer toutes les autres clés.
+                view_pref_value = current_prefs.get("calendar_default_view") # Garder la valeur existante si elle y est
 
+                # Vérifier si des clés non désirées existent ou si calendar_default_view manque
+                keys_to_remove = [k for k in current_prefs if k != "calendar_default_view"]
+                if keys_to_remove or "calendar_default_view" not in current_prefs:
+                    user_info["preferences"] = {"calendar_default_view": view_pref_value} # Réinitialiser avec la valeur gardée (ou None si elle n'était pas là)
+                    if keys_to_remove:
+                        logger.info(f"Utilisateur '{username}': Clés de préférences obsolètes supprimées: {keys_to_remove}.")
+                    if "calendar_default_view" not in current_prefs:
+                         logger.info(f"Utilisateur '{username}': Clé 'calendar_default_view' ajoutée aux préférences.")
+                    prefs_changed_for_existing_user = True
+
+            if prefs_changed_for_existing_user:
+                made_change = True
         else:
             logger.error(f"Format de données utilisateur inconnu pour '{username}': {type(user_info)}. Ignoré.")
             # On pourrait le supprimer ou tenter une migration plus agressive. Pour l'instant, on logue et ignore.
@@ -3180,41 +3166,28 @@ def set_user_calendar_preference():
 
     if not data:
         logger.warning(f"User '{user_id}' - set_calendar_preference: Aucune donnée JSON reçue.")
-        return jsonify({"error": "Aucune donnée JSON reçue."}), 400
+        return jsonify({"error": "Aucune donnée JSON reçue.", "success": False}), 400
 
-    required_view = data.get('view')
-    required_academic_year = data.get('academic_year')
+    view_type = data.get('view')
 
-    if not required_view or not required_academic_year:
-        logger.warning(f"User '{user_id}' - set_calendar_preference: Données 'view' ou 'academic_year' manquantes. Reçu: {data}")
-        return jsonify({"error": "Les champs 'view' et 'academic_year' sont requis."}), 400
+    if not view_type:
+        logger.warning(f"User '{user_id}' - set_calendar_preference: Donnée 'view' manquante. Reçu: {data}")
+        return jsonify({"error": "Le champ 'view' est requis.", "success": False}), 400
 
-    # Valider les types de données plus précisément si nécessaire
-    # Exemple: view doit être dans une liste prédéfinie, academic_year doit correspondre à un format YYYY-YYYY, etc.
+    # Valider le type de vue si nécessaire (ex: doit être dans une liste de vues valides)
+    # valid_views = ['year', 'month', 'week', 'day', 'semester', 'trimester']
+    # if view_type not in valid_views:
+    #    logger.warning(f"User '{user_id}' - set_calendar_preference: Type de vue invalide '{view_type}'.")
+    #    return jsonify({"error": f"Type de vue '{view_type}' invalide.", "success": False}), 400
 
     if user_id in users_data:
-        if 'preferences' not in users_data[user_id] or users_data[user_id]['preferences'] is None:
-            # Initialiser avec toutes les clés au cas où load_users n'aurait pas été appelé récemment (peu probable mais sécurisé)
-            users_data[user_id]['preferences'] = {
-                "calendar_default_view": None,
-                "calendar_default_academic_year": None,
-                "calendar_default_semester": None,
-                "calendar_default_trimester": None,
-                "calendar_default_month": None,
-                "calendar_default_week_start_iso": None,
-                "calendar_default_day_iso": None
-            }
-
-        users_data[user_id]['preferences']['calendar_default_view'] = data.get('view')
-        users_data[user_id]['preferences']['calendar_default_academic_year'] = data.get('academic_year')
-        users_data[user_id]['preferences']['calendar_default_semester'] = data.get('semester', None)
-        users_data[user_id]['preferences']['calendar_default_trimester'] = data.get('trimester', None)
-        users_data[user_id]['preferences']['calendar_default_month'] = data.get('month', None)
-        users_data[user_id]['preferences']['calendar_default_week_start_iso'] = data.get('week_start_iso', None)
-        users_data[user_id]['preferences']['calendar_default_day_iso'] = data.get('day_iso', None)
+        # Remplacer complètement l'objet preferences par la nouvelle structure simplifiée
+        users_data[user_id]['preferences'] = {
+            "calendar_default_view": view_type
+        }
 
         if save_users_data():
-            logger.info(f"Préférences calendrier sauvegardées pour user '{user_id}'.")
+            logger.info(f"Préférence de vue calendrier '{view_type}' sauvegardée pour user '{user_id}'.")
             return jsonify({"message": "Préférence de vue calendrier sauvegardée avec succès."}), 200
         else:
             logger.error(f"Échec sauvegarde users.json pour préférences user '{user_id}'.")
@@ -3236,10 +3209,13 @@ def get_user_calendar_preference():
     # Si user_prefs_data est None (ce qui peut arriver si le fichier json a été modifié manuellement avec "preferences": null),
     # on le convertit en {} pour être cohérent avec le cas où la clé "preferences" n'existe pas.
     if user_prefs_data is None:
-        user_prefs_data = {}
+        user_prefs_data = {} # Assure que user_prefs_data est un dict
 
-    logger.debug(f"Récupération préférences calendrier pour user '{user_id}': {user_prefs_data}")
-    return jsonify(user_prefs_data), 200
+    # Retourner uniquement la clé calendar_default_view, ou null si elle n'existe pas.
+    default_view = user_prefs_data.get("calendar_default_view") # Renverra None si la clé n'existe pas
+
+    logger.debug(f"Récupération préférence 'calendar_default_view' pour user '{user_id}': {default_view}")
+    return jsonify({"calendar_default_view": default_view}), 200
 
 # FIN Routes API pour les Préférences Utilisateur
 # ==============================================================================
