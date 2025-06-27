@@ -420,7 +420,7 @@ function changeCalendarView(event) {
     console.log(`[FIN changeCalendarView] Vue: ${selectedCalendarView}, Année: ${selectedAcademicYear}, Semestre: ${selectedSemester}, Trimestre: ${selectedTrimester}, Mois: ${selectedMonth}, Semaine Début: ${selectedWeekStartDate ? selectedWeekStartDate.toISOString().split('T')[0] : 'null'}, Jour Spécifique: ${selectedSpecificDay ? selectedSpecificDay.toISOString().split('T')[0] : 'null'}`);
 
     // Mise à jour du titre du calendrier et des informations spécifiques à la vue (comme week-info-display)
-    const calendarTitleSpan = document.getElementById('calendar-title-year');
+    // const calendarTitleSpan = document.getElementById('calendar-title-year'); // Déjà déclaré au début de la fonction
     if (calendarTitleSpan) {
         if (selectedCalendarView === 'year') {
             calendarTitleSpan.textContent = `Scolaire ${selectedAcademicYear}`;
