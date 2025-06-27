@@ -63,12 +63,12 @@
 
     <div id="calendar-period-controls" class="d-flex align-items-center flex-wrap">
         {# Sélecteur d'Année Scolaire #}
-        <div id="academic-year-selector-container" class="d-flex align-items-center me-3" style="display: none;">
+        <div id="academic-year-selector-container" class="d-flex align-items-center me-3">
             <label for="academic-year-select" class="form-label mb-0 me-2">Année scolaire :</label>
             <select id="academic-year-select" class="form-select form-select-sm" style="min-width: 120px;" onchange="changeCalendarView(event)"></select>
         </div>
         {# Sélecteur de Semestre #}
-        <div id="semester-selector-container" class="d-flex align-items-center me-3" style="display: none;">
+        <div id="semester-selector-container" class="d-flex align-items-center me-3">
             <label for="semester-select" class="form-label mb-0 me-2">Semestre :</label>
             <select id="semester-select" class="form-select form-select-sm" style="min-width: 150px;" onchange="changeCalendarView(event)">
                 <option value="1">S1 (Sept - Fev)</option>
@@ -77,7 +77,7 @@
         </div>
 
         {# Sélecteur de Trimestre #}
-        <div id="trimester-selector-container" class="d-flex align-items-center me-3" style="display: none;">
+        <div id="trimester-selector-container" class="d-flex align-items-center me-3">
             <label for="trimester-select" class="form-label mb-0 me-2">Trimestre :</label>
             <select id="trimester-select" class="form-select form-select-sm" style="min-width: 150px;" onchange="changeCalendarView(event)">
                 <option value="1">T1 (Sept - Déc)</option>
@@ -87,13 +87,13 @@
         </div>
 
         {# Sélecteur de Mois #}
-        <div id="month-selector-container" class="d-flex align-items-center me-3" style="display: none;">
+        <div id="month-selector-container" class="d-flex align-items-center me-3">
             <label for="month-select" class="form-label mb-0 me-2">Mois :</label>
             <select id="month-select" class="form-select form-select-sm" style="min-width: 130px;" onchange="changeCalendarView(event)"></select>
         </div>
 
         {# Sélecteur de Semaine #}
-        <div id="week-selector-container" class="d-flex align-items-center me-3" style="display: none;">
+        <div id="week-selector-container" class="d-flex align-items-center me-3">
             <label for="week-date-select" class="form-label mb-0 me-2">Semaine du :</label>
             <input type="date" id="week-date-select" class="form-control form-control-sm" style="width: auto;" onchange="changeCalendarView(event)">
             <div class="btn-group btn-group-sm ms-2" role="group">
@@ -104,7 +104,7 @@
         </div>
 
         {# Sélecteur de Jour #}
-        <div id="day-selector-container" class="d-flex align-items-center" style="display: none;">
+        <div id="day-selector-container" class="d-flex align-items-center">
             <label for="day-date-select" class="form-label mb-0 me-2">Jour :</label>
             <input type="date" id="day-date-select" class="form-control form-control-sm" style="width: auto;" onchange="changeCalendarView(event)">
             <div class="btn-group btn-group-sm ms-2" role="group">
@@ -340,12 +340,13 @@ function changeCalendarView(event) {
 
 
     // --- ÉTAPE 2: MASQUAGE SYSTÉMATIQUE ---
-    console.log("Étape 2: Masquage de tous les sélecteurs de période...");
+    console.log("Étape 2: Masquage de tous les sélecteurs de période via la classe .d-none...");
     allPeriodSelectors.forEach(container => {
         if (container) {
-            container.style.display = 'none';
-        } else {
-            console.warn("Un conteneur de sélecteur est null et ne peut être masqué.");
+            // Assure-toi qu'ils ont .d-flex (pour quand on les montrera) et .d-none (pour les cacher)
+            // On va juste ajouter .d-none.
+            container.classList.add('d-none');
+            // On pourrait aussi vouloir retirer .d-flex mais ce n'est pas nécessaire si .d-none l'emporte.
         }
     });
 
@@ -355,26 +356,22 @@ function changeCalendarView(event) {
 
     switch (selectedCalendarView) {
         case 'year':
-            console.log("-> Cas 'year' détecté. Affichage du sélecteur d'année.");
-            if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
+            if (academicYearSelectorContainer) academicYearSelectorContainer.classList.remove('d-none');
             // selectedAcademicYear est déjà à jour
             break;
         case 'semester':
-            console.log("-> Cas 'semester' détecté. Affichage des sélecteurs année et semestre.");
-            if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
-            if (semesterSelectorContainer) semesterSelectorContainer.style.display = 'flex';
+            if (academicYearSelectorContainer) academicYearSelectorContainer.classList.remove('d-none');
+            if (semesterSelectorContainer) semesterSelectorContainer.classList.remove('d-none');
             if (semesterSelect) selectedSemester = parseInt(semesterSelect.value);
             break;
         case 'trimester':
-            console.log("-> Cas 'trimester' détecté. Affichage des sélecteurs année et trimestre.");
-            if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
-            if (trimesterSelectorContainer) trimesterSelectorContainer.style.display = 'flex';
+            if (academicYearSelectorContainer) academicYearSelectorContainer.classList.remove('d-none');
+            if (trimesterSelectorContainer) trimesterSelectorContainer.classList.remove('d-none');
             if (trimesterSelect) selectedTrimester = parseInt(trimesterSelect.value);
             break;
         case 'month':
-            console.log("-> Cas 'month' détecté. Affichage des sélecteurs année et mois.");
-            if (academicYearSelectorContainer) academicYearSelectorContainer.style.display = 'flex';
-            if (monthSelectorContainer) monthSelectorContainer.style.display = 'flex';
+            if (academicYearSelectorContainer) academicYearSelectorContainer.classList.remove('d-none');
+            if (monthSelectorContainer) monthSelectorContainer.classList.remove('d-none');
             if (monthSelect) {
                 if (eventSourceId === 'calendar-view-type-select' || previousAcademicYear !== selectedAcademicYear || !monthSelect.options.length || typeof selectedMonth === 'undefined') {
                     populateMonthSelector(selectedAcademicYear);
@@ -383,8 +380,7 @@ function changeCalendarView(event) {
             }
             break;
         case 'week':
-            console.log("-> Cas 'week' détecté. Affichage du sélecteur de semaine.");
-            if (weekSelectorContainer) weekSelectorContainer.style.display = 'flex';
+            if (weekSelectorContainer) weekSelectorContainer.classList.remove('d-none');
             if (weekDateSelect) {
                 if (eventSourceId === 'week-date-select') {
                     if (weekDateSelect.valueAsDate) {
@@ -406,8 +402,7 @@ function changeCalendarView(event) {
             }
             break;
         case 'day':
-            console.log("-> Cas 'day' détecté. Affichage du sélecteur de jour.");
-            if (daySelectorContainer) daySelectorContainer.style.display = 'flex';
+            if (daySelectorContainer) daySelectorContainer.classList.remove('d-none');
             if (dayDateSelect) {
                 if (eventSourceId === 'day-date-select') {
                     if (dayDateSelect.valueAsDate) {
@@ -432,10 +427,11 @@ function changeCalendarView(event) {
             console.error(`Cas non traité dans le switch pour la vue: "${selectedCalendarView}"`);
     }
 
-    console.log("Vérification finale du style 'display' des conteneurs :");
+    // --- VÉRIFICATION FINALE ---
+    console.log("Vérification finale des classes des conteneurs :");
     allPeriodSelectors.forEach(container => {
         if (container && container.id) { // Vérifier que l'ID existe
-             console.log(`- ${container.id}: ${container.style.display}`);
+             console.log(`- ${container.id}: contient .d-none ? ${container.classList.contains('d-none')}`);
         }
     });
 
