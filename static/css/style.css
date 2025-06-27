@@ -985,7 +985,7 @@ h2 { color: #333; } /* Gard pour certains titres spcifiques si besoin */
 
 /* Style pour le lien ACTIF (la page actuelle) */
 [data-bs-theme="dark"] .list-group-item.active {
-    background-color: #e9ecef !important; /* Gris très clair de Bootstrap ('light') */
+    background-color: #636363 !important; /* Gris très clair de Bootstrap ('light') */
     color: #000000 !important;             /* Texte NOIR */
     font-weight: bold;
 }
@@ -1069,22 +1069,22 @@ h2 { color: #333; } /* Gard pour certains titres spcifiques si besoin */
 
 /* --- Styles par type de jour --- */
 [data-bs-theme="dark"] .calendar-day.classe {
-    background-color: transparent; /* Fond transparent, hérite du fond du mois */
+    background-color: #377E47; /* Fond transparent, hérite du fond du mois */
 }
 [data-bs-theme="dark"] .calendar-day.weekend-samedi {
-    background-color: #2c3136;
+    background-color: #636363;
     color: #adb5bd;
 }
 [data-bs-theme="dark"] .calendar-day.weekend-dimanche {
-    background-color: #4f2226;
+    background-color: #942715;
     color: #f5c6cb;
 }
 [data-bs-theme="dark"] .calendar-day.vacances {
-    background-color: #0b2d13;
+    background-color: #20549E;
     color: #a3d9b1;
 }
 [data-bs-theme="dark"] .calendar-day.ferie {
-    background-color: #4d3c0b;
+    background-color: #EB1161;
     color: #ffeeba;
     font-weight: bold;
 }
@@ -1114,6 +1114,11 @@ h2 { color: #333; } /* Gard pour certains titres spcifiques si besoin */
     background-color: #495057; /* Gris moyen pour le survol */
     border-color: #8ab4f8;
     color: #ffffff;
+}
+/* Style pour les jours vides (grise la couleur du fond du mois) */
+[data-bs-theme="dark"] .calendar-day.empty {
+    background-color: #2a2e32; /* Un gris très foncé, un peu plus clair que le fond du mois */
+    border-color: transparent; /* Pas de bordure visible pour les cellules vides */
 }
 
 /* --- Cohérence pour Vues Semaine/Jour --- */
