@@ -4,7 +4,7 @@
     "role": "Administrateur",
     "nom_complet": "Nom Complet de l'Utilisateur",
     "preferences": {
-      "calendar_default_view": "day"
+      "calendar_default_view": "year"
     }
   },
   "zzdez": {
