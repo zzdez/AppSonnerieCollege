@@ -985,7 +985,7 @@ h2 { color: #333; } /* Gard pour certains titres spcifiques si besoin */
 
 /* Style pour le lien ACTIF (la page actuelle) */
 [data-bs-theme="dark"] .list-group-item.active {
-    background-color: #ffffff !important; /* Fond BLANC */
+    background-color: #e9ecef !important; /* Gris très clair de Bootstrap ('light') */
     color: #000000 !important;             /* Texte NOIR */
     font-weight: bold;
 }
@@ -1013,6 +1013,123 @@ h2 { color: #333; } /* Gard pour certains titres spcifiques si besoin */
     border-color: #444 !important;
     color: #c0c0c0 !important;
 }
+/* ======================================================= */
+/* RE-AJOUT - Thème Sombre : Layout et Calendrier          */
+/* ======================================================= */
+
+/* --- En-tête de la Page (Titre) --- */
+[data-bs-theme="dark"] #page-content-wrapper > nav.navbar {
+    background-color: #212529 !important; /* Fond sombre, cohérent avec les composants Bootstrap */
+    border-bottom-color: #333 !important;
+}
+
+[data-bs-theme="dark"] #page-content-wrapper > nav.navbar h1 {
+    color: #f8f9fa !important; /* Texte blanc/très clair */
+}
+
+/* ======================================================= */
+/* CALENDRIER - Styles Complets pour le Thème Sombre       */
+/* ======================================================= */
+
+/* --- Titre et conteneur général --- */
+[data-bs-theme="dark"] #calendar-section h2 {
+    color: #f8f9fa; /* Texte blanc/très clair */
+    border-bottom-color: #333;
+}
+[data-bs-theme="dark"] .calendar-month {
+    background-color: #212529; /* Fond sombre des cartes Bootstrap */
+    border-color: #495057;
+}
+[data-bs-theme="dark"] .calendar-month h3 {
+    color: #ced4da; /* Titre du mois en gris doux */
+}
+/* --- Correction des conteneurs du calendrier pour le Thème Sombre --- */
+[data-bs-theme="dark"] #calendar-section {
+    background-color: #121212 !important; /* Le même noir que le body */
+    border-color: #333 !important;
+}
+
+/* Le fond des mois est déjà sombre avec .calendar-month, c'est bon. */
+/* Le titre du calendrier a aussi sa règle, c'est bon. */
+
+/* La grille principale qui contient les mois ne doit pas avoir de fond clair */
+[data-bs-theme="dark"] #calendar-container {
+    background-color: transparent; /* Pour qu'on voie le fond de #calendar-section */
+}
+
+/* --- Grille des jours --- */
+[data-bs-theme="dark"] .calendar-weekday {
+    background-color: #343a40; /* En-têtes de semaine (L, M, M...) */
+    color: #adb5bd;
+}
+[data-bs-theme="dark"] .calendar-day {
+    color: #ced4da; /* Couleur de texte par défaut pour les jours */
+    border-color: #444; /* Bordure des cellules */
+}
+
+/* --- Styles par type de jour --- */
+[data-bs-theme="dark"] .calendar-day.classe {
+    background-color: transparent; /* Fond transparent, hérite du fond du mois */
+}
+[data-bs-theme="dark"] .calendar-day.weekend-samedi {
+    background-color: #2c3136;
+    color: #adb5bd;
+}
+[data-bs-theme="dark"] .calendar-day.weekend-dimanche {
+    background-color: #4f2226;
+    color: #f5c6cb;
+}
+[data-bs-theme="dark"] .calendar-day.vacances {
+    background-color: #0b2d13;
+    color: #a3d9b1;
+}
+[data-bs-theme="dark"] .calendar-day.ferie {
+    background-color: #4d3c0b;
+    color: #ffeeba;
+    font-weight: bold;
+}
+[data-bs-theme="dark"] .calendar-day.exception-silence {
+    background-color: #37474f;
+    color: #b0bec5;
+    font-style: italic;
+}
+[data-bs-theme="dark"] .calendar-day.exception-jt {
+    background-color: #01579b;
+    color: #b3e5fc;
+    font-style: italic;
+}
+[data-bs-theme="dark"] .calendar-day.erreur-donnees {
+    background-color: #660000;
+    color: #ffcccc;
+}
+
+/* --- États spéciaux (survol, aujourd'hui) --- */
+[data-bs-theme="dark"] .calendar-day.today {
+    border-color: #0d6efd; /* Garder la bordure bleue Bootstrap */
+    box-shadow: 0 0 8px rgba(13, 110, 253, 0.6); /* Halo lumineux */
+    color: #ffffff; /* Texte en blanc pour le jour actuel */
+    background-color: #0d6efd; /* Fond bleu aussi pour bien le voir */
+}
+[data-bs-theme="dark"] .calendar-day:not(.empty):hover {
+    background-color: #495057; /* Gris moyen pour le survol */
+    border-color: #8ab4f8;
+    color: #ffffff;
+}
+
+/* --- Cohérence pour Vues Semaine/Jour --- */
+[data-bs-theme="dark"] .calendar-week-view-container .card.bg-danger-subtle,
+[data-bs-theme="dark"] .calendar-day-view-container .card.bg-danger-subtle {
+    background-color: #4f2226 !important;
+    color: #f5c6cb !important;
+}
+[data-bs-theme="dark"] .calendar-week-view-container .card.bg-secondary-subtle,
+[data-bs-theme="dark"] .calendar-day-view-container .card.bg-secondary-subtle {
+    background-color: #2c3136 !important;
+    color: #adb5bd !important;
+}
+
+
+/* Ajouter d'autres surcharges pour les bg-*-subtle si les couleurs de la vue semaine ne sont pas bonnes */
 /* Feedback dans cette page (utilise dj .feedback-message global) */
 /* #exception-feedback, #list-feedback { margin-top: 15px; } */
 
