@@ -367,12 +367,17 @@ class SchedulerManager:
         try:
             day_info = self.holiday_manager.get_day_type_and_desc(target_date, self.weekly_planning, self.planning_exceptions)
             schedule_name = day_info.get("schedule_name")
-            day_desc = day_info.get("description", day_info.get("type"))
+            # Utiliser directement le "type" de day_info pour le "day_type" de la réponse API.
+            # day_desc est conservé pour le message s'il n'y a pas de planning détaillé.
+            actual_day_type = day_info.get("type")
+            day_desc_for_message = day_info.get("description", actual_day_type) # Message utilise la description ou le type
+
             day_schedule_config = self.day_types.get(schedule_name) if schedule_name else None
 
             if not schedule_name or not day_schedule_config:
-                 self.logger.debug(f"API daily: Pas de planning détaillé pour {target_date} (type: {day_info.get('type')})")
-                 return {"message": day_desc, "schedule": [], "day_type": day_info.get("type")}
+                 self.logger.debug(f"API daily: Pas de planning détaillé pour {target_date} (type: {actual_day_type})")
+                 # Le message peut rester day_desc_for_message, mais le day_type doit être actual_day_type
+                 return {"message": day_desc_for_message, "schedule": [], "day_type": actual_day_type}
             else:
                  periods = day_schedule_config.get("periodes", []); api_schedule = []
                  for p in periods:
@@ -384,8 +389,9 @@ class SchedulerManager:
                      api_schedule.sort(key=lambda x: dt_time.fromisoformat(x["time"]))
                  except ValueError:
                      self.logger.warning(f"API daily: tri impossible pour {target_date}.")
-                 self.logger.debug(f"API daily: Planning pour {target_date} généré ({len(api_schedule)} events). Type: {day_desc}")
-                 return {"schedule": api_schedule, "day_type": day_desc, "message": None}
+                 self.logger.debug(f"API daily: Planning pour {target_date} généré ({len(api_schedule)} events). Type: {actual_day_type}")
+                 # Utiliser actual_day_type pour le champ "day_type"
+                 return {"schedule": api_schedule, "day_type": actual_day_type, "message": None}
         except Exception as e:
             self.logger.error(f"Erreur get_schedule_for_date API({target_date}): {e}", exc_info=True)
             return {"error": f"Erreur serveur: {e}"}

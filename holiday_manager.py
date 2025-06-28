@@ -311,69 +311,79 @@ class HolidayManager:
             if vac["debut"] <= target_date <= vac["fin"]: return vac.copy()
         return None
 
-    # --- get_day_type_and_desc (CORRIGÉ - Indentation et Priorité) ---
+    # Dans la classe HolidayManager
+
+    # ==============================================================================
+    # MÉTHODE DÉFINITIVE POUR DÉTERMINER LE TYPE DE JOUR
+    # ==============================================================================
     def get_day_type_and_desc(self, target_date, weekly_planning, planning_exceptions):
-        """ Détermine type/description (Priorité: Excep > Férié > Vacances > Hebdo). """
-        if isinstance(target_date, datetime): target_date = target_date.date()
-        elif not isinstance(target_date, date): return {"type": "Erreur", "description": "Date invalide", "schedule_name": None}
-        self.logger.debug(f"Détermination type/desc pour: {target_date}"); date_str = target_date.strftime('%Y-%m-%d')
+        """
+        Détermine le type de jour, sa description, et le nom du planning applicable.
+        Priorité : Exception > Férié > Vacances > Planning Hebdomadaire.
+        """
 
-        # 1. Exceptions
+        # 0. Validation de la date en entrée
+        if isinstance(target_date, datetime):
+            target_date = target_date.date()
+        elif not isinstance(target_date, date):
+            self.logger.error(f"Type de date invalide reçu dans get_day_type_and_desc: {type(target_date)}")
+            return {"type": "Erreur", "description": "Date invalide", "schedule_name": None}
+
+        date_str = target_date.strftime('%Y-%m-%d')
+        self.logger.debug(f"Détermination du type de jour pour : {date_str}")
+
+        # 1. Priorité absolue : les Exceptions
         if planning_exceptions and date_str in planning_exceptions:
-            details = planning_exceptions[date_str]; action = details.get("action"); jt_name = details.get("journee_type")
+            details = planning_exceptions[date_str]
+            action = details.get("action", "silence")
+            jt_name = details.get("journee_type")
             desc = details.get("description", "") or (f"Exception: {action.upper()}" + (f" ({jt_name})" if jt_name else ""))
-            self.logger.debug(f"-> Trouvé: Exception {action}")
-            if action == "silence": return {"type": "Exception (Silence)", "description": desc, "schedule_name": None}
-            elif action == "utiliser_jt": return {"type": "Exception (utiliser_jt)", "description": desc, "schedule_name": jt_name}
-            else: self.logger.warning(f"Action exception inconnue {date_str}: {details}. -> Silence"); return {"type": "Exception (Silence)", "description": "Silence (Exception Inconnue)", "schedule_name": None}
+            self.logger.debug(f"-> Règle trouvée : Exception '{action}' pour {date_str}")
+            if action == "utiliser_jt":
+                return {"type": f"Exception (utiliser_jt)", "description": desc, "schedule_name": jt_name}
+            # Toutes les autres actions (silence, ou action inconnue) sont traitées comme silence
+            return {"type": "Exception (Silence)", "description": desc, "schedule_name": None}
 
-        # 2. Férié (AVANT Vacances)
+        # 2. Priorité suivante : les Jours Fériés
         holiday_desc = self.get_holiday_description(target_date)
-        self.logger.debug(f"-> Check Férié: Résultat = {holiday_desc}")
         if holiday_desc:
-            self.logger.debug(f"-> Trouvé: Férié ({holiday_desc}).")
+            self.logger.debug(f"-> Règle trouvée : Férié ({holiday_desc})")
             return {"type": "Férié", "description": holiday_desc, "schedule_name": None}
 
-        # 3. Vacances (APRÈS Férié)
+        # 3. Priorité suivante : les Vacances
         vac_info = self.get_vacation_info(target_date)
-        self.logger.debug(f"-> Check Vacances: Résultat = {vac_info}")
         if vac_info:
-            desc = vac_info['description']; self.logger.debug(f"-> Trouvé: Vacances ({desc}).")
+            desc = vac_info.get('description', 'Vacances')
+            self.logger.debug(f"-> Règle trouvée : Vacances ({desc})")
             return {"type": "Vacances", "description": desc, "schedule_name": None}
 
-        # 4. Planning Hebdo / Weekend
-        day_index = target_date.weekday(); day_keys = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]; current_day_key = day_keys[day_index] if 0 <= day_index < len(day_keys) else None
-        self.logger.debug(f"-> Check Hebdo/WE: Jour={current_day_key} (Index={day_index})")
+        # 4. Si ce n'est rien de tout ça, on regarde le Planning Hebdomadaire
+        day_name_fr = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+        current_day_key = day_name_fr[target_date.weekday()]
 
-        # Valeurs par défaut si pas de planning spécifique ou jour non trouvé
-        default_type = "Weekend"
-        default_description = "Weekend (Par défaut)"
-        default_schedule_name = None
-        if day_index < 5: # Pour les jours de semaine par défaut sans config spécifique
-            default_description = "Aucun planning (Défaut Semaine)"
+        applicable_schedule_name = weekly_planning.get(current_day_key) if weekly_planning else None
+        self.logger.debug(f"-> Planning Hebdo pour {current_day_key} : Valeur lue = '{applicable_schedule_name}'")
 
-
-        if weekly_planning and current_day_key in weekly_planning:
-            schedule_name_from_config = weekly_planning[current_day_key]
-            self.logger.debug(f"   -> Hebdo défini pour {current_day_key}: '{schedule_name_from_config}'")
-
-            # Vérifier si le nom est None, vide, ou "Aucune" (insensible à la casse)
-            if schedule_name_from_config is None or \
-               schedule_name_from_config.strip() == "" or \
-               schedule_name_from_config.strip().lower() == "aucune":
-                self.logger.debug(f"   -> Trouvé: '{schedule_name_from_config}' interprété comme Weekend/Aucun planning.")
-                return {"type": "Weekend", "description": "Weekend", "schedule_name": None}
-            else:
-                # C'est un nom de journée type valide
-                self.logger.debug(f"   -> Trouvé: Classe via Hebdo (JT: {schedule_name_from_config}).")
-                return {"type": f"Classe ({schedule_name_from_config})", "description": f"Planning: {schedule_name_from_config}", "schedule_name": schedule_name_from_config}
+        # Si la valeur est None (absente), une chaîne vide, ou "Aucune" (insensible à la casse) -> c'est un jour SANS COURS.
+        # Correction demandée:
+        # SI le nom récupéré est None, une chaîne vide, ou la chaîne "Aucune" (insensible à la casse),
+        # alors le type de jour DOIT être "Weekend".
+        # SINON, le type de jour est "Classe (Nom de la Journée Type)".
+        if not applicable_schedule_name or not applicable_schedule_name.strip() or applicable_schedule_name.lower() == "aucune":
+            self.logger.debug(f"   -> Interprétation : Jour sans cours (type Weekend) - Nom lu: '{applicable_schedule_name}'")
+            return {
+                "type": "Weekend",
+                "description": "Aucun planning pour ce jour (Weekend/Aucune)", # Description mise à jour pour clarté
+                "schedule_name": None
+            }
         else:
-            # Cas où le jour n'est pas du tout dans weekly_planning (ex: Samedi/Dimanche non explicitement définis)
-            # ou si weekly_planning est vide/None.
-            self.logger.info(f"-> Jour '{current_day_key}' non trouvé dans weekly_planning ou planning vide. Utilisation type/description par défaut pour ce jour.")
-            # Le comportement par défaut pour les jours de semaine sans config est "Aucun Planning (Défaut Semaine)" -> type "Weekend"
-            # Le comportement par défaut pour Samedi/Dimanche est "Weekend (Par défaut)" -> type "Weekend"
-            return {"type": default_type, "description": default_description, "schedule_name": default_schedule_name}
+            # Sinon, une journée type est assignée -> c'est un jour DE COURS.
+            self.logger.debug(f"   -> Interprétation : Jour de classe (JT: {applicable_schedule_name})")
+            return {
+                "type": f"Classe ({applicable_schedule_name})", # Format "Classe (Nom de la Journée Type)"
+                "description": f"Planning: {applicable_schedule_name}",
+                "schedule_name": applicable_schedule_name
+            }
 
     # --- Méthodes pour API ---
     def get_holidays(self): return sorted(self._holidays.items())
