@@ -344,27 +344,36 @@ class HolidayManager:
         # 4. Planning Hebdo / Weekend
         day_index = target_date.weekday(); day_keys = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]; current_day_key = day_keys[day_index] if 0 <= day_index < len(day_keys) else None
         self.logger.debug(f"-> Check Hebdo/WE: Jour={current_day_key} (Index={day_index})")
+
+        # Valeurs par défaut si pas de planning spécifique ou jour non trouvé
+        default_type = "Weekend"
+        default_description = "Weekend (Par défaut)"
+        default_schedule_name = None
+        if day_index < 5: # Pour les jours de semaine par défaut sans config spécifique
+            default_description = "Aucun planning (Défaut Semaine)"
+
+
         if weekly_planning and current_day_key in weekly_planning:
-            schedule_name = weekly_planning[current_day_key]
-            self.logger.debug(f"   -> Hebdo défini: '{schedule_name}'")
-            if schedule_name and schedule_name.lower() not in ["aucun", "silence", "weekend", ""]:
-                self.logger.debug(f"   -> Trouvé: Classe via Hebdo (JT: {schedule_name}).")
-                return {"type": f"Classe ({schedule_name})", "description": f"Planning: {schedule_name}", "schedule_name": schedule_name}
-            elif (schedule_name and schedule_name.lower() == "weekend") or day_index >= 5 :
-                self.logger.debug(f"   -> Trouvé: Weekend via Hebdo ou jour.")
+            schedule_name_from_config = weekly_planning[current_day_key]
+            self.logger.debug(f"   -> Hebdo défini pour {current_day_key}: '{schedule_name_from_config}'")
+
+            # Vérifier si le nom est None, vide, ou "Aucune" (insensible à la casse)
+            if schedule_name_from_config is None or \
+               schedule_name_from_config.strip() == "" or \
+               schedule_name_from_config.strip().lower() == "aucune":
+                self.logger.debug(f"   -> Trouvé: '{schedule_name_from_config}' interprété comme Weekend/Aucun planning.")
                 return {"type": "Weekend", "description": "Weekend", "schedule_name": None}
             else:
-                self.logger.debug(f"   -> Trouvé: Silence/Aucun via Hebdo.")
-                # Retourner "Weekend" pour style gris, mais description indique Silence
-                return {"type": "Weekend", "description": "Aucun planning (Hebdo)", "schedule_name": None}
+                # C'est un nom de journée type valide
+                self.logger.debug(f"   -> Trouvé: Classe via Hebdo (JT: {schedule_name_from_config}).")
+                return {"type": f"Classe ({schedule_name_from_config})", "description": f"Planning: {schedule_name_from_config}", "schedule_name": schedule_name_from_config}
         else:
-             self.logger.warning(f"-> Jour '{current_day_key}' non trouvé dans weekly_planning. Application défaut.")
-             if day_index >= 5:
-                 # --- Ligne Corrigée ---
-                 return {"type": "Weekend", "description": "Weekend (Par défaut)", "schedule_name": None}
-             else:
-                 # --- Ligne Corrigée ---
-                 return {"type": "Weekend", "description": "Aucun planning (Défaut)", "schedule_name": None}
+            # Cas où le jour n'est pas du tout dans weekly_planning (ex: Samedi/Dimanche non explicitement définis)
+            # ou si weekly_planning est vide/None.
+            self.logger.info(f"-> Jour '{current_day_key}' non trouvé dans weekly_planning ou planning vide. Utilisation type/description par défaut pour ce jour.")
+            # Le comportement par défaut pour les jours de semaine sans config est "Aucun Planning (Défaut Semaine)" -> type "Weekend"
+            # Le comportement par défaut pour Samedi/Dimanche est "Weekend (Par défaut)" -> type "Weekend"
+            return {"type": default_type, "description": default_description, "schedule_name": default_schedule_name}
 
     # --- Méthodes pour API ---
     def get_holidays(self): return sorted(self._holidays.items())
