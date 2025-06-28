@@ -180,10 +180,10 @@
   "planning_hebdomadaire": {
     "Lundi": "LMJV",
     "Mardi": "LMJV",
-    "Mercredi": "Mercredi",
+    "Mercredi": "Aucune",
     "Jeudi": "LMJV",
     "Vendredi": "LMJV",
-    "Samedi": "Aucune",
+    "Samedi": "Mercredi",
     "Dimanche": "Aucune"
   },
   "exceptions_planning": {
